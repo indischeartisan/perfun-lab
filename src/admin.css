@@ -1,0 +1,26 @@
+.admin-dashboard { max-width: 1100px; margin: auto; }
+.admin-tabs { flex-wrap: wrap; gap: 8px; }
+.admin-content { min-width: 0; }
+.admin-content .app-screen { padding: 20px 0; max-width: none; }
+.admin-metrics { display: grid; grid-template-columns: repeat(auto-fit,minmax(190px,1fr)); gap: 14px; margin: 20px 0 30px; }
+.admin-metrics article,.admin-editor { padding: 20px; border: 1px solid #dedbd2; background: #fffdf7; border-radius: 18px; }
+.admin-metrics span,.admin-metrics strong { display: block; }
+.admin-metrics strong { font-size: 1.5rem; margin-top: 12px; overflow-wrap: anywhere; }
+.admin-help { color: #68665e; font-size: .85rem; line-height: 1.6; overflow-wrap: anywhere; }
+.admin-filters,.admin-form,.admin-phase { display: grid; gap: 14px; }
+.admin-filters { grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); align-items: end; margin: 20px 0; }
+.admin-filters label,.admin-form label,.admin-search { display: grid; gap: 7px; font-size: .85rem; }
+.admin-dashboard input,.admin-dashboard select,.admin-dashboard textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: 11px; border: 1px solid #bcb9ae; border-radius: 8px; background: white; color: #27271e; font: inherit; }
+.admin-dashboard button { cursor: pointer; }
+.admin-dashboard button:disabled { cursor: default; opacity: .5; }
+.admin-form { margin-top: 18px; }
+.admin-form .admin-checkbox { display: flex; align-items: center; gap: 8px; }
+.admin-checkbox input { width: 18px; height: 18px; }
+.admin-form fieldset { min-width: 0; border: 1px solid #dedbd2; border-radius: 10px; padding: 12px; }
+.admin-phase { grid-template-columns: 80px 1fr 2fr; align-items: center; padding: 12px 0; }
+.admin-editor summary { cursor: pointer; font-weight: 600; }
+.admin-search { margin-bottom: 18px; }
+.admin-order-details { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 12px; }
+.admin-order-details dt { color: #68665e; font-size: .8rem; }
+.admin-order-details dd { margin: 6px 0; text-transform: capitalize; }
+@media(max-width:600px) { .admin-phase { grid-template-columns: 1fr; } .admin-metrics { grid-template-columns: 1fr 1fr; gap: 8px; } .admin-metrics article { padding: 12px; } .admin-metrics strong { font-size: 1.1rem; } .admin-tabs button { flex: 1 1 auto; } }

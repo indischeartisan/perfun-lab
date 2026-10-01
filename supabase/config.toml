@@ -1,0 +1,11 @@
+project_id = "perfun-lab"
+
+[functions.payments-create]
+verify_jwt = true
+
+[functions.payments-sync]
+verify_jwt = true
+
+# DOKU does not send a Supabase JWT. Handler verifies DOKU HMAC before any write.
+[functions.payments-webhook]
+verify_jwt = false

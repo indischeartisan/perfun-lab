@@ -1,0 +1,35 @@
+{
+    "name":  "perfun-lab",
+    "private":  true,
+    "version":  "0.1.0",
+    "type":  "module",
+    "scripts":  {
+                    "dev":  "vite",
+                    "build":  "tsc -b \u0026\u0026 vite build",
+                    "preview":  "vite preview",
+                    "lint":  "eslint .",
+                    "test:payments":  "node --experimental-strip-types --test tests/payments.test.mjs",
+                    "deploy:cloudflare":  "npm run build \u0026\u0026 wrangler pages deploy dist --project-name perfun-lab --branch main"
+                },
+    "dependencies":  {
+                         "@supabase/supabase-js":  "2.116.0",
+                         "@vitejs/plugin-react":  "latest",
+                         "lucide-react":  "latest",
+                         "react":  "latest",
+                         "react-dom":  "latest",
+                         "typescript":  "latest",
+                         "vite":  "latest",
+                         "vite-plugin-pwa":  "latest"
+                     },
+    "devDependencies":  {
+                            "@eslint/js":  "latest",
+                            "@types/react":  "latest",
+                            "@types/react-dom":  "latest",
+                            "eslint":  "latest",
+                            "eslint-plugin-react-hooks":  "latest",
+                            "eslint-plugin-react-refresh":  "latest",
+                            "globals":  "latest",
+                            "typescript-eslint":  "latest",
+                            "wrangler":  "4.130.0"
+                        }
+}

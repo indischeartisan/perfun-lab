@@ -6,6 +6,7 @@ dev-dist
 *.local
 .env*
 !.env.example
+!.env.production
 supabase/.temp/
 .wrangler/
 .dev.vars*

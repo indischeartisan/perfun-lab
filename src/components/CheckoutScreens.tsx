@@ -5,14 +5,27 @@ import { getOrder, placeOrder, quoteOrder, type CustomerOrder, type OrderIntent,
 import { errorMessage } from '../lib/supabase'
 import { AddressBook, AddressText } from './AddressBook'
 import { PaymentActions } from './PaymentActions'
+import { isCheckoutPending } from '../lib/storageValidation'
 
 interface Pending { addressId: string; items: OrderIntent[]; requestId: string; token: string }
-function readPending(key: string): Pending | null { try { return JSON.parse(sessionStorage.getItem(key) ?? 'null') } catch { return null } }
+function clearPending(key: string) { try { sessionStorage.removeItem(key) } catch { /* Storage is optional. */ } }
+function savePending(key: string, value: Pending) { try { sessionStorage.setItem(key, JSON.stringify(value)) } catch { /* The request can still continue in memory. */ } }
+function readPending(key: string, expectedItems: OrderIntent[]): Pending | null {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(key) ?? 'null')
+    if (isCheckoutPending(value) && JSON.stringify(value.items) === JSON.stringify(expectedItems)) return value
+    clearPending(key)
+    return null
+  } catch {
+    clearPending(key)
+    return null
+  }
+}
 
 export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: string; items: OrderIntent[]; onBack: () => void; onPlaced: (order: CustomerOrder) => void }) {
   const storageKey = `perfun-order-submit:${userId}`
-  const [pending, setPending] = useState<Pending | null>(() => readPending(storageKey))
-  const [addressId, setAddressId] = useState(() => readPending(storageKey)?.addressId ?? '')
+  const [pending, setPending] = useState<Pending | null>(() => readPending(storageKey, items))
+  const [addressId, setAddressId] = useState(() => readPending(storageKey, items)?.addressId ?? '')
   const [quote, setQuote] = useState<Quote | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -31,16 +44,16 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
     const request = pending ?? { addressId, items, requestId: crypto.randomUUID(), token: quote!.quote_token }
     let committed = false
     try {
-      sessionStorage.setItem(storageKey, JSON.stringify(request)); setPending(request)
+      savePending(storageKey, request); setPending(request)
       const id = await placeOrder(request.addressId, request.items, request.requestId, request.token)
       committed = true
       const order = await getOrder(id)
-      sessionStorage.removeItem(storageKey); setPending(null); onPlaced(order)
+      clearPending(storageKey); setPending(null); onPlaced(order)
     } catch (error) {
       setError(errorMessage(error))
       // Only definitive database validation failures clear the intent. Network errors preserve it.
       if (!committed && error && typeof error === 'object' && 'code' in error && ['P0001', '42501', '23514', '22P02'].includes(String(error.code))) {
-        sessionStorage.removeItem(storageKey); setPending(null); setQuote(null)
+        clearPending(storageKey); setPending(null); setQuote(null)
       }
     } finally { locked.current = false; setBusy(false) }
   }

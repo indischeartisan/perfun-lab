@@ -2,11 +2,17 @@ import { useEffect, useState } from 'react'
 import { emptySelection } from '../data/notes'
 import type { CompleteSelection, FragranceNote, NoteLayer, ProductChoice, Selection } from '../types'
 import { useLocalStorage } from './useLocalStorage'
+import { rehydratePlaySet, rehydrateSelection } from '../lib/storageValidation'
 
-export function useBlend(noteGroups: Record<NoteLayer, FragranceNote[]>) {
-  const [selection, setSelection] = useLocalStorage<Selection>('perfun-builder-draft-v3', emptySelection)
+export function useBlend(noteGroups: Record<NoteLayer, FragranceNote[]>, ownerId: string | null) {
+  const scope = ownerId === null ? null : ownerId === 'guest' ? 'perfun:guest' : `perfun:user:${ownerId}`
+  const guestScope = 'perfun:guest'
+  const migrationKeys = ownerId === null ? [] : ownerId === 'guest' ? ['perfun-builder-draft-v3'] : [`${guestScope}:builder`]
+  const playSetMigrationKeys = ownerId === null ? [] : ownerId === 'guest' ? ['perfun-play-set-draft-v1'] : [`${guestScope}:play-set`]
+  const [selection, setSelection] = useLocalStorage<Selection>(scope ? `${scope}:builder` : null, emptySelection, { restore: value => rehydrateSelection(value, noteGroups), migrateFromKeys: migrationKeys })
   const [product, setProductState] = useState<ProductChoice | null>(null)
-  const [playSetBlends, setPlaySetBlends] = useState<CompleteSelection[]>([])
+  const [playSetBlends, setPlaySetBlends] = useLocalStorage<CompleteSelection[]>(scope ? `${scope}:play-set` : null, [], { restore: value => rehydratePlaySet(value, noteGroups), migrateFromKeys: playSetMigrationKeys })
+  const [editingPlaySetIndex, setEditingPlaySetIndex] = useState<number | null>(null)
   const [added, setAdded] = useState(false)
 
   useEffect(() => {
@@ -22,28 +28,63 @@ export function useBlend(noteGroups: Record<NoteLayer, FragranceNote[]>) {
     setSelection(current => ({ ...current, [layer]: note }))
   }
 
-  function reset() {
+  function clearCurrentFormula() {
+    setSelection(emptySelection)
+    if (product !== 'play-set') setProductState(null)
+    setAdded(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function discardPlaySet() {
     setSelection(emptySelection)
     setProductState(null)
     setPlaySetBlends([])
+    setEditingPlaySetIndex(null)
     setAdded(false)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function setProduct(next: ProductChoice) {
     setProductState(next)
     setAdded(false)
-    if (next !== 'play-set') setPlaySetBlends([])
+    if (next !== 'play-set') setEditingPlaySetIndex(null)
   }
 
-  function addPlaySetBlend(blend: CompleteSelection) {
+  function savePlaySetBlend(blend: CompleteSelection) {
+    if (editingPlaySetIndex !== null) {
+      setPlaySetBlends(current => current.map((item, index) => index === editingPlaySetIndex ? { ...blend } : item))
+      setEditingPlaySetIndex(null)
+      setSelection(emptySelection)
+      return
+    }
     if (playSetBlends.length >= 3) return
     const next = [...playSetBlends, { ...blend }]
     setPlaySetBlends(next)
-    if (next.length < 3) setSelection(emptySelection)
+    setSelection(emptySelection)
   }
 
-  return { selection, product, playSetBlends, added, choose, reset, setProduct, addPlaySetBlend, markAdded: () => setAdded(true) }
+  function editPlaySetBlend(index: number) {
+    const blend = playSetBlends[index]
+    if (!blend) return
+    setAdded(false)
+    setProductState('play-set')
+    setEditingPlaySetIndex(index)
+    setSelection({ ...blend })
+  }
+
+  function cancelPlaySetEdit() {
+    if (editingPlaySetIndex === null) return
+    setSelection(emptySelection)
+    setEditingPlaySetIndex(null)
+  }
+
+  function exitPlaySet() {
+    setSelection(emptySelection)
+    setProductState(null)
+    setEditingPlaySetIndex(null)
+    setAdded(false)
+  }
+
+  return { selection, product, playSetBlends, added, editingPlaySetIndex, choose, clearCurrentFormula, discardPlaySet, setProduct, savePlaySetBlend, editPlaySetBlend, cancelPlaySetEdit, exitPlaySet, markAdded: () => setAdded(true) }
 }
 
 const layers: NoteLayer[] = ['top', 'middle', 'base']

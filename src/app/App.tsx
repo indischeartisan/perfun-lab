@@ -10,7 +10,7 @@ import { BuildPage } from '../pages/BuildPage'
 import { CheckoutPage, OrderConfirmationPage } from '../pages/CheckoutPage'
 import { MorePage } from '../pages/MorePage'
 import { OrdersPage } from '../pages/OrdersPage'
-import type { AppView, CompleteSelection, Selection } from '../types'
+import type { AppView, CompleteSelection, ProductChoice, Selection } from '../types'
 import '../styles.css'
 import '../theme.css'
 import '../checkout.css'
@@ -22,7 +22,8 @@ import { errorMessage } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { AccountMenu } from '../components/AccountMenu'
 import { EmailPasswordDialog } from '../components/EmailPasswordDialog'
-import { prepareBagCheckout } from '../lib/bagCheckout'
+import { prepareBagCheckout, prepareDirectFormulaCheckout } from '../lib/bagCheckout'
+import { isCheckoutDraft, orderIntentsMatchCatalog } from '../lib/storageValidation'
 
 import { ProductionPage } from '../pages/ProductionPage'
 import { FulfillmentPage } from '../pages/FulfillmentPage'
@@ -35,9 +36,37 @@ function isComplete(selection: Selection): selection is CompleteSelection {
   return Boolean(selection.top && selection.middle && selection.base)
 }
 
+const directCheckoutKey = 'perfun-direct-checkout-v1'
+
+function readSessionValue(key: string) {
+  try { return sessionStorage.getItem(key) } catch { return null }
+}
+
+function writeSessionValue(key: string, value: string) {
+  try { sessionStorage.setItem(key, value) } catch { /* Session resume is optional. */ }
+}
+
+function removeSessionValue(key: string) {
+  try { sessionStorage.removeItem(key) } catch { /* Session resume is optional. */ }
+}
+
+function readPendingDirectCheckout(noteGroups: Catalog['noteGroups']): OrderIntent[] | null {
+  try {
+    const value = readSessionValue(directCheckoutKey)
+    if (!value) return null
+    const items = JSON.parse(value)
+    if (orderIntentsMatchCatalog(items, noteGroups)) return items
+    removeSessionValue(directCheckoutKey)
+    return null
+  } catch {
+    removeSessionValue(directCheckoutKey)
+    return null
+  }
+}
+
 function viewFromHash(): AppView {
   const value = window.location.hash.slice(1)
-  if (!value && sessionStorage.getItem('perfun-return-to-bag')) return 'bag'
+  if (!value && readSessionValue('perfun-return-to-bag')) return 'bag'
   return ['bag', 'checkout', 'orders', 'production', 'fulfillment', 'admin'].includes(value) ? value as AppView : 'build'
 }
 
@@ -60,21 +89,26 @@ export default function App() {
 function ConnectedApp({ catalog }: { catalog: Catalog }) {
   const [requestedView, setView] = useState<AppView>(viewFromHash)
   const [authDialogOpen, setAuthDialogOpen] = useState(false)
-  const [resumeCheckout, setResumeCheckout] = useState(() => sessionStorage.getItem('perfun-return-to-bag') === '1')
+  const [resumeCheckout, setResumeCheckout] = useState(() => readSessionValue('perfun-return-to-bag') === '1')
+  const [pendingDirectCheckout, setPendingDirectCheckout] = useState<OrderIntent[] | null>(() => readPendingDirectCheckout(catalog.noteGroups))
+  const [resumeDirectCheckout, setResumeDirectCheckout] = useState(() => readSessionValue(directCheckoutKey) !== null)
   useEffect(() => {
     const onHashChange = () => setView(viewFromHash())
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
-  const [confirmedOrder, setConfirmedOrder] = useState<CustomerOrder | null>(null)
-  const blend = useBlend(catalog.noteGroups)
-  const cart = useCart(catalog)
-  const [checkoutDraft, setCheckoutDraft] = useLocalStorage<{ userId: string; items: OrderIntent[] } | null>('perfun-checkout-draft-v1', null)
   const auth = useAuth()
+  const storageOwner = auth.loading ? null : auth.user?.id ?? 'guest'
+  const [confirmedOrder, setConfirmedOrder] = useState<CustomerOrder | null>(null)
+  const blend = useBlend(catalog.noteGroups, storageOwner)
+  const cart = useCart(catalog, storageOwner)
+  const [checkoutDraft, setCheckoutDraft] = useLocalStorage<{ userId: string; items: OrderIntent[]; source?: 'bag' | 'direct' } | null>(auth.loading || !auth.user ? null : `perfun:user:${auth.user.id}:checkout-draft`, null, { restore: value => isCheckoutDraft(value) && orderIntentsMatchCatalog(value.items, catalog.noteGroups) ? value : null })
   useEffect(() => { if (auth.passwordRecovery) setAuthDialogOpen(true) }, [auth.passwordRecovery])
   const preparing = useRef(false)
   const [checkoutBusy, setCheckoutBusy] = useState(false)
   const [checkoutError, setCheckoutError] = useState('')
+  const [directCheckoutBusy, setDirectCheckoutBusy] = useState(false)
+  const [directCheckoutError, setDirectCheckoutError] = useState('')
   const view = auth.role === 'vendor' ? 'fulfillment' : requestedView
 
   function scrollToTop() {
@@ -93,9 +127,9 @@ function ConnectedApp({ catalog }: { catalog: Catalog }) {
     blend.markAdded()
   }
 
-  function addPlaySetBlend() {
+  function savePlaySetBlend() {
     if (!isComplete(blend.selection)) return
-    blend.addPlaySetBlend(blend.selection)
+    blend.savePlaySetBlend(blend.selection)
   }
 
   function addPlaySetToBag() {
@@ -106,31 +140,72 @@ function ConnectedApp({ catalog }: { catalog: Catalog }) {
 
   async function checkoutBag() {
     if (preparing.current || auth.loading) return
-    if (!auth.user) { sessionStorage.setItem('perfun-return-to-bag', '1'); setResumeCheckout(true); setAuthDialogOpen(true); return }
+    if (!auth.user) { writeSessionValue('perfun-return-to-bag', '1'); setResumeCheckout(true); setAuthDialogOpen(true); return }
     preparing.current = true; setCheckoutBusy(true); setCheckoutError('')
-    try { startCheckout(prepareBagCheckout(cart.items)) }
+    try { startCheckout(prepareBagCheckout(cart.items), 'bag') }
     catch (error) { setCheckoutError(errorMessage(error)) }
     finally { preparing.current = false; setCheckoutBusy(false) }
   }
-  function startCheckout(items: OrderIntent[]) {
+  function startCheckout(items: OrderIntent[], source: 'bag' | 'direct' = 'bag') {
     if (!auth.user) return
-    setCheckoutDraft({ userId: auth.user.id, items })
+    setCheckoutDraft({ userId: auth.user.id, items, source })
     navigate('checkout')
   }
   useEffect(() => {
     if (!auth.user || !resumeCheckout || auth.loading || preparing.current) return
-    sessionStorage.removeItem('perfun-return-to-bag')
+    removeSessionValue('perfun-return-to-bag')
     setResumeCheckout(false)
     preparing.current = true
     setCheckoutBusy(true)
     setCheckoutError('')
-    try { startCheckout(prepareBagCheckout(cart.items)) }
+    try { startCheckout(prepareBagCheckout(cart.items), 'bag') }
     catch (error) { setCheckoutError(errorMessage(error)) }
     finally { preparing.current = false; setCheckoutBusy(false) }
   }, [auth.user, auth.loading, cart.items, resumeCheckout])
+  function checkoutDirect(product: ProductChoice, formula: CompleteSelection, playSetBlends: CompleteSelection[]) {
+    if (preparing.current || directCheckoutBusy) return
+    if (auth.loading) { setDirectCheckoutError('Your account is still loading. Please try again.'); return }
+    setDirectCheckoutError('')
+    let items: OrderIntent[]
+    try { items = prepareDirectFormulaCheckout(product, formula, playSetBlends) }
+    catch (error) { setDirectCheckoutError(errorMessage(error)); return }
+
+    if (!auth.user) {
+      writeSessionValue(directCheckoutKey, JSON.stringify(items))
+      setPendingDirectCheckout(items)
+      setResumeDirectCheckout(true)
+      setAuthDialogOpen(true)
+      return
+    }
+
+    preparing.current = true
+    setDirectCheckoutBusy(true)
+    try { startCheckout(items, 'direct') }
+    catch (error) { setDirectCheckoutError(errorMessage(error)) }
+    finally { preparing.current = false; setDirectCheckoutBusy(false) }
+  }
+  useEffect(() => {
+    if (!resumeDirectCheckout || auth.loading || preparing.current) return
+    if (!pendingDirectCheckout) {
+      removeSessionValue(directCheckoutKey)
+      setResumeDirectCheckout(false)
+      return
+    }
+    if (!auth.user) return
+
+    removeSessionValue(directCheckoutKey)
+    setPendingDirectCheckout(null)
+    setResumeDirectCheckout(false)
+    preparing.current = true
+    setDirectCheckoutBusy(true)
+    setDirectCheckoutError('')
+    try { startCheckout(pendingDirectCheckout, 'direct') }
+    catch (error) { setDirectCheckoutError(errorMessage(error)) }
+    finally { preparing.current = false; setDirectCheckoutBusy(false) }
+  }, [auth.user, auth.loading, pendingDirectCheckout, resumeDirectCheckout])
   function orderPlaced(order: CustomerOrder) {
     setConfirmedOrder(order)
-    cart.clear()
+    if (checkoutDraft?.source !== 'direct') cart.clear()
     setCheckoutDraft(null)
     navigate('confirmation')
   }
@@ -145,14 +220,14 @@ function ConnectedApp({ catalog }: { catalog: Catalog }) {
       {view === 'admin' ? auth.user && auth.role === 'admin' ? <AdminPage key={auth.user.id} userId={auth.user.id}/> : <div className="screen-empty"><h2>{auth.loading || auth.roleLoading ? 'Loading account…' : 'Admin access required'}</h2><p>This page is available to administrators.</p></div> : null}
       {view === 'fulfillment' ? auth.user && (auth.role === 'vendor' || auth.role === 'admin') ? <FulfillmentPage key={`${auth.user.id}:${auth.role}`}/> : <div className="screen-empty"><h2>{auth.loading || auth.roleLoading ? 'Loading account…' : 'Fulfillment access required'}</h2><p>This page is available to vendors and administrators.</p>{!auth.user && !auth.loading ? <button onClick={auth.login}>Continue with Google</button> : null}</div> : null}
       {view === 'production' ? auth.user && (auth.role === 'perfumer' || auth.role === 'admin') ? <ProductionPage key={`${auth.user.id}:${auth.role}`} userId={auth.user.id} role={auth.role}/> : <div className="screen-empty"><h2>{auth.loading || auth.roleLoading ? 'Loading account…' : 'Production access required'}</h2><p>This page is available to perfumers and administrators.</p>{!auth.user && !auth.loading ? <button onClick={auth.login}>Continue with Google</button> : null}</div> : null}
-      {view === 'build' ? <BuildPage catalog={catalog} selection={blend.selection} product={catalog.productOptions.some(option => option.id === blend.product) ? blend.product : null} playSetBlends={blend.playSetBlends} added={blend.added} onSelect={blend.choose} onProduct={blend.setProduct} onAdd={addToBag} onAddPlaySetBlend={addPlaySetBlend} onAddPlaySet={addPlaySetToBag} onReset={blend.reset} onViewBag={() => navigate('bag')}/> : null}
-      {view === 'bag' ? <BagPage items={cart.items} onQuantity={cart.setQuantity} onSize={cart.setSize} onRemove={cart.remove} onBuild={() => { blend.reset(); navigate('build') }} onCheckout={checkoutBag}/> : null}
+      {view === 'build' ? <BuildPage catalog={catalog} selection={blend.selection} product={catalog.productOptions.some(option => option.id === blend.product) ? blend.product : null} playSetBlends={blend.playSetBlends} editingPlaySetIndex={blend.editingPlaySetIndex} added={blend.added} onSelect={blend.choose} onProduct={blend.setProduct} onAdd={addToBag} onSavePlaySetBlend={savePlaySetBlend} onAddPlaySet={addPlaySetToBag} onEditPlaySetBlend={blend.editPlaySetBlend} onCancelPlaySetEdit={blend.cancelPlaySetEdit} onExitPlaySet={blend.exitPlaySet} onGetItNow={checkoutDirect} getItNowBusy={directCheckoutBusy} getItNowError={directCheckoutError} onClearFormula={blend.clearCurrentFormula} onViewBag={() => navigate('bag')}/> : null}
+      {view === 'bag' ? <BagPage items={cart.items} onQuantity={cart.setQuantity} onSize={cart.setSize} onRemove={cart.remove} onBuild={() => { blend.clearCurrentFormula(); navigate('build') }} onCheckout={checkoutBag}/> : null}
       {view === 'checkout' ? auth.user && checkoutDraft?.userId === auth.user.id ? <CheckoutPage key={auth.user.id} userId={auth.user.id} items={checkoutDraft.items} onBack={() => navigate('bag')} onPlaced={orderPlaced}/> : <div className="screen-empty"><p>{auth.loading ? 'Loading account…' : 'Add a perfume to your bag to checkout.'}</p><button onClick={() => navigate('bag')}>View Bag</button></div> : null}
-      {view === 'confirmation' && confirmedOrder && confirmedOrder.user_id === auth.user?.id ? <OrderConfirmationPage order={confirmedOrder} onBuild={() => { blend.reset(); navigate('build') }} onOrders={() => navigate('orders')}/> : null}
+      {view === 'confirmation' && confirmedOrder && confirmedOrder.user_id === auth.user?.id ? <OrderConfirmationPage order={confirmedOrder} onBuild={() => { blend.clearCurrentFormula(); navigate('build') }} onOrders={() => navigate('orders')}/> : null}
       {view === 'orders' ? <OrdersPage key={auth.user?.id ?? 'guest'} userId={auth.user?.id} onLogin={() => setAuthDialogOpen(true)} onBuild={() => navigate('bag')}/> : null}
       {view === 'more' ? <MorePage/> : null}
     </main>
     {auth.role !== 'vendor' ? <BottomNav active={view} count={cart.count} onNavigate={navigate}/> : null}
-    <EmailPasswordDialog auth={auth} open={authDialogOpen} onClose={() => setAuthDialogOpen(false)} onAuthenticated={() => setAuthDialogOpen(false)}/>
+    <EmailPasswordDialog auth={auth} open={authDialogOpen} onClose={() => { setAuthDialogOpen(false); if (!auth.user && resumeCheckout) { removeSessionValue('perfun-return-to-bag'); setResumeCheckout(false) } if (!auth.user && resumeDirectCheckout) { removeSessionValue(directCheckoutKey); setPendingDirectCheckout(null); setResumeDirectCheckout(false) } }} onAuthenticated={() => setAuthDialogOpen(false)}/>
   </div>
 }

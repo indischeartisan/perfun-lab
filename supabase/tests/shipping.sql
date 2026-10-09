@@ -12,7 +12,7 @@ insert into public.orders(id,order_number,user_id,request_id,request_payload,add
  values('d2000000-0000-4000-8000-000000000001','SHIPPING-TEST','d1000000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"recipient_name":"PRIVATE CUSTOMER"}',727000,60000,0,667000);
 insert into public.order_items(id,order_id,position,product_snapshot,creations_snapshot,quantity,normal_unit_price,unit_price,line_total)
  select ('d3000000-0000-4000-8000-00000000000'||n)::uuid,'d2000000-0000-4000-8000-000000000001',n,
- jsonb_build_object('label',case n when 1 then '10 ML' when 2 then '30 ML' else 'Bundle 3x10ml' end,'volume_ml',case n when 2 then 30 else 10 end,'bottle_count',case n when 3 then 3 else 1 end,'secret_extra','PRIVATE'),
+ jsonb_build_object('id',case n when 1 then '10ml' when 2 then '30ml' else 'bundle-3x10ml' end,'label',case n when 1 then '10 ML' when 2 then '30 ML' else 'Bundle 3x10ml' end,'volume_ml',case n when 2 then 30 else 10 end,'bottle_count',case n when 3 then 3 else 1 end,'secret_extra','PRIVATE'),
  (select jsonb_agg(jsonb_build_object('id',gen_random_uuid(),'name','PRIVATE CREATION','notes',jsonb_build_array(
  jsonb_build_object('phase','top','note',jsonb_build_object('id','yuzu','name','Historical Yuzu '||b)),
  jsonb_build_object('phase','middle','note',jsonb_build_object('id','rose','name','Historical Rose')),
@@ -27,6 +27,10 @@ do $$ begin
  if exists(select 1 from public.shipments where order_number='SHIPPING-TEST') then raise exception 'Unpaid shipment created'; end if;
  begin insert into public.shipments(order_id) values('d2000000-0000-4000-8000-000000000001'); raise exception 'Unpaid insert allowed'; exception when check_violation then null; end;
 end $$;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','d1000000-0000-4000-8000-000000000004',true);
+select public.admin_set_default_vendor(null);
+reset role;
 set local role service_role;
 do $$ declare p jsonb; before_state jsonb; begin
  p:=public.reserve_payment('d2000000-0000-4000-8000-000000000001','d1000000-0000-4000-8000-000000000001','doku','sandbox','https://example.invalid');
@@ -35,6 +39,10 @@ do $$ declare p jsonb; before_state jsonb; begin
  perform public.apply_payment_event((p->>'id')::uuid,'shipping-paid',667000,'paid',now(),'{}');
  if before_state is distinct from (select to_jsonb(s) from public.shipments s where order_id='d2000000-0000-4000-8000-000000000001') then raise exception 'Payment retry changed shipment'; end if;
 end $$;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','d1000000-0000-4000-8000-000000000004',true);
+select public.admin_assign_vendor('d2000000-0000-4000-8000-000000000001','d1000000-0000-4000-8000-000000000005');
 reset role;
 do $$ declare s public.shipments; begin
  select * into s from public.shipments where order_number='SHIPPING-TEST';
@@ -51,7 +59,7 @@ do $$ declare sid uuid; begin
  select id into sid from public.shipments where order_number='SHIPPING-TEST';
  if sid is null then raise exception 'Vendor cannot read fulfillment'; end if;
  if exists(select 1 from public.orders) or exists(select 1 from public.order_items) or exists(select 1 from public.payments)
-  or exists(select 1 from public.addresses) or exists(select 1 from public.production_jobs)
+  or exists(select 1 from public.addresses)
   or exists(select 1 from public.profiles where id<>auth.uid()) then raise exception 'Vendor sees restricted customer data'; end if;
  begin perform public.fulfill_shipment(sid,'ship','JNE','REG','TEST123'); raise exception 'Early ship allowed'; exception when check_violation then null; end;
  begin perform public.fulfill_shipment(sid,'deliver'); raise exception 'Early delivery allowed'; exception when check_violation then null; end;
@@ -74,11 +82,18 @@ reset role;
 -- A missing production job must not be treated as completed.
 delete from public.production_jobs where order_item_id='d3000000-0000-4000-8000-000000000003';
 set local role authenticated;
-select set_config('request.jwt.claim.sub','d1000000-0000-4000-8000-000000000002',true);
-do $$ declare jid uuid; begin
+select set_config('request.jwt.claim.sub','d1000000-0000-4000-8000-000000000005',true);
+do $$ declare jid uuid; sid uuid; begin
  for jid in select id from public.production_jobs where order_number='SHIPPING-TEST' loop
   perform public.advance_production_job(jid,'start'); perform public.advance_production_job(jid,'complete');
  end loop;
+ select id into sid from public.shipments where order_number='SHIPPING-TEST';
+ begin perform public.fulfill_shipment(sid,'ship','JNE','REG','TEST123'); raise exception 'Vendor bypassed shipment readiness'; exception when check_violation then null; end;
+end $$;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','d1000000-0000-4000-8000-000000000002',true);
+do $$ begin
  if exists(select 1 from public.shipments) then raise exception 'Perfumer sees customer delivery data'; end if;
  begin perform public.fulfill_shipment(gen_random_uuid(),'ship'); raise exception 'Perfumer can ship'; exception when insufficient_privilege then null; end;
 end $$;
@@ -88,6 +103,7 @@ do $$ begin
 end $$;
 insert into public.production_jobs(order_item_id) values('d3000000-0000-4000-8000-000000000003');
 set local role authenticated;
+select set_config('request.jwt.claim.sub','d1000000-0000-4000-8000-000000000005',true);
 do $$ declare jid uuid; begin
  select id into jid from public.production_jobs where order_item_id='d3000000-0000-4000-8000-000000000003';
  perform public.advance_production_job(jid,'start'); perform public.advance_production_job(jid,'complete');
@@ -154,7 +170,7 @@ do $$ begin
  if exists(select 1 from public.orders) or exists(select 1 from public.order_items) or exists(select 1 from public.payments)
   or exists(select 1 from public.addresses) then raise exception 'Former customer vendor sees historical customer data'; end if;
  begin perform public.quote_order('d4000000-0000-4000-8000-000000000001','[{"product_id":"10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"}]}]'); raise exception 'Vendor can bypass RLS through checkout'; exception when insufficient_privilege then null; end;
- if not exists(select 1 from public.shipments where order_number='SHIPPING-TEST') then raise exception 'Vendor lost fulfillment access'; end if;
+ if exists(select 1 from public.shipments where order_number='SHIPPING-TEST') then raise exception 'Unassigned vendor sees another vendor shipment'; end if;
 end $$;
 reset role;
 update public.profiles set role='customer' where id='d1000000-0000-4000-8000-000000000001';

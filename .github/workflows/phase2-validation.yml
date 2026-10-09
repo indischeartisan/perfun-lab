@@ -1,0 +1,110 @@
+name: Phase 2 local validation
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Build and local database tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          # Node 24 supports the built-in TypeScript stripping used by test:payments.
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.81.3
+
+      - name: Verify local CI prerequisites
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          supabase --version
+          docker info
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npm exec tsc -- -b
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Payment unit tests
+        run: npm run test:payments
+
+      - name: Production build
+        run: npm run build
+
+      - name: Apply local migrations and run SQL regression tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          # This starts Docker containers on the ephemeral GitHub runner only.
+          # No project is linked and no remote Supabase command is invoked.
+          cleanup() {
+            supabase stop --no-backup || true
+          }
+          trap cleanup EXIT
+
+          supabase start
+          supabase db reset --local --yes
+          supabase migration list --local
+
+          db_container="$(docker ps --format '{{.ID}} {{.Names}}' | awk '$2 ~ /^supabase_db_/ { print $1; exit }')"
+          if [[ -z "$db_container" ]]; then
+            echo "::error::Local Supabase Postgres container was not found."
+            exit 1
+          fi
+
+          sql_tests=(
+            supabase/tests/ownership.sql
+            supabase/tests/orders.sql
+            supabase/tests/direct_formulas.sql
+            supabase/tests/payments.sql
+            supabase/tests/production.sql
+            supabase/tests/shipping.sql
+            supabase/tests/admin.sql
+            supabase/tests/vendor_assignment.sql
+          )
+          failed_tests=()
+
+          for sql_test in "${sql_tests[@]}"; do
+            if [[ ! -f "$sql_test" ]]; then
+              echo "::error file=$sql_test::Required SQL test file is missing."
+              failed_tests+=("$sql_test (missing)")
+              continue
+            fi
+
+            echo "::group::SQL test: $sql_test"
+            if ! docker exec -i "$db_container" psql \
+              -v ON_ERROR_STOP=1 \
+              -U postgres \
+              -d postgres < "$sql_test"; then
+              failed_tests+=("$sql_test")
+            fi
+            echo "::endgroup::"
+          done
+
+          if (( ${#failed_tests[@]} > 0 )); then
+            echo "::error::One or more local SQL tests failed:"
+            printf ' - %s\n' "${failed_tests[@]}"
+            exit 1
+          fi

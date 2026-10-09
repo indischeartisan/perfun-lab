@@ -37,4 +37,16 @@
 .workspace-nav { display: flex; gap: 8px; max-width: 1060px; margin: 14px auto 0; padding: 0 18px; }
 .workspace-nav button { flex: 1; min-height: 48px; border: 1px solid #bcb9ae; background: #fffdf7; border-radius: 10px; font-weight: 700; }
 .workspace-nav button[aria-current="page"] { background: #242724; border-color: #242724; color: #fff; }
-@media(max-width:600px) { .admin-phase { grid-template-columns: 1fr; } .admin-metrics { grid-template-columns: 1fr 1fr; gap: 8px; } .admin-metrics article { padding: 12px; } .admin-metrics strong { font-size: 1.1rem; } .admin-tabs button { flex: 1 1 auto; } }
+.fulfillment-address-copy { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; align-items: start; }
+.fulfillment-address-copy pre { margin: 8px 0 0; font: inherit; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.fulfillment-address-copy > p { grid-column: 1 / -1; margin: 0; color: #536c00; }
+.packing-card { display: grid; gap: 12px; margin-top: 16px; padding: 16px; border: 1px solid #dedbd2; border-radius: 12px; background: #fffdf7; }
+.packing-card h2,.packing-card p { margin: 0; }
+.packing-card > p { color: #68665e; font-size: .9rem; line-height: 1.5; }
+.packing-checklist { display: grid; gap: 10px; margin: 0; padding: 0; border: 0; }
+.packing-checklist label { display: flex; gap: 10px; align-items: flex-start; line-height: 1.4; }
+.packing-checklist input { width: 18px; height: 18px; flex: 0 0 auto; margin-top: 1px; }
+.shipping-cost-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.shipping-cost-grid label { display: grid; gap: 7px; font-size: .85rem; }
+.shipping-cost-grid input,.shipping-cost-grid select { width: 100%; min-height: 42px; box-sizing: border-box; padding: 9px; border: 1px solid #bcb9ae; border-radius: 8px; background: #fff; color: #27271e; font: inherit; }
+@media(max-width:600px) { .admin-phase { grid-template-columns: 1fr; } .admin-metrics { grid-template-columns: 1fr 1fr; gap: 8px; } .admin-metrics article { padding: 12px; } .admin-metrics strong { font-size: 1.1rem; } .admin-tabs button { flex: 1 1 auto; } .fulfillment-address-copy,.shipping-cost-grid { grid-template-columns: 1fr; } .fulfillment-address-copy > p { grid-column: auto; } }

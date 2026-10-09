@@ -130,11 +130,13 @@ do $$ begin if (select status from public.shipments where order_number='SHIPPING
 update public.orders set status='paid' where id='d2000000-0000-4000-8000-000000000001';
 set local role authenticated;
 select set_config('request.jwt.claim.sub','d1000000-0000-4000-8000-000000000005',true);
-do $$ declare s public.shipments; again public.shipments; begin
- select * into s from public.shipments where order_number='SHIPPING-TEST';
- begin perform public.fulfill_shipment(s.id,'ship','JNE','REG',''); raise exception 'Tracking not required'; exception when check_violation then null; end;
- begin perform public.fulfill_shipment(s.id,'ship',repeat('x',101),'REG','TRACK'); raise exception 'Unbounded details accepted'; exception when check_violation then null; end;
- s:=public.fulfill_shipment(s.id,'save',' JNE ',' REG ',' TEST123 ');
+do $$ declare sid uuid; s public.shipments; again public.shipments; packed_checklist jsonb:='{"bottles_checked":true,"formula_stickers_checked":true,"bottles_sealed":true,"packaging_ready":true,"recipient_label_checked":true}'; begin
+ select id into sid from public.shipments where order_number='SHIPPING-TEST';
+ begin perform public.fulfill_shipment(sid,'ship','JNE','REG',''); raise exception 'Tracking not required'; exception when check_violation then null; end;
+ begin perform public.fulfill_shipment(sid,'ship',repeat('x',101),'REG','TRACK'); raise exception when check_violation then null; end;
+ s:=public.save_shipment_packing(sid,packed_checklist,true);
+ perform public.save_actual_shipping(sid,15000,'vendor');
+ s:=public.fulfill_shipment(sid,'save',' JNE ',' REG ',' TEST123 ');
  if s.status<>'ready_to_ship' or s.courier<>'JNE' or s.shipped_at is not null then raise exception 'Save marked shipped'; end if;
  s:=public.fulfill_shipment(s.id,'ship','JNE','REG','TEST123'); again:=public.fulfill_shipment(s.id,'ship','JNE','REG','TEST123');
  if s.status<>'shipped' or s.shipped_at is null or to_jsonb(s)<>to_jsonb(again) then raise exception 'Ship/retry failed'; end if;
@@ -146,10 +148,10 @@ do $$ begin
  if (select tracking_number from public.shipments where order_number='SHIPPING-TEST')<>'TEST123' then raise exception 'Customer missing tracking'; end if;
 end $$;
 select set_config('request.jwt.claim.sub','d1000000-0000-4000-8000-000000000004',true);
-do $$ declare s public.shipments; again public.shipments; begin
- select * into s from public.shipments where order_number='SHIPPING-TEST';
- if s.id is null then raise exception 'Admin cannot see shipments'; end if;
- s:=public.fulfill_shipment(s.id,'deliver'); again:=public.fulfill_shipment(s.id,'deliver');
+do $$ declare sid uuid; s public.shipments; again public.shipments; begin
+ select id into sid from public.shipments where order_number='SHIPPING-TEST';
+ if sid is null then raise exception 'Admin cannot see shipments'; end if;
+ s:=public.fulfill_shipment(sid,'deliver'); again:=public.fulfill_shipment(sid,'deliver');
  if s.status<>'delivered' or s.delivered_at is null or to_jsonb(s)<>to_jsonb(again) then raise exception 'Deliver/retry failed'; end if;
 end $$;
 reset role;

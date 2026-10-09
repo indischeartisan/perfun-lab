@@ -22,7 +22,7 @@ export function AdminPage({ userId }: { userId: string }) {
       {tab === 'Customers' ? <AdminCustomers/> : null}
       {tab === 'Notes' || tab === 'Products & Pricing' ? <AdminCatalogPanel section={tab === 'Notes' ? 'notes' : 'products'}/> : null}
       {tab === 'Production' ? <ProductionPage userId={userId} role="admin"/> : null}
-      {tab === 'Fulfillment' ? <FulfillmentPage/> : null}
+      {tab === 'Fulfillment' ? <FulfillmentPage role="admin"/> : null}
     </div>
   </section>
 }

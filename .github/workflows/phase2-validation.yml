@@ -84,6 +84,7 @@ jobs:
             supabase/tests/payments.sql
             supabase/tests/production.sql
             supabase/tests/shipping.sql
+            supabase/tests/packing.sql
             supabase/tests/admin.sql
             supabase/tests/vendor_assignment.sql
           )

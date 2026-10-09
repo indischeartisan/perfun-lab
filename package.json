@@ -9,7 +9,7 @@
                     "preview":  "vite preview",
                     "lint":  "eslint .",
                     "test:payments":  "node --experimental-strip-types --test tests/payments.test.mjs",
-                    "test:client-state":  "node --experimental-strip-types --test tests/client-state.test.mjs",
+                    "test:client-state":  "node --experimental-strip-types --test tests/storage-validation.test.mjs tests/client-state.test.mjs",
                     "deploy:cloudflare":  "npm run build \u0026\u0026 wrangler pages deploy dist --project-name perfun-lab --branch main"
                 },
     "dependencies":  {

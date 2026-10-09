@@ -60,7 +60,10 @@ export function isOrderIntents(value: unknown): value is OrderIntent[] {
 }
 
 export function orderIntentsMatchCatalog(value: unknown, noteGroups: Record<NoteLayer, FragranceNote[]>) {
-  return isOrderIntents(value) && value.every(item => item.formulas.every(formula => Boolean(rehydrateCompleteSelection(formula, noteGroups))))
+  return isOrderIntents(value) && value.every(item => item.formulas.every(formula => {
+    const notes = layers.map(layer => noteGroups[layer].find(note => note.id === formula[layer]) ?? null)
+    return validNotes(notes)
+  }))
 }
 
 export function readPendingCheckout(value: string | null, noteGroups: Record<NoteLayer, FragranceNote[]>): OrderIntent[] | null {

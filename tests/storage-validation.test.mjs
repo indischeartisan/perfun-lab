@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { isOrderIntents, rehydratePlaySet, rehydrateSelection } from '../src/lib/storageValidation.ts'
+import { isOrderIntents, orderIntentsMatchCatalog, rehydratePlaySet, rehydrateSelection } from '../src/lib/storageValidation.ts'
 
 const note = (id, layer) => ({ id, layer, name: id, category: 'test', shortDescription: '', predictionText: '', stickerColor: '#000', icon: '', profile: {} })
 const groups = {
@@ -26,6 +26,8 @@ test('invalid Play Set shapes and duplicate notes are rejected safely', () => {
 test('checkout intents require valid products, quantities, formula counts, and distinct notes', () => {
   const intentFormula = { top: 'yuzu', middle: 'matcha', base: 'amber' }
   assert.equal(isOrderIntents([{ product_id: '10ml', quantity: 1, formulas: [intentFormula] }]), true)
+  assert.equal(orderIntentsMatchCatalog([{ product_id: '10ml', quantity: 1, formulas: [intentFormula] }], groups), true)
+  assert.equal(orderIntentsMatchCatalog([{ product_id: '10ml', quantity: 1, formulas: [{ ...intentFormula, top: 'missing' }] }], groups), false)
   assert.equal(isOrderIntents([{ product_id: 'bundle-3x10ml', quantity: 1, formulas: [intentFormula] }]), false)
   assert.equal(isOrderIntents([{ product_id: '10ml', quantity: 0, formulas: [intentFormula] }]), false)
   assert.equal(isOrderIntents([{ product_id: '10ml', quantity: 1, formulas: [{ top: 'yuzu', middle: 'yuzu', base: 'amber' }] }]), false)

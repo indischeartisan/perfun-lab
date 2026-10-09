@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 
 interface LocalStorageOptions<T> {
   restore?: (value: unknown) => T | null
@@ -40,10 +40,6 @@ export function loadValue<T>(key: string | null, initialValue: T, options: Local
 
 export function useLocalStorage<T>(key: string | null, initialValue: T, options: LocalStorageOptions<T> = {}) {
   const [stored, setStored] = useState(() => ({ key, value: loadValue(key, initialValue, options) }))
-  const initialValueRef = useRef(initialValue)
-  const optionsRef = useRef(options)
-  initialValueRef.current = initialValue
-  optionsRef.current = options
 
   if (stored.key !== key) {
     setStored({ key, value: loadValue(key, initialValue, options) })
@@ -57,8 +53,8 @@ export function useLocalStorage<T>(key: string | null, initialValue: T, options:
   }, [key, stored])
 
   const setValue = useCallback<Dispatch<SetStateAction<T>>>(next => setStored(current => {
-    const currentValue = current.key === key ? current.value : loadValue(key, initialValueRef.current, optionsRef.current)
-    return { key, value: typeof next === 'function' ? (next as (previous: T) => T)(currentValue) : next }
+    if (current.key !== key) return current
+    return { ...current, value: typeof next === 'function' ? (next as (previous: T) => T)(current.value) : next }
   }), [key])
   return [stored.key === key ? stored.value : initialValue, setValue] as const
 }

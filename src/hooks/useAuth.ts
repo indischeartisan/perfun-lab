@@ -38,6 +38,10 @@ export function useAuth() {
     }).catch(error => { if (active) { setError(errorMessage(error)); setLoading(false) } })
     return () => { active = false; subscription.unsubscribe() }
   }, [])
+  useEffect(() => {
+    if (!session?.user.id) return
+    window.dispatchEvent(new CustomEvent('perfun-authenticated', { detail: session.user.id }))
+  }, [session?.user.id])
   async function login() {
     setError('')
     try {

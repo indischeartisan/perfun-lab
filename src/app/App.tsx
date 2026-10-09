@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { BottomNav } from '../components/BottomNav'
 import { Header } from '../components/Header'
 import { useBlend } from '../hooks/useBlend'
@@ -24,6 +24,7 @@ import { AccountMenu } from '../components/AccountMenu'
 import { EmailPasswordDialog } from '../components/EmailPasswordDialog'
 import { prepareBagCheckout, prepareDirectFormulaCheckout } from '../lib/bagCheckout'
 import { isCheckoutDraft, orderIntentsMatchCatalog } from '../lib/storageValidation'
+import { bagCheckoutResumeKey, directCheckoutResumeKey, readPendingDirectCheckout, readSessionValue, removeSessionValue, writeSessionValue } from '../lib/checkoutResume'
 
 import { ProductionPage } from '../pages/ProductionPage'
 import { FulfillmentPage } from '../pages/FulfillmentPage'
@@ -36,37 +37,9 @@ function isComplete(selection: Selection): selection is CompleteSelection {
   return Boolean(selection.top && selection.middle && selection.base)
 }
 
-const directCheckoutKey = 'perfun-direct-checkout-v1'
-
-function readSessionValue(key: string) {
-  try { return sessionStorage.getItem(key) } catch { return null }
-}
-
-function writeSessionValue(key: string, value: string) {
-  try { sessionStorage.setItem(key, value) } catch { /* Session resume is optional. */ }
-}
-
-function removeSessionValue(key: string) {
-  try { sessionStorage.removeItem(key) } catch { /* Session resume is optional. */ }
-}
-
-function readPendingDirectCheckout(noteGroups: Catalog['noteGroups']): OrderIntent[] | null {
-  try {
-    const value = readSessionValue(directCheckoutKey)
-    if (!value) return null
-    const items = JSON.parse(value)
-    if (orderIntentsMatchCatalog(items, noteGroups)) return items
-    removeSessionValue(directCheckoutKey)
-    return null
-  } catch {
-    removeSessionValue(directCheckoutKey)
-    return null
-  }
-}
-
 function viewFromHash(): AppView {
   const value = window.location.hash.slice(1)
-  if (!value && readSessionValue('perfun-return-to-bag')) return 'bag'
+  if (!value && readSessionValue(bagCheckoutResumeKey)) return 'bag'
   return ['bag', 'checkout', 'orders', 'production', 'fulfillment', 'admin'].includes(value) ? value as AppView : 'build'
 }
 
@@ -89,9 +62,9 @@ export default function App() {
 function ConnectedApp({ catalog }: { catalog: Catalog }) {
   const [requestedView, setView] = useState<AppView>(viewFromHash)
   const [authDialogOpen, setAuthDialogOpen] = useState(false)
-  const [resumeCheckout, setResumeCheckout] = useState(() => readSessionValue('perfun-return-to-bag') === '1')
+  const [resumeCheckout, setResumeCheckout] = useState(() => readSessionValue(bagCheckoutResumeKey) === '1')
   const [pendingDirectCheckout, setPendingDirectCheckout] = useState<OrderIntent[] | null>(() => readPendingDirectCheckout(catalog.noteGroups))
-  const [resumeDirectCheckout, setResumeDirectCheckout] = useState(() => readSessionValue(directCheckoutKey) !== null)
+  const [resumeDirectCheckout, setResumeDirectCheckout] = useState(() => readSessionValue(directCheckoutResumeKey) !== null)
   useEffect(() => {
     const onHashChange = () => setView(viewFromHash())
     window.addEventListener('hashchange', onHashChange)
@@ -103,7 +76,6 @@ function ConnectedApp({ catalog }: { catalog: Catalog }) {
   const blend = useBlend(catalog.noteGroups, storageOwner)
   const cart = useCart(catalog, storageOwner)
   const [checkoutDraft, setCheckoutDraft] = useLocalStorage<{ userId: string; items: OrderIntent[]; source?: 'bag' | 'direct' } | null>(auth.loading || !auth.user ? null : `perfun:user:${auth.user.id}:checkout-draft`, null, { restore: value => isCheckoutDraft(value) && orderIntentsMatchCatalog(value.items, catalog.noteGroups) ? value : null })
-  useEffect(() => { if (auth.passwordRecovery) setAuthDialogOpen(true) }, [auth.passwordRecovery])
   const preparing = useRef(false)
   const [checkoutBusy, setCheckoutBusy] = useState(false)
   const [checkoutError, setCheckoutError] = useState('')
@@ -111,15 +83,17 @@ function ConnectedApp({ catalog }: { catalog: Catalog }) {
   const [directCheckoutError, setDirectCheckoutError] = useState('')
   const view = auth.role === 'vendor' ? 'fulfillment' : requestedView
 
+  const userId = auth.user?.id
+
   function scrollToTop() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  function navigate(next: AppView) {
+  const navigate = useCallback((next: AppView) => {
     setView(next)
     window.history.replaceState(null, '', ['bag', 'checkout', 'production', 'fulfillment', 'admin'].includes(next) ? `#${next}` : window.location.pathname + window.location.search)
     scrollToTop()
-  }
+  }, [])
 
   function addToBag() {
     if (!isComplete(blend.selection) || blend.product === null || blend.product === 'play-set') return
@@ -140,20 +114,21 @@ function ConnectedApp({ catalog }: { catalog: Catalog }) {
 
   async function checkoutBag() {
     if (preparing.current || auth.loading) return
-    if (!auth.user) { writeSessionValue('perfun-return-to-bag', '1'); setResumeCheckout(true); setAuthDialogOpen(true); return }
+    if (!auth.user) { writeSessionValue(bagCheckoutResumeKey, '1'); setResumeCheckout(true); setAuthDialogOpen(true); return }
     preparing.current = true; setCheckoutBusy(true); setCheckoutError('')
     try { startCheckout(prepareBagCheckout(cart.items), 'bag') }
     catch (error) { setCheckoutError(errorMessage(error)) }
     finally { preparing.current = false; setCheckoutBusy(false) }
   }
-  function startCheckout(items: OrderIntent[], source: 'bag' | 'direct' = 'bag') {
-    if (!auth.user) return
-    setCheckoutDraft({ userId: auth.user.id, items, source })
+  const startCheckout = useCallback((items: OrderIntent[], source: 'bag' | 'direct' = 'bag') => {
+    if (!userId) return
+    setCheckoutDraft({ userId, items, source })
     navigate('checkout')
-  }
-  useEffect(() => {
-    if (!auth.user || !resumeCheckout || auth.loading || preparing.current) return
-    removeSessionValue('perfun-return-to-bag')
+  }, [navigate, setCheckoutDraft, userId])
+
+  const resumeBagCheckout = useCallback(() => {
+    if (!userId || !resumeCheckout || auth.loading || preparing.current) return
+    removeSessionValue(bagCheckoutResumeKey)
     setResumeCheckout(false)
     preparing.current = true
     setCheckoutBusy(true)
@@ -161,7 +136,11 @@ function ConnectedApp({ catalog }: { catalog: Catalog }) {
     try { startCheckout(prepareBagCheckout(cart.items), 'bag') }
     catch (error) { setCheckoutError(errorMessage(error)) }
     finally { preparing.current = false; setCheckoutBusy(false) }
-  }, [auth.user, auth.loading, cart.items, resumeCheckout])
+  }, [auth.loading, cart.items, resumeCheckout, startCheckout, userId])
+
+  useEffect(() => {
+    resumeBagCheckout()
+  }, [resumeBagCheckout])
   function checkoutDirect(product: ProductChoice, formula: CompleteSelection, playSetBlends: CompleteSelection[]) {
     if (preparing.current || directCheckoutBusy) return
     if (auth.loading) { setDirectCheckoutError('Your account is still loading. Please try again.'); return }
@@ -171,7 +150,7 @@ function ConnectedApp({ catalog }: { catalog: Catalog }) {
     catch (error) { setDirectCheckoutError(errorMessage(error)); return }
 
     if (!auth.user) {
-      writeSessionValue(directCheckoutKey, JSON.stringify(items))
+      writeSessionValue(directCheckoutResumeKey, JSON.stringify(items))
       setPendingDirectCheckout(items)
       setResumeDirectCheckout(true)
       setAuthDialogOpen(true)
@@ -184,16 +163,16 @@ function ConnectedApp({ catalog }: { catalog: Catalog }) {
     catch (error) { setDirectCheckoutError(errorMessage(error)) }
     finally { preparing.current = false; setDirectCheckoutBusy(false) }
   }
-  useEffect(() => {
+  const continueDirectCheckout = useCallback(() => {
     if (!resumeDirectCheckout || auth.loading || preparing.current) return
     if (!pendingDirectCheckout) {
-      removeSessionValue(directCheckoutKey)
+      removeSessionValue(directCheckoutResumeKey)
       setResumeDirectCheckout(false)
       return
     }
-    if (!auth.user) return
+    if (!userId) return
 
-    removeSessionValue(directCheckoutKey)
+    removeSessionValue(directCheckoutResumeKey)
     setPendingDirectCheckout(null)
     setResumeDirectCheckout(false)
     preparing.current = true
@@ -202,7 +181,11 @@ function ConnectedApp({ catalog }: { catalog: Catalog }) {
     try { startCheckout(pendingDirectCheckout, 'direct') }
     catch (error) { setDirectCheckoutError(errorMessage(error)) }
     finally { preparing.current = false; setDirectCheckoutBusy(false) }
-  }, [auth.user, auth.loading, pendingDirectCheckout, resumeDirectCheckout])
+  }, [auth.loading, pendingDirectCheckout, resumeDirectCheckout, startCheckout, userId])
+
+  useEffect(() => {
+    continueDirectCheckout()
+  }, [continueDirectCheckout])
   function orderPlaced(order: CustomerOrder) {
     setConfirmedOrder(order)
     if (checkoutDraft?.source !== 'direct') cart.clear()
@@ -228,6 +211,6 @@ function ConnectedApp({ catalog }: { catalog: Catalog }) {
       {view === 'more' ? <MorePage/> : null}
     </main>
     {auth.role !== 'vendor' ? <BottomNav active={view} count={cart.count} onNavigate={navigate}/> : null}
-    <EmailPasswordDialog auth={auth} open={authDialogOpen} onClose={() => { setAuthDialogOpen(false); if (!auth.user && resumeCheckout) { removeSessionValue('perfun-return-to-bag'); setResumeCheckout(false) } if (!auth.user && resumeDirectCheckout) { removeSessionValue(directCheckoutKey); setPendingDirectCheckout(null); setResumeDirectCheckout(false) } }} onAuthenticated={() => setAuthDialogOpen(false)}/>
+    <EmailPasswordDialog auth={auth} open={authDialogOpen} onClose={() => { setAuthDialogOpen(false); if (!auth.user && resumeCheckout) { removeSessionValue(bagCheckoutResumeKey); setResumeCheckout(false) } if (!auth.user && resumeDirectCheckout) { removeSessionValue(directCheckoutResumeKey); setPendingDirectCheckout(null); setResumeDirectCheckout(false) } }} onAuthenticated={() => setAuthDialogOpen(false)}/>
   </div>
 }

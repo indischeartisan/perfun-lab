@@ -49,6 +49,9 @@ jobs:
       - name: Payment unit tests
         run: npm run test:payments
 
+      - name: Client state regression tests
+        run: npm run test:client-state
+
       - name: Production build
         run: npm run build
 

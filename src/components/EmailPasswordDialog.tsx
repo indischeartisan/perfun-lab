@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { useAuth } from '../hooks/useAuth'
 
 type Mode = 'sign-in' | 'sign-up' | 'forgot-password' | 'recovery' | 'verify-email'
@@ -13,20 +13,21 @@ function messageFor(error: unknown, action: 'sign-in' | 'sign-up' | 'send' | 'pa
 }
 
 export function EmailPasswordDialog({ auth, open, onClose, onAuthenticated }: { auth: ReturnType<typeof useAuth>; open: boolean; onClose: () => void; onAuthenticated: () => void }) {
-  const [mode, setMode] = useState<Mode>('sign-in')
+  const [recoverySession, setRecoverySession] = useState(false)
+  if (auth.passwordRecovery && !recoverySession) setRecoverySession(true)
+
+  const recoveryMode = auth.passwordRecovery || recoverySession
+  if (!open && !recoveryMode) return null
+  return <EmailPasswordDialogContents key={recoveryMode ? 'recovery' : 'sign-in'} auth={auth} onClose={() => { setRecoverySession(false); onClose() }} onAuthenticated={() => { setRecoverySession(false); onAuthenticated() }}/>
+}
+
+function EmailPasswordDialogContents({ auth, onClose, onAuthenticated }: { auth: ReturnType<typeof useAuth>; onClose: () => void; onAuthenticated: () => void }) {
+  const [mode, setMode] = useState<Mode>(() => auth.passwordRecovery ? 'recovery' : 'sign-in')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
-
-  useEffect(() => {
-    if (!open) return
-    setMode(auth.passwordRecovery ? 'recovery' : 'sign-in')
-    setPassword('')
-    setConfirmPassword('')
-    setMessage('')
-  }, [open, auth.passwordRecovery])
 
   function changeMode(next: Mode) {
     setMode(next)
@@ -85,7 +86,6 @@ export function EmailPasswordDialog({ auth, open, onClose, onAuthenticated }: { 
     finally { setBusy(false) }
   }
 
-  if (!open) return null
   const isPasswordMode = mode === 'sign-in' || mode === 'sign-up' || mode === 'recovery'
   const title = mode === 'sign-in' ? 'Welcome back.' : mode === 'sign-up' ? 'Create your account.' : mode === 'forgot-password' ? 'Reset your password.' : mode === 'recovery' ? 'Choose a new password.' : 'Check your email.'
   return <div className="auth-dialog-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !busy) onClose() }}>

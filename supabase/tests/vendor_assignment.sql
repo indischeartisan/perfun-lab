@@ -48,8 +48,7 @@ do $$ declare result jsonb; repeated jsonb; begin
  result:=public.admin_assign_vendor('b2000000-0000-4000-8000-000000000001','b1000000-0000-4000-8000-000000000003');
  repeated:=public.admin_assign_vendor('b2000000-0000-4000-8000-000000000001','b1000000-0000-4000-8000-000000000003');
  if result->>'vendor_fee_amount'<>'300000' or repeated->>'vendor_fee_amount'<>'300000' then raise exception 'Play Set fee is not 300000'; end if;
- if (select count(*) from public.order_vendor_assignments where order_id='b2000000-0000-4000-8000-000000000001')<>1 then raise exception 'Assignment retry duplicated row'; end if;
- if (public.admin_vendor_assignments(0)->>'count')::integer<>1 then raise exception 'Admin cannot monitor assignment'; end if;
+ if (public.admin_vendor_assignments(0)->>'count')::integer<>1 then raise exception 'Assignment retry duplicated row or admin cannot monitor assignment'; end if;
  begin perform public.admin_assign_vendor('b2000000-0000-4000-8000-000000000002','b1000000-0000-4000-8000-000000000003'); raise exception 'Pending order assigned'; exception when check_violation then null; end;
 end $$;
 select set_config('app.vendor_assignment_job',(select id::text from public.production_jobs where order_item_id='b3000000-0000-4000-8000-000000000001'),false);

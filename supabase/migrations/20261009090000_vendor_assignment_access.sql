@@ -227,6 +227,9 @@ begin
  select role into actor_role from public.profiles where id=actor;
  if actor is null or actor_role not in ('vendor','perfumer') then raise exception 'Vendor or perfumer access required' using errcode='42501'; end if;
  if p_action is null or p_action not in ('start','complete') then raise exception 'Invalid production action' using errcode='22023'; end if;
+ if actor_role='vendor' and not exists(select 1 from public.production_jobs where id=p_job_id and vendor_id=actor) then
+  raise exception 'Assigned vendor access required' using errcode='42501';
+ end if;
  select i.order_id into parent_id from public.production_jobs j join public.order_items i on i.id=j.order_item_id where j.id=p_job_id;
  if parent_id is null then raise exception 'Production job not found' using errcode='P0002'; end if;
  select * into parent from public.orders where id=parent_id for update;

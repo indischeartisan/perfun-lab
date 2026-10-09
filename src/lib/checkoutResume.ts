@@ -1,6 +1,6 @@
 import type { Catalog } from './catalog'
 import type { OrderIntent } from './orders'
-import { orderIntentsMatchCatalog } from './storageValidation'
+import { readPendingCheckout } from './storageValidation'
 
 export const bagCheckoutResumeKey = 'perfun-return-to-bag'
 export const directCheckoutResumeKey = 'perfun-direct-checkout-v1'
@@ -21,8 +21,8 @@ export function readPendingDirectCheckout(noteGroups: Catalog['noteGroups']): Or
   try {
     const value = readSessionValue(directCheckoutResumeKey)
     if (!value) return null
-    const items = JSON.parse(value)
-    if (orderIntentsMatchCatalog(items, noteGroups)) return items
+    const items = readPendingCheckout(value, noteGroups)
+    if (items) return items
     removeSessionValue(directCheckoutResumeKey)
     return null
   } catch {

@@ -63,6 +63,16 @@ export function orderIntentsMatchCatalog(value: unknown, noteGroups: Record<Note
   return isOrderIntents(value) && value.every(item => item.formulas.every(formula => Boolean(rehydrateCompleteSelection(formula, noteGroups))))
 }
 
+export function readPendingCheckout(value: string | null, noteGroups: Record<NoteLayer, FragranceNote[]>): OrderIntent[] | null {
+  if (!value) return null
+  try {
+    const items = JSON.parse(value)
+    return orderIntentsMatchCatalog(items, noteGroups) ? items : null
+  } catch {
+    return null
+  }
+}
+
 export function isCheckoutDraft(value: unknown): value is { userId: string; items: OrderIntent[]; source?: 'bag' | 'direct' } {
   return isRecord(value) && typeof value.userId === 'string' && value.userId.length > 0 && (value.source === undefined || value.source === 'bag' || value.source === 'direct') && isOrderIntents(value.items)
 }

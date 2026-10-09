@@ -101,7 +101,7 @@ end $$;
 revoke all on function private.admin_assign_vendor(uuid,uuid) from public,anon,authenticated;
 
 create or replace function public.admin_assign_vendor(p_order_id uuid,p_vendor_id uuid)
-returns jsonb language sql security invoker set search_path='' as $$ select private.admin_assign_vendor(p_order_id,p_vendor_id); $$;
+returns jsonb language sql security definer set search_path='' as $$ select private.admin_assign_vendor(p_order_id,p_vendor_id); $$;
 revoke all on function public.admin_assign_vendor(uuid,uuid) from public,anon;
 grant execute on function public.admin_assign_vendor(uuid,uuid) to authenticated;
 
@@ -121,7 +121,7 @@ begin
 end $$;
 revoke all on function private.admin_vendor_assignments(integer) from public,anon,authenticated;
 create or replace function public.admin_vendor_assignments(p_page integer default 0)
-returns jsonb language sql security invoker set search_path='' as $$ select private.admin_vendor_assignments(p_page); $$;
+returns jsonb language sql security definer set search_path='' as $$ select private.admin_vendor_assignments(p_page); $$;
 revoke all on function public.admin_vendor_assignments(integer) from public,anon;
 grant execute on function public.admin_vendor_assignments(integer) to authenticated;
 
@@ -140,7 +140,7 @@ begin
 end $$;
 revoke all on function private.admin_set_default_vendor(uuid) from public,anon,authenticated;
 create or replace function public.admin_set_default_vendor(p_vendor_id uuid default null)
-returns void language sql security invoker set search_path='' as $$ select private.admin_set_default_vendor(p_vendor_id); $$;
+returns void language sql security definer set search_path='' as $$ select private.admin_set_default_vendor(p_vendor_id); $$;
 revoke all on function public.admin_set_default_vendor(uuid) from public,anon;
 grant execute on function public.admin_set_default_vendor(uuid) to authenticated;
 

@@ -62,7 +62,7 @@ export function isOrderIntents(value: unknown): value is OrderIntent[] {
 export function orderIntentsMatchCatalog(value: unknown, noteGroups: Record<NoteLayer, FragranceNote[]>) {
   return isOrderIntents(value) && value.every(item => item.formulas.every(formula => {
     const notes = layers.map(layer => noteGroups[layer].find(note => note.id === formula[layer]) ?? null)
-    return validNotes(notes)
+    return notes.every((note): note is FragranceNote => note !== null) && validNotes(notes)
   }))
 }
 

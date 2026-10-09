@@ -46,7 +46,7 @@ begin
  foreach field in array required loop
   if jsonb_typeof(p_checklist->field) is distinct from 'boolean' then raise exception 'Packing checklist is invalid' using errcode='23514'; end if;
  end loop;
- select bool_and((p_checklist->>field)::boolean) into all_checked from unnest(required) field;
+ select bool_and((p_checklist->>required_key.key)::boolean) into all_checked from unnest(required) as required_key(key);
  if shipment.packing_status='packed' then
   if shipment.packing_checklist=p_checklist then return shipment; end if;
   raise exception 'Packed shipment checklist is final' using errcode='23514';

@@ -4,10 +4,10 @@ import { errorMessage } from '../lib/supabase'
 
 const labels: Record<ProductionStatus, string> = { queued: 'Queued', in_production: 'In Production', completed: 'Completed' }
 
-export function ProductionPage({ userId, role }: { userId: string; role: 'perfumer' | 'admin' }) {
+export function ProductionPage({ userId, role }: { userId: string; role: 'perfumer' | 'admin' | 'vendor' }) {
   const [filter, setFilter] = useState<{ status: ProductionStatus; page: number }>({ status: 'queued', page: 0 })
   return <section className="app-screen production-screen">
-    <header className="screen-title"><span>THE LAB</span><h1>Production Queue</h1><p>{role === 'admin' ? 'View production progress across all jobs.' : 'Choose a job and craft each formula as ordered.'}</p></header>
+    <header className="screen-title"><span>THE LAB</span><h1>Production Queue</h1><p>{role === 'admin' ? 'View production progress across all jobs.' : role === 'vendor' ? 'Produce only orders assigned to your vendor workspace.' : 'Choose a job and craft each formula as ordered.'}</p></header>
     <nav className="production-filters" aria-label="Production status">
       {(Object.keys(labels) as ProductionStatus[]).map(status => <button key={status} aria-pressed={filter.status === status} onClick={() => setFilter({ status, page: 0 })}>{labels[status]}</button>)}
     </nav>
@@ -15,7 +15,7 @@ export function ProductionPage({ userId, role }: { userId: string; role: 'perfum
   </section>
 }
 
-function ProductionList({ userId, role, status, page, onPage }: { userId: string; role: 'perfumer' | 'admin'; status: ProductionStatus; page: number; onPage: (page: number) => void }) {
+function ProductionList({ userId, role, status, page, onPage }: { userId: string; role: 'perfumer' | 'admin' | 'vendor'; status: ProductionStatus; page: number; onPage: (page: number) => void }) {
   const [jobs, setJobs] = useState<ProductionJob[]>([])
   const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -43,7 +43,7 @@ function ProductionList({ userId, role, status, page, onPage }: { userId: string
     <div className="production-toolbar"><p role="status">{notice || (loading ? 'Loading production jobs…' : `${count} ${labels[status].toLowerCase()} jobs`)}</p><button onClick={() => setRevision(n => n + 1)}>Refresh</button></div>
     {error ? <p role="alert">{error}</p> : null}
     {!loading && !error && !jobs.length ? <div className="screen-empty"><h2>No jobs on this page</h2><p>Paid order items appear here automatically.</p></div> : null}
-    <div className="production-list">{jobs.map(job => <ProductionCard key={job.id} job={job} userId={userId} canWork={role === 'perfumer'} onChanged={message => { setNotice(message); setRevision(n => n + 1) }}/>)}</div>
+    <div className="production-list">{jobs.map(job => <ProductionCard key={job.id} job={job} userId={userId} canWork={role !== 'admin'} onChanged={message => { setNotice(message); setRevision(n => n + 1) }}/>)}</div>
     <div className="production-pagination"><button disabled={page === 0} onClick={() => onPage(page - 1)}>Previous</button><span>Page {page + 1}</span><button disabled={(page + 1) * 25 >= count} onClick={() => onPage(page + 1)}>Next</button></div>
   </>
 }

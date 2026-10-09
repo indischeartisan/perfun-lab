@@ -44,7 +44,9 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub','b1000000-0000-4000-8000-000000000002',true);
-do $$ declare result jsonb; repeated jsonb; begin
+do $$ declare result jsonb; repeated jsonb; workspace jsonb; begin
+ workspace:=public.admin_vendor_workspace(0);
+ if workspace->>'default_vendor_id' is not null or (workspace->>'unassigned_count')::integer<>1 or jsonb_array_length(workspace->'vendors')<>2 then raise exception 'Admin vendor workspace read model is incomplete'; end if;
  result:=public.admin_assign_vendor('b2000000-0000-4000-8000-000000000001','b1000000-0000-4000-8000-000000000003');
  repeated:=public.admin_assign_vendor('b2000000-0000-4000-8000-000000000001','b1000000-0000-4000-8000-000000000003');
  if result->>'vendor_fee_amount'<>'300000' or repeated->>'vendor_fee_amount'<>'300000' then raise exception 'Play Set fee is not 300000'; end if;
@@ -69,6 +71,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub','b1000000-0000-4000-8000-000000000001',true);
 do $$ begin
  begin perform 1 from public.order_vendor_assignments; raise exception 'Customer reads vendor fee assignment'; exception when insufficient_privilege then null; end;
+ begin perform public.admin_vendor_workspace(0); raise exception 'Customer reads admin vendor workspace'; exception when insufficient_privilege then null; end;
 end $$;
 reset role;
 

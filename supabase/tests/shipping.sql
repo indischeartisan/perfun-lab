@@ -133,7 +133,7 @@ select set_config('request.jwt.claim.sub','d1000000-0000-4000-8000-000000000005'
 do $$ declare sid uuid; s public.shipments; again public.shipments; packed_checklist jsonb:='{"bottles_checked":true,"formula_stickers_checked":true,"bottles_sealed":true,"packaging_ready":true,"recipient_label_checked":true}'; begin
  select id into sid from public.shipments where order_number='SHIPPING-TEST';
  begin perform public.fulfill_shipment(sid,'ship','JNE','REG',''); raise exception 'Tracking not required'; exception when check_violation then null; end;
- begin perform public.fulfill_shipment(sid,'ship',repeat('x',101),'REG','TRACK'); raise exception when check_violation then null; end;
+ begin perform public.fulfill_shipment(sid,'ship',repeat('x',101),'REG','TRACK'); raise exception 'Unbounded details accepted'; exception when check_violation then null; end;
  s:=public.save_shipment_packing(sid,packed_checklist,true);
  perform public.save_actual_shipping(sid,15000,'vendor');
  s:=public.fulfill_shipment(sid,'save',' JNE ',' REG ',' TEST123 ');

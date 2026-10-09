@@ -10,7 +10,6 @@ insert into public.orders(id,order_number,user_id,request_id,request_payload,add
 values ('f2000000-0000-4000-8000-000000000001','PACKING-TEST','f1000000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"recipient_name":"Packing Recipient","phone":"081200000000","address_line":"Packing Street 1","district":"Kecamatan Test","city":"Bandung","province":"Jawa Barat","postal_code":"40111","delivery_note":"Leave with security"}',50000,0,10000,60000,'paid','paid');
 insert into public.order_items(id,order_id,position,product_snapshot,creations_snapshot,quantity,normal_unit_price,unit_price,line_total)
 values ('f3000000-0000-4000-8000-000000000001','f2000000-0000-4000-8000-000000000001',1,'{"id":"10ml","label":"10 ML","volume_ml":10,"bottle_count":1}','[]',1,50000,50000,50000);
-insert into public.production_jobs(order_item_id) values ('f3000000-0000-4000-8000-000000000001');
 set local role authenticated;
 select set_config('request.jwt.claim.sub','f1000000-0000-4000-8000-000000000002',true);
 select public.admin_assign_vendor('f2000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000003');

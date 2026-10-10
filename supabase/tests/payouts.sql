@@ -36,13 +36,14 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub','aa100000-0000-4000-8000-000000000003',true);
 do $$ begin if auth.uid() is distinct from 'aa100000-0000-4000-8000-000000000003'::uuid then raise exception 'Vendor A JWT identity was not configured'; end if; end $$;
 do $$ declare job_id uuid; shipment_id uuid; checklist jsonb:='{"bottles_checked":true,"formula_stickers_checked":true,"bottles_sealed":true,"packaging_ready":true,"recipient_label_checked":true}'; target uuid; payer text; cost bigint; begin
+ for job_id in select j.id from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id in ('aa200000-0000-4000-8000-000000000001','aa200000-0000-4000-8000-000000000002','aa200000-0000-4000-8000-000000000003') order by i.position loop
+  perform public.advance_production_job(job_id,'start'); perform public.advance_production_job(job_id,'complete');
+ end loop;
  for target,payer,cost in values
   ('aa200000-0000-4000-8000-000000000001'::uuid,'vendor',12000::bigint),
   ('aa200000-0000-4000-8000-000000000002'::uuid,'perfun',14000::bigint),
-  ('aa200000-0000-4000-8000-000000000003'::uuid,'customer',16000::bigint)
+ ('aa200000-0000-4000-8000-000000000003'::uuid,'customer',16000::bigint)
  loop
-  select j.id into job_id from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id=target;
-  perform public.advance_production_job(job_id,'start'); perform public.advance_production_job(job_id,'complete');
   select id into shipment_id from public.shipments where order_id=target;
   perform public.save_shipment_packing(shipment_id,checklist,true);
   perform public.save_actual_shipping(shipment_id,cost,payer);

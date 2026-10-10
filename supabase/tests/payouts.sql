@@ -34,6 +34,7 @@ do $$ begin
 end $$;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','aa100000-0000-4000-8000-000000000003',true);
+do $$ begin if auth.uid() is distinct from 'aa100000-0000-4000-8000-000000000003'::uuid then raise exception 'Vendor A JWT identity was not configured'; end if; end $$;
 do $$ declare job_id uuid; shipment_id uuid; checklist jsonb:='{"bottles_checked":true,"formula_stickers_checked":true,"bottles_sealed":true,"packaging_ready":true,"recipient_label_checked":true}'; target uuid; payer text; cost bigint; begin
  for target,payer,cost in values
   ('aa200000-0000-4000-8000-000000000001'::uuid,'vendor',12000::bigint),

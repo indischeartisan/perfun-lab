@@ -55,6 +55,7 @@ do $$ declare job_id uuid; shipment_id uuid; snapshot jsonb; checklist jsonb:='{
   perform public.advance_production_job(job_id,'start'); perform public.advance_production_job(job_id,'complete');
  end loop;
  select id into shipment_id from public.shipments where order_id=current_setting('app.shipping_checkout_order')::uuid;
+ if (select status from public.shipments where id=shipment_id)<>'ready_to_ship' then raise exception 'Completed production did not make shipment ready: shipment %, jobs %', (select status from public.shipments where id=shipment_id), (select jsonb_agg(jsonb_build_object('status',status,'vendor_id',vendor_id)) from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id=current_setting('app.shipping_checkout_order')::uuid); end if;
  if (select courier from public.shipments where id=shipment_id)<>'JNE' or (select service from public.shipments where id=shipment_id)<>'REG' then raise exception 'Shipment did not inherit customer service'; end if;
  perform public.save_shipment_packing(shipment_id,checklist,true); perform public.save_actual_shipping(shipment_id,22000,'vendor');
  begin perform public.fulfill_shipment(shipment_id,'save','SiCepat','BEST',''); raise exception 'Vendor changed customer service'; exception when check_violation then null; end;

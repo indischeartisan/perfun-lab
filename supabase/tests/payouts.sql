@@ -39,6 +39,11 @@ do $$ declare job_id uuid; shipment_id uuid; checklist jsonb:='{"bottles_checked
  for job_id in select j.id from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id in ('aa200000-0000-4000-8000-000000000001','aa200000-0000-4000-8000-000000000002','aa200000-0000-4000-8000-000000000003') order by i.position loop
   perform public.advance_production_job(job_id,'start'); perform public.advance_production_job(job_id,'complete');
  end loop;
+ if exists(
+  select 1 from public.shipments
+  where order_id in ('aa200000-0000-4000-8000-000000000001','aa200000-0000-4000-8000-000000000002','aa200000-0000-4000-8000-000000000003')
+   and status<>'ready_to_ship'
+ ) then raise exception 'Vendor A fixture did not complete production for every shipment'; end if;
  for target,payer,cost in values
   ('aa200000-0000-4000-8000-000000000001'::uuid,'vendor',12000::bigint),
   ('aa200000-0000-4000-8000-000000000002'::uuid,'perfun',14000::bigint),
@@ -55,8 +60,10 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub','aa100000-0000-4000-8000-000000000004',true);
 do $$ declare job_id uuid; shipment_id uuid; checklist jsonb:='{"bottles_checked":true,"formula_stickers_checked":true,"bottles_sealed":true,"packaging_ready":true,"recipient_label_checked":true}'; begin
  select j.id into job_id from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id='aa200000-0000-4000-8000-000000000005';
+ if job_id is null then raise exception 'Vendor B cannot read its assigned production job'; end if;
  perform public.advance_production_job(job_id,'start'); perform public.advance_production_job(job_id,'complete');
  select id into shipment_id from public.shipments where order_id='aa200000-0000-4000-8000-000000000005';
+ if shipment_id is null or (select status from public.shipments where id=shipment_id)<>'ready_to_ship' then raise exception 'Vendor B fixture did not complete production for shipment'; end if;
  perform public.save_shipment_packing(shipment_id,checklist,true); perform public.save_actual_shipping(shipment_id,8000,'vendor'); perform public.fulfill_shipment(shipment_id,'ship','JNE','REG','PAYOUT-B');
 end $$;
 -- Vendors can neither create nor mark financial records and cannot read another vendor's dashboard.

@@ -43,7 +43,7 @@ export function ShippingQuotePicker({ address, items, onQuote }: { address: Addr
   async function chooseRate(rate: ShippingRate) {
     if (!address || busy) return
     setBusy(true); setError(''); setSelected(`${rate.courier_code}:${rate.service}`)
-    try { const next = await selectShippingRate(address.id, items, rate.courier_code, rate.service); setClock(Date.now()); setQuote(next); onQuote(next) }
+    try { const next = await selectShippingRate(address.id, items, rate.courier_code, rate.service); setClock(Date.parse(next.expires_at) - 600_000); setQuote(next); onQuote(next) }
     catch (error) { setSelected(''); setQuote(null); onQuote(null); setError(errorMessage(error)) } finally { setBusy(false) }
   }
   if (!address) return <section className="shipping-picker"><h2>Shipping</h2><p>Select a delivery address first.</p></section>

@@ -16,7 +16,7 @@ insert into public.orders(id,order_number,user_id,request_id,request_payload,add
 insert into public.order_items(id,order_id,position,product_snapshot,creations_snapshot,quantity,normal_unit_price,unit_price,line_total) values
  ('aa300000-0000-4000-8000-000000000001','aa200000-0000-4000-8000-000000000001',1,'{"id":"10ml","label":"10 ML","volume_ml":10,"bottle_count":1}','[]',1,50000,50000,50000),
  ('aa300000-0000-4000-8000-000000000002','aa200000-0000-4000-8000-000000000002',1,'{"id":"30ml","label":"30 ML","volume_ml":30,"bottle_count":1}','[]',1,100000,100000,100000),
- ('aa300000-0000-4000-8000-000000000003','aa200000-0000-4000-8000-000000000003',1,'{"id":"bundle-3x10ml","label":"Play Set","volume_ml":10,"bottle_count":3}','[]',2,300000,300000,300000),
+ ('aa300000-0000-4000-8000-000000000003','aa200000-0000-4000-8000-000000000003',1,'{"id":"bundle-3x10ml","label":"Play Set","volume_ml":10,"bottle_count":3}','[]',2,150000,150000,300000),
  ('aa300000-0000-4000-8000-000000000004','aa200000-0000-4000-8000-000000000004',1,'{"id":"10ml","label":"10 ML","volume_ml":10,"bottle_count":1}','[]',1,50000,50000,50000),
  ('aa300000-0000-4000-8000-000000000005','aa200000-0000-4000-8000-000000000005',1,'{"id":"10ml","label":"10 ML","volume_ml":10,"bottle_count":1}','[]',1,50000,50000,50000);
 set local role authenticated;

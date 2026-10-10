@@ -1,9 +1,12 @@
 -- Included inside each test transaction only. It creates real, owned quote rows and rolls back with the test.
 update private.shipping_feature_settings set enabled=true;
-update private.shipping_origin_settings set status='active',origin_destination_id=900001,origin_destination_label='{"name":"Test origin"}',version=version+1,verified_at=clock_timestamp(),verified_by=(select id from public.profiles limit 1),updated_by=(select id from public.profiles limit 1);
 create function public.quote_order(p_address_id uuid,p_items jsonb) returns jsonb language plpgsql security definer set search_path='' as $$
 declare owner_id uuid:=auth.uid(); quote jsonb;
 begin
+ update private.shipping_origin_settings
+ set status='active',origin_destination_id=900001,origin_destination_label='{"name":"Test origin"}',version=version+1,
+     verified_at=clock_timestamp(),verified_by=owner_id,updated_by=owner_id
+ where singleton=true and status='inactive';
  update public.addresses set rajaongkir_destination_id=900002,rajaongkir_destination_label='{"name":"Test destination"}',rajaongkir_destination_verified_at=clock_timestamp() where id=p_address_id and user_id=owner_id and rajaongkir_destination_id is null;
  quote:=private.create_shipping_quote(owner_id,p_address_id,p_items,'jne','JNE','REG',18000,'2 days');
  return public.quote_order(p_address_id,p_items,(quote->>'quote_id')::uuid);

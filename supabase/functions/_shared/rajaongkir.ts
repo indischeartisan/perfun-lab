@@ -12,7 +12,14 @@ export interface Destination { id: number; label: Record<string, unknown> }
 export interface Rate { courier_code: string; courier_name: string; service: string; amount: number; etd: string }
 
 export class RajaOngkirShippingCostProvider {
-  constructor(private readonly apiKey: string, private readonly baseUrl: string, private readonly send: typeof fetch = fetch) {}
+  private readonly apiKey: string
+  private readonly baseUrl: string
+  private readonly send: typeof fetch
+  constructor(apiKey: string, baseUrl: string, send: typeof fetch = fetch) {
+    this.apiKey = apiKey
+    this.baseUrl = baseUrl
+    this.send = send
+  }
   private url(path: string) { return new URL(path, this.baseUrl.endsWith('/') ? this.baseUrl : this.baseUrl + '/').toString() }
   private async request(url: string, init: RequestInit): Promise<Response> {
     for (let attempt = 0; attempt < 2; attempt++) {

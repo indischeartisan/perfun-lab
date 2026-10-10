@@ -20,7 +20,7 @@ export function AddressBook({ selectedId, onSelect, onAddressSelect }: { selecte
     let active = true
     listAddresses().then(rows => { if (active) { setItems(rows); if (!selectedId) { const preferred = rows.find(row => row.is_default); if (preferred) { onSelect(preferred.id); onAddressSelect?.(preferred) } } } }).catch(error => { if (active) setError(errorMessage(error)) }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [attempt, selectedId, onSelect])
+  }, [attempt, selectedId, onSelect, onAddressSelect])
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (!editor || busy) return

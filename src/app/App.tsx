@@ -77,7 +77,7 @@ function ConnectedApp({ catalog }: { catalog: Catalog }) {
   const [checkoutError, setCheckoutError] = useState('')
   const [directCheckoutBusy, setDirectCheckoutBusy] = useState(false)
   const [directCheckoutError, setDirectCheckoutError] = useState('')
-  const view = workspaceView(auth.role, requestedView)
+  const view = workspaceView(auth.role ?? null, requestedView)
 
   function scrollToTop() {
     window.scrollTo({ top: 0, behavior: 'smooth' })

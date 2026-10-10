@@ -30,18 +30,13 @@ import { ProductionPage } from '../pages/ProductionPage'
 import { FulfillmentPage } from '../pages/FulfillmentPage'
 import { AdminPage } from '../pages/AdminPage'
 import { VendorPaymentsPage } from '../pages/VendorPaymentsPage'
+import { navigationHash, viewFromHash, workspaceView } from './workspaceRouting'
 import '../admin.css'
 
 
 
 function isComplete(selection: Selection): selection is CompleteSelection {
   return Boolean(selection.top && selection.middle && selection.base)
-}
-
-function viewFromHash(): AppView {
-  const value = window.location.hash.slice(1)
-  if (!value && readSessionValue(bagCheckoutResumeKey)) return 'bag'
-  return ['bag', 'checkout', 'orders', 'production', 'fulfillment', 'admin'].includes(value) ? value as AppView : 'build'
 }
 
 export default function App() {
@@ -61,13 +56,13 @@ export default function App() {
 }
 
 function ConnectedApp({ catalog }: { catalog: Catalog }) {
-  const [requestedView, setView] = useState<AppView>(viewFromHash)
+  const [requestedView, setView] = useState<AppView>(() => viewFromHash(window.location.hash, Boolean(readSessionValue(bagCheckoutResumeKey))))
   const [authDialogOpen, setAuthDialogOpen] = useState(false)
   const [resumeCheckout, setResumeCheckout] = useState(() => readSessionValue(bagCheckoutResumeKey) === '1')
   const [pendingDirectCheckout, setPendingDirectCheckout] = useState<OrderIntent[] | null>(() => readPendingDirectCheckout(catalog.noteGroups))
   const [resumeDirectCheckout, setResumeDirectCheckout] = useState(() => readSessionValue(directCheckoutResumeKey) !== null)
   useEffect(() => {
-    const onHashChange = () => setView(viewFromHash())
+    const onHashChange = () => setView(viewFromHash(window.location.hash, Boolean(readSessionValue(bagCheckoutResumeKey))))
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
@@ -82,7 +77,7 @@ function ConnectedApp({ catalog }: { catalog: Catalog }) {
   const [checkoutError, setCheckoutError] = useState('')
   const [directCheckoutBusy, setDirectCheckoutBusy] = useState(false)
   const [directCheckoutError, setDirectCheckoutError] = useState('')
-  const view = auth.role === 'vendor' && requestedView !== 'production' && requestedView !== 'fulfillment' ? 'production' : requestedView
+  const view = workspaceView(auth.role, requestedView)
 
   function scrollToTop() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -90,7 +85,7 @@ function ConnectedApp({ catalog }: { catalog: Catalog }) {
 
   const navigate = useCallback((next: AppView) => {
     setView(next)
-    window.history.replaceState(null, '', ['bag', 'checkout', 'production', 'fulfillment', 'admin'].includes(next) ? `#${next}` : window.location.pathname + window.location.search)
+    window.history.replaceState(null, '', navigationHash(next, window.location.pathname, window.location.search))
     scrollToTop()
   }, [])
 

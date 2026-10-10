@@ -32,7 +32,7 @@ do $$ declare f jsonb; q jsonb; oid uuid; items jsonb; begin
  if (q->>'grand_total')::bigint<>616000 or jsonb_array_length(q->'items'->0->'creations_snapshot')<>3 then raise exception 'Bundle price or formula count wrong'; end if;
  oid:=(public.place_order('b9200000-0000-4000-8000-000000000001',items,'b9300000-0000-4000-8000-000000000001',q->>'quote_token')->>'order_id')::uuid;
  if (public.place_order('b9200000-0000-4000-8000-000000000001',items,'b9300000-0000-4000-8000-000000000001',q->>'quote_token')->>'order_id')::uuid<>oid then raise exception 'Duplicate order'; end if;
- begin perform public.place_order('b9200000-0000-4000-8000-000000000001',jsonb_set(items,'{0,formulas,0,top}','"mint"'),'b9300000-0000-4000-8000-000000000001',q->>'quote_token'); raise exception 'Conflicting request accepted'; exception when raise_exception then if sqlerrm='Conflicting request accepted' then raise; end if; end;
+ begin perform public.place_order('b9200000-0000-4000-8000-000000000001',jsonb_set(items,'{0,formulas,0,top}','"mint"'),'b9300000-0000-4000-8000-000000000001',q->>'quote_token'); raise exception 'Conflicting request accepted'; exception when raise_exception or check_violation then if sqlerrm='Conflicting request accepted' then raise; end if; end;
 end $$;
 reset role;
 create temp table formula_quote as select public.quote_order('b9200000-0000-4000-8000-000000000001','[{"product_id":"10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"}]}]') q;

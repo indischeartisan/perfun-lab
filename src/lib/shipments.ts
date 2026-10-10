@@ -16,6 +16,8 @@ export interface Shipment extends ShipmentSummary {
   items_snapshot: Array<{ product: { label: string; volume_ml: number; bottle_count: number }; quantity: number }>
   packing_status: PackingStatus; packing_checklist: PackingChecklist; packed_at: string | null; packed_by: string | null
   actual_shipping_cost: number | null; shipping_payer: ShippingPayer | null; actual_shipping_entered_at: string | null; actual_shipping_entered_by: string | null
+  customer_shipping: { courier: string; service: string; amount: number; quote_id: string | null } | null
+  shipping_override_history: Array<{ original_courier: string; original_service: string; new_courier: string; new_service: string; reason: string; overridden_at: string }>
 }
 export interface ShippingDetails { courier: string; service: string; tracking_number: string }
 export async function listShipments(status: ShipmentStatus, page: number) {
@@ -39,6 +41,11 @@ export async function saveShipmentPacking(id: string, checklist: PackingChecklis
 }
 export async function saveActualShipping(id: string, cost: number, payer: ShippingPayer) {
   const { data, error } = await requireSupabase().rpc('save_actual_shipping', { p_shipment_id: id, p_cost: cost, p_payer: payer })
+  if (error) throw error
+  return data as Shipment
+}
+export async function overrideShipmentService(id: string, courier: string, service: string, reason: string) {
+  const { data, error } = await requireSupabase().rpc('admin_override_shipment_service', { p_shipment_id: id, p_courier: courier, p_service: service, p_reason: reason })
   if (error) throw error
   return data as Shipment
 }

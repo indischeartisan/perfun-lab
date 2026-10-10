@@ -48,7 +48,8 @@
 .packing-checklist input { width: 18px; height: 18px; flex: 0 0 auto; margin-top: 1px; }
 .shipping-cost-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
 .shipping-cost-grid label { display: grid; gap: 7px; font-size: .85rem; }
-.shipping-cost-grid input,.shipping-cost-grid select { width: 100%; min-height: 42px; box-sizing: border-box; padding: 9px; border: 1px solid #bcb9ae; border-radius: 8px; background: #fff; color: #27271e; font: inherit; }
+.shipping-cost-grid input,.shipping-cost-grid select,.packing-card textarea { width: 100%; min-height: 42px; box-sizing: border-box; padding: 9px; border: 1px solid #bcb9ae; border-radius: 8px; background: #fff; color: #27271e; font: inherit; }
+.packing-card textarea { min-height: 76px; resize: vertical; }
 .payout-group,.payout-admin-card { display: grid; gap: 12px; }
 .payout-group { margin-bottom: 14px; }
 .payout-group h2,.payout-group p { margin: 0; }

@@ -133,6 +133,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub','d1000000-0000-4000-8000-000000000005',true);
 do $$ declare sid uuid; s public.shipments; again public.shipments; packed_checklist jsonb:='{"bottles_checked":true,"formula_stickers_checked":true,"bottles_sealed":true,"packaging_ready":true,"recipient_label_checked":true}'; begin
  select id into sid from public.shipments where order_number='SHIPPING-TEST';
+ if private.shipment_customer_service((select order_id from public.shipments where id=sid)) is not null then raise exception 'Legacy shipment unexpectedly has a customer shipping selection'; end if;
  begin perform public.fulfill_shipment(sid,'ship','JNE','REG',''); raise exception 'Tracking not required'; exception when check_violation then null; end;
  begin perform public.fulfill_shipment(sid,'ship',repeat('x',101),'REG','TRACK'); raise exception 'Unbounded details accepted'; exception when check_violation then null; end;
  s:=public.save_shipment_packing(sid,packed_checklist,true);

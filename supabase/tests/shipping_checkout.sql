@@ -35,5 +35,54 @@ do $$ begin
  begin perform public.get_shipping_quote(current_setting('app.shipping_checkout_quote')::uuid); raise exception 'Foreign quote exposed'; exception when insufficient_privilege then null; end;
 end $$;
 reset role;
-select 'PASS: checkout locks owned quote, includes shipping in DOKU amount, and preserves idempotency' as result;
+insert into auth.users(id,email) values ('f5100000-0000-4000-8000-000000000003','shipping-vendor@example.invalid'),('f5100000-0000-4000-8000-000000000004','shipping-admin@example.invalid');
+update public.profiles set role='vendor' where id='f5100000-0000-4000-8000-000000000003';
+update public.profiles set role='admin' where id='f5100000-0000-4000-8000-000000000004';
+set local role service_role;
+do $$ declare payment_id uuid; begin
+ select id into payment_id from public.payments where order_id=current_setting('app.shipping_checkout_order')::uuid;
+ perform public.apply_payment_event(payment_id,'fulfillment-paid',127000,'paid',clock_timestamp(),'{}');
+end $$;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','f5100000-0000-4000-8000-000000000004',true);
+select public.admin_assign_vendor(current_setting('app.shipping_checkout_order')::uuid,'f5100000-0000-4000-8000-000000000003');
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','f5100000-0000-4000-8000-000000000003',true);
+do $$ declare job_id uuid; shipment_id uuid; snapshot jsonb; checklist jsonb:='{"bottles_checked":true,"formula_stickers_checked":true,"bottles_sealed":true,"packaging_ready":true,"recipient_label_checked":true}'; begin
+ for job_id in select j.id from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id=current_setting('app.shipping_checkout_order')::uuid loop
+  perform public.advance_production_job(job_id,'start'); perform public.advance_production_job(job_id,'complete');
+ end loop;
+ select id into shipment_id from public.shipments where order_id=current_setting('app.shipping_checkout_order')::uuid;
+ if (select courier from public.shipments where id=shipment_id)<>'JNE' or (select service from public.shipments where id=shipment_id)<>'REG' then raise exception 'Shipment did not inherit customer service'; end if;
+ perform public.save_shipment_packing(shipment_id,checklist,true); perform public.save_actual_shipping(shipment_id,22000,'vendor');
+ begin perform public.fulfill_shipment(shipment_id,'save','SiCepat','BEST',''); raise exception 'Vendor changed customer service'; exception when check_violation then null; end;
+ begin perform public.admin_override_shipment_service(shipment_id,'SiCepat','BEST','Attempted vendor override'); raise exception 'Vendor override allowed'; exception when insufficient_privilege then null; end;
+ snapshot:=public.list_fulfillment_shipments('ready_to_ship',0);
+ if snapshot->'rows'->0->'customer_shipping'->>'courier'<>'JNE' then raise exception 'Vendor cannot see customer service'; end if;
+end $$;
+select set_config('request.jwt.claim.sub','f5100000-0000-4000-8000-000000000004',true);
+do $$ declare shipment_id uuid; before_total bigint; before_cost bigint; begin
+ select id into shipment_id from public.shipments where order_id=current_setting('app.shipping_checkout_order')::uuid;
+ select grand_total into before_total from public.orders where id=current_setting('app.shipping_checkout_order')::uuid;
+ select actual_shipping_cost into before_cost from public.shipments where id=shipment_id;
+ begin perform public.admin_override_shipment_service(shipment_id,'J&T','EZ',''); raise exception 'Override without reason allowed'; exception when check_violation then null; end;
+ perform public.admin_override_shipment_service(shipment_id,'J&T','EZ','Carrier service outage');
+ if (select grand_total from public.orders where id=current_setting('app.shipping_checkout_order')::uuid)<>before_total or (select shipping from public.orders where id=current_setting('app.shipping_checkout_order')::uuid)<>18000 then raise exception 'Override changed customer total'; end if;
+ if (select actual_shipping_cost from public.shipments where id=shipment_id)<>before_cost or (select shipping_payer from public.shipments where id=shipment_id)<>'vendor' then raise exception 'Override changed actual shipping'; end if;
+ if not exists(select 1 from private.shipment_shipping_service_overrides where shipment_id=shipment_id and reason='Carrier service outage') then raise exception 'Override audit missing'; end if;
+end $$;
+select set_config('request.jwt.claim.sub','f5100000-0000-4000-8000-000000000003',true);
+do $$ declare shipment_id uuid; begin
+ select id into shipment_id from public.shipments where order_id=current_setting('app.shipping_checkout_order')::uuid;
+ perform public.fulfill_shipment(shipment_id,'ship','J&T','EZ','TRACK-5D');
+end $$;
+select set_config('request.jwt.claim.sub','f5100000-0000-4000-8000-000000000004',true);
+do $$ declare shipment_id uuid; begin
+ select id into shipment_id from public.shipments where order_id=current_setting('app.shipping_checkout_order')::uuid;
+ begin perform public.admin_override_shipment_service(shipment_id,'JNE','REG','Too late'); raise exception 'Shipped override allowed'; exception when check_violation then null; end;
+end $$;
+reset role;
+select 'PASS: checkout locks owned quote, preserves DOKU amount and idempotency, and fulfillment locks customer service with audited admin overrides' as result;
 rollback;

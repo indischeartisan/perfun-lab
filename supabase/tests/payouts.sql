@@ -35,13 +35,13 @@ end $$;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','aa100000-0000-4000-8000-000000000003',true);
 do $$ begin if auth.uid() is distinct from 'aa100000-0000-4000-8000-000000000003'::uuid then raise exception 'Vendor A JWT identity was not configured'; end if; end $$;
-do $$ declare job_id uuid; shipment_id uuid; checklist jsonb:='{"bottles_checked":true,"formula_stickers_checked":true,"bottles_sealed":true,"packaging_ready":true,"recipient_label_checked":true}'; target uuid; payer text; cost bigint; begin
- for target in values
-  ('aa200000-0000-4000-8000-000000000001'::uuid),
-  ('aa200000-0000-4000-8000-000000000002'::uuid),
-  ('aa200000-0000-4000-8000-000000000003'::uuid)
+do $$ declare job_id uuid; shipment_id uuid; checklist jsonb:='{"bottles_checked":true,"formula_stickers_checked":true,"bottles_sealed":true,"packaging_ready":true,"recipient_label_checked":true}'; target uuid; order_code text; payer text; cost bigint; begin
+ for target,order_code in values
+  ('aa200000-0000-4000-8000-000000000001'::uuid,'PAYOUT-10ML'),
+  ('aa200000-0000-4000-8000-000000000002'::uuid,'PAYOUT-30ML'),
+  ('aa200000-0000-4000-8000-000000000003'::uuid,'PAYOUT-PLAYSET')
  loop
-  select j.id into job_id from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id=target;
+  select id into job_id from public.production_jobs where order_number=order_code;
   if job_id is null then raise exception 'Vendor A cannot read assigned job for %', target; end if;
   perform public.advance_production_job(job_id,'start'); perform public.advance_production_job(job_id,'complete');
   if (select status from public.shipments where order_id=target)<>'ready_to_ship' then raise exception 'Vendor A fixture did not complete production for %', target; end if;
@@ -61,7 +61,7 @@ reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','aa100000-0000-4000-8000-000000000004',true);
 do $$ declare job_id uuid; shipment_id uuid; checklist jsonb:='{"bottles_checked":true,"formula_stickers_checked":true,"bottles_sealed":true,"packaging_ready":true,"recipient_label_checked":true}'; begin
- select j.id into job_id from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id='aa200000-0000-4000-8000-000000000005';
+ select id into job_id from public.production_jobs where order_number='PAYOUT-VENDOR-B';
  if job_id is null then raise exception 'Vendor B cannot read its assigned production job'; end if;
  perform public.advance_production_job(job_id,'start'); perform public.advance_production_job(job_id,'complete');
  select id into shipment_id from public.shipments where order_id='aa200000-0000-4000-8000-000000000005';

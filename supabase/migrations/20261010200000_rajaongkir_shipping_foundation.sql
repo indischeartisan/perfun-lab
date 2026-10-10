@@ -267,7 +267,7 @@ begin
  values(p_cache_key,p_origin_version,p_package_profile_version,p_origin_destination_id,p_destination_id,p_weight_grams,p_courier_code,p_rates,clock_timestamp()+interval '5 minutes')
  on conflict(cache_key) do update set rates=excluded.rates,expires_at=excluded.expires_at,created_at=clock_timestamp();
 end $$;
-revoke all on function private.shipping_quote_cache_put(text,integer,bigint,bigint,integer,text,jsonb) from public,anon,authenticated;
+revoke all on function private.shipping_quote_cache_put(text,integer,integer,bigint,bigint,integer,text,jsonb) from public,anon,authenticated;
 
 create or replace function private.create_shipping_quote(p_user_id uuid,p_address_id uuid,p_items jsonb,p_courier_code text,p_courier_name text,p_service text,p_amount bigint,p_etd text)
 returns jsonb language plpgsql security definer set search_path='' as $$

@@ -52,6 +52,9 @@ jobs:
       - name: Shipping provider unit tests
         run: npm run test:shipping
 
+      - name: Shipping checkout unit tests
+        run: npm run test:shipping-checkout
+
       - name: Client state regression tests
         run: npm run test:client-state
 
@@ -90,6 +93,7 @@ jobs:
             supabase/tests/packing.sql
             supabase/tests/payouts.sql
             supabase/tests/shipping_foundation.sql
+            supabase/tests/shipping_checkout.sql
             supabase/tests/admin.sql
             supabase/tests/vendor_assignment.sql
           )

@@ -9,6 +9,7 @@ Deno.serve(async req => {
  try {
   const userId=await shippingUser(req), body=await shippingJson(req), action=body.action==='bind' ? 'bind' : 'search', query=typeof body.query==='string' ? body.query.trim().replace(/\s+/g,' ') : ''
   if (query.length<3 || query.length>160) throw new ShippingError('Enter at least 3 characters to search a destination.',400)
+  if (!await shippingRpc<boolean>('shipping_feature_ready',{})) throw new ShippingError('Shipping is not configured yet. Please try again later.',503)
   const cacheKey=await digest(query.toLowerCase()), cached=await shippingRpc<unknown[]|null>('shipping_destination_cache_get',{p_cache_key:cacheKey})
   if(action==='bind') {
    const addressId=typeof body.address_id==='string' ? body.address_id : '', destinationId=Number(body.destination_id)

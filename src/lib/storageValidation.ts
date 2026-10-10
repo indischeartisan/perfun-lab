@@ -80,6 +80,6 @@ export function isCheckoutDraft(value: unknown): value is { userId: string; item
   return isRecord(value) && typeof value.userId === 'string' && value.userId.length > 0 && (value.source === undefined || value.source === 'bag' || value.source === 'direct') && isOrderIntents(value.items)
 }
 
-export function isCheckoutPending(value: unknown): value is { addressId: string; items: OrderIntent[]; requestId: string; token: string } {
-  return isRecord(value) && typeof value.addressId === 'string' && value.addressId.length > 0 && typeof value.requestId === 'string' && value.requestId.length > 0 && typeof value.token === 'string' && value.token.length > 0 && isOrderIntents(value.items)
+export function isCheckoutPending(value: unknown): value is { addressId: string; items: OrderIntent[]; shippingQuoteId: string; requestId: string; token: string } {
+  return isRecord(value) && typeof value.addressId === 'string' && value.addressId.length > 0 && typeof value.shippingQuoteId === 'string' && value.shippingQuoteId.length > 0 && typeof value.requestId === 'string' && value.requestId.length > 0 && typeof value.token === 'string' && value.token.length > 0 && isOrderIntents(value.items)
 }

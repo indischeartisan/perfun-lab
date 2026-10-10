@@ -107,10 +107,19 @@ jobs:
             fi
 
             echo "::group::SQL test: $sql_test"
-            if ! docker exec -i "$db_container" psql \
+            # psql runs inside the database container, so it cannot resolve a
+            # host-side \ir include. Inline the transaction-scoped checkout
+            # fixture at its marker before sending the script over stdin.
+            if ! while IFS= read -r line || [[ -n "$line" ]]; do
+              if [[ "$line" == '\ir checkout_test_helpers.sql' ]]; then
+                cat supabase/tests/checkout_test_helpers.sql
+              else
+                printf '%s\n' "$line"
+              fi
+            done < "$sql_test" | docker exec -i "$db_container" psql \
               -v ON_ERROR_STOP=1 \
               -U postgres \
-              -d postgres < "$sql_test"; then
+              -d postgres; then
               failed_tests+=("$sql_test")
             fi
             echo "::endgroup::"

@@ -1,6 +1,6 @@
 -- Live integration test, entirely rolled back. Does not send emails or touch real customers.
 begin;
-\ir supabase/tests/checkout_test_helpers.sql
+\ir checkout_test_helpers.sql
 insert into auth.users(id,email) values ('c1000000-0000-4000-8000-000000000001','checkout-a@example.invalid'),('c1000000-0000-4000-8000-000000000002','checkout-b@example.invalid');
 set local role authenticated;
 select set_config('request.jwt.claim.sub','c1000000-0000-4000-8000-000000000001',true);

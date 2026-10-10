@@ -29,6 +29,9 @@ select public.admin_assign_vendor('aa200000-0000-4000-8000-000000000005','aa1000
 -- A vendor with no shipped work cannot create an empty payout batch.
 do $$ begin perform public.admin_create_vendor_payout('aa100000-0000-4000-8000-000000000005','aa400000-0000-4000-8000-000000000001',null); raise exception 'Empty payout was created'; exception when check_violation then null; end $$;
 reset role;
+do $$ begin
+ if (select count(*) from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id in ('aa200000-0000-4000-8000-000000000001','aa200000-0000-4000-8000-000000000002','aa200000-0000-4000-8000-000000000003') and j.vendor_id='aa100000-0000-4000-8000-000000000003')<>3 then raise exception 'Vendor assignment was not projected to all Vendor A jobs'; end if;
+end $$;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','aa100000-0000-4000-8000-000000000003',true);
 do $$ declare job_id uuid; shipment_id uuid; checklist jsonb:='{"bottles_checked":true,"formula_stickers_checked":true,"bottles_sealed":true,"packaging_ready":true,"recipient_label_checked":true}'; target uuid; payer text; cost bigint; begin

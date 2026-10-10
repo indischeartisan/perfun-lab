@@ -81,10 +81,10 @@ do $$ declare shipment_id uuid; before_total bigint; begin
 end $$;
 reset role;
 set local role service_role;
-do $$ declare shipment_id uuid; begin
- select id into shipment_id from public.shipments where order_id=current_setting('app.shipping_checkout_order')::uuid;
- if (select actual_shipping_cost from public.shipments where id=shipment_id)<>22000 or (select shipping_payer from public.shipments where id=shipment_id)<>'vendor' then raise exception 'Override changed actual shipping'; end if;
- if not exists(select 1 from private.shipment_shipping_service_overrides where shipment_id=shipment_id and reason='Carrier service outage') then raise exception 'Override audit missing'; end if;
+do $$ declare target_shipment_id uuid; begin
+ select id into target_shipment_id from public.shipments where order_id=current_setting('app.shipping_checkout_order')::uuid;
+ if (select actual_shipping_cost from public.shipments where id=target_shipment_id)<>22000 or (select shipping_payer from public.shipments where id=target_shipment_id)<>'vendor' then raise exception 'Override changed actual shipping'; end if;
+ if not exists(select 1 from private.shipment_shipping_service_overrides h where h.shipment_id=target_shipment_id and h.reason='Carrier service outage') then raise exception 'Override audit missing'; end if;
 end $$;
 reset role;
 set local role authenticated;

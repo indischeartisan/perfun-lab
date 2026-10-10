@@ -71,6 +71,10 @@ end $$;
 
 -- Retain the historical JSON column name creations_snapshot: it is a standalone
 -- order snapshot, not a reference to the removed tables.
+-- Historical migration exception: LOCK TABLE requires an explicit transaction
+-- when this file is applied by the local Supabase CLI runner. See
+-- MIGRATION_HISTORY_EXCEPTIONS.md; do not rerun this already-applied migration remotely.
+begin;
 lock table public.creations, public.creation_notes in access exclusive mode;
 do $$ begin
  if exists(select 1 from public.creations) or exists(select 1 from public.creation_notes) then
@@ -82,3 +86,4 @@ drop table public.creation_notes;
 drop table public.creations;
 drop function private.check_creation_complete();
 drop function private.validate_selected_note_phase();
+commit;

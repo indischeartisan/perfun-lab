@@ -4,7 +4,7 @@ import type { ShipmentSummary } from './shipments'
 export interface AddressInput {
   recipient_name: string; phone: string; address_line: string; city: string; province: string; postal_code: string; label: string; is_default: boolean
 }
-export interface Address extends AddressInput { id: string; user_id: string }
+export interface Address extends AddressInput { id: string; user_id: string; rajaongkir_destination_id?: number | null; rajaongkir_destination_label?: Record<string, unknown>; rajaongkir_destination_verified_at?: string | null }
 export interface FormulaIntent { top: string; middle: string; base: string }
 export interface OrderIntent { product_id: string; formulas: FormulaIntent[]; quantity: number }
 export interface OrderLine {
@@ -30,13 +30,13 @@ export async function deleteAddress(id: string) {
   const { error } = await requireSupabase().from('addresses').delete().eq('id', id)
   if (error) throw error
 }
-export async function quoteOrder(addressId: string, items: OrderIntent[]): Promise<Quote> {
-  const { data, error } = await requireSupabase().rpc('quote_order', { p_address_id: addressId, p_items: items })
+export async function quoteOrder(addressId: string, items: OrderIntent[], shippingQuoteId: string): Promise<Quote> {
+  const { data, error } = await requireSupabase().rpc('quote_order', { p_address_id: addressId, p_items: items, p_shipping_quote_id: shippingQuoteId })
   if (error) throw error
   return data as Quote
 }
-export async function placeOrder(addressId: string, items: OrderIntent[], requestId: string, token: string) {
-  const { data, error } = await requireSupabase().rpc('place_order', { p_address_id: addressId, p_items: items, p_request_id: requestId, p_quote_token: token })
+export async function placeOrder(addressId: string, items: OrderIntent[], shippingQuoteId: string, requestId: string, token: string) {
+  const { data, error } = await requireSupabase().rpc('place_order', { p_address_id: addressId, p_items: items, p_shipping_quote_id: shippingQuoteId, p_request_id: requestId, p_quote_token: token })
   if (error) throw error
   return data.order_id as string
 }

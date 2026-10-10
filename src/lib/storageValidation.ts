@@ -60,13 +60,26 @@ export function isOrderIntents(value: unknown): value is OrderIntent[] {
 }
 
 export function orderIntentsMatchCatalog(value: unknown, noteGroups: Record<NoteLayer, FragranceNote[]>) {
-  return isOrderIntents(value) && value.every(item => item.formulas.every(formula => Boolean(rehydrateCompleteSelection(formula, noteGroups))))
+  return isOrderIntents(value) && value.every(item => item.formulas.every(formula => {
+    const notes = layers.map(layer => noteGroups[layer].find(note => note.id === formula[layer]) ?? null)
+    return notes.every((note): note is FragranceNote => note !== null) && validNotes(notes)
+  }))
+}
+
+export function readPendingCheckout(value: string | null, noteGroups: Record<NoteLayer, FragranceNote[]>): OrderIntent[] | null {
+  if (!value) return null
+  try {
+    const items = JSON.parse(value)
+    return orderIntentsMatchCatalog(items, noteGroups) ? items : null
+  } catch {
+    return null
+  }
 }
 
 export function isCheckoutDraft(value: unknown): value is { userId: string; items: OrderIntent[]; source?: 'bag' | 'direct' } {
   return isRecord(value) && typeof value.userId === 'string' && value.userId.length > 0 && (value.source === undefined || value.source === 'bag' || value.source === 'direct') && isOrderIntents(value.items)
 }
 
-export function isCheckoutPending(value: unknown): value is { addressId: string; items: OrderIntent[]; requestId: string; token: string } {
-  return isRecord(value) && typeof value.addressId === 'string' && value.addressId.length > 0 && typeof value.requestId === 'string' && value.requestId.length > 0 && typeof value.token === 'string' && value.token.length > 0 && isOrderIntents(value.items)
+export function isCheckoutPending(value: unknown): value is { addressId: string; items: OrderIntent[]; shippingQuoteId: string; requestId: string; token: string } {
+  return isRecord(value) && typeof value.addressId === 'string' && value.addressId.length > 0 && typeof value.shippingQuoteId === 'string' && value.shippingQuoteId.length > 0 && typeof value.requestId === 'string' && value.requestId.length > 0 && typeof value.token === 'string' && value.token.length > 0 && isOrderIntents(value.items)
 }

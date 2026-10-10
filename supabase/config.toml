@@ -9,3 +9,9 @@ verify_jwt = true
 # DOKU does not send a Supabase JWT. Handler verifies DOKU HMAC before any write.
 [functions.payments-webhook]
 verify_jwt = false
+
+[functions.shipping-destinations]
+verify_jwt = true
+
+[functions.shipping-quote]
+verify_jwt = true

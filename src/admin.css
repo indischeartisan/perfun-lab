@@ -49,4 +49,10 @@
 .shipping-cost-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
 .shipping-cost-grid label { display: grid; gap: 7px; font-size: .85rem; }
 .shipping-cost-grid input,.shipping-cost-grid select { width: 100%; min-height: 42px; box-sizing: border-box; padding: 9px; border: 1px solid #bcb9ae; border-radius: 8px; background: #fff; color: #27271e; font: inherit; }
-@media(max-width:600px) { .admin-phase { grid-template-columns: 1fr; } .admin-metrics { grid-template-columns: 1fr 1fr; gap: 8px; } .admin-metrics article { padding: 12px; } .admin-metrics strong { font-size: 1.1rem; } .admin-tabs button { flex: 1 1 auto; } .fulfillment-address-copy,.shipping-cost-grid { grid-template-columns: 1fr; } .fulfillment-address-copy > p { grid-column: auto; } }
+.payout-group,.payout-admin-card { display: grid; gap: 12px; }
+.payout-group { margin-bottom: 14px; }
+.payout-group h2,.payout-group p { margin: 0; }
+.payout-actions { display: grid; grid-template-columns: minmax(190px,1fr) auto auto; gap: 10px; align-items: end; }
+.payout-actions label { display: grid; gap: 7px; font-size: .85rem; }
+.payout-actions input { min-height: 42px; box-sizing: border-box; padding: 9px; border: 1px solid #bcb9ae; border-radius: 8px; font: inherit; }
+@media(max-width:600px) { .admin-phase { grid-template-columns: 1fr; } .admin-metrics { grid-template-columns: 1fr 1fr; gap: 8px; } .admin-metrics article { padding: 12px; } .admin-metrics strong { font-size: 1.1rem; } .admin-tabs button { flex: 1 1 auto; } .fulfillment-address-copy,.shipping-cost-grid,.payout-actions { grid-template-columns: 1fr; } .fulfillment-address-copy > p { grid-column: auto; } }

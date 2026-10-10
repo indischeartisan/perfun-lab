@@ -2,7 +2,7 @@ import { ArrowLeft, PackageCheck } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { formatPrice } from '../lib/currency'
 import { getOrder, placeOrder, quoteOrder, type CustomerOrder, type OrderIntent, type OrderLine, type Quote } from '../lib/orders'
-import { errorMessage } from '../lib/supabase'
+import { checkoutErrorMessage, isShippingCheckoutEnabled, shippingUnavailable } from '../lib/shippingCheckout'
 import { AddressBook, AddressText } from './AddressBook'
 import { ShippingQuotePicker } from './ShippingQuotePicker'
 import type { Address } from '../lib/orders'
@@ -35,16 +35,19 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const locked = useRef(false)
+  const shippingEnabled = isShippingCheckoutEnabled()
   const selectAddress = useCallback((id: string) => { setAddressId(id); setAddress(null); setShippingQuote(null); setQuote(null); setError('') }, [])
   async function review() {
     if (locked.current) return
+    if (!shippingEnabled) { setError(shippingUnavailable); return }
     locked.current = true; setBusy(true); setError('')
     try { if (!shippingQuote) throw new Error('Choose a current shipping service before reviewing your order.'); setQuote(await quoteOrder(addressId, items, shippingQuote.quote_id)) }
-    catch (error) { setError(errorMessage(error)); setQuote(null) }
+    catch (error) { setError(checkoutErrorMessage(error)); setQuote(null) }
     finally { locked.current = false; setBusy(false) }
   }
   async function submit() {
     if (locked.current || (!quote && !pending)) return
+    if (!shippingEnabled) { setError(shippingUnavailable); return }
     locked.current = true; setBusy(true); setError('')
     const request = pending ?? { addressId, items, shippingQuoteId: shippingQuote!.quote_id, requestId: crypto.randomUUID(), token: quote!.quote_token }
     let committed = false
@@ -55,13 +58,14 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
       const order = await getOrder(id)
       clearPending(storageKey); setPending(null); onPlaced(order)
     } catch (error) {
-      setError(errorMessage(error))
+      setError(checkoutErrorMessage(error))
       // Only definitive database validation failures clear the intent. Network errors preserve it.
       if (!committed && error && typeof error === 'object' && 'code' in error && ['P0001', '42501', '23514', '22P02'].includes(String(error.code))) {
         clearPending(storageKey); setPending(null); setQuote(null)
       }
     } finally { locked.current = false; setBusy(false) }
   }
+  if (!shippingEnabled) return <section className="checkout-screen app-screen"><button className="checkout-back" onClick={onBack}><ArrowLeft/> Back to Bag</button><header className="screen-title"><span>CHECKOUT</span><h1>Almost yours.</h1><p>{shippingUnavailable}</p></header><div className="cloud-message" role="status"><p>No order or payment request has been created.</p></div></section>
   return <section className="checkout-screen app-screen"><button className="checkout-back" disabled={busy || !!pending} onClick={onBack}><ArrowLeft/> Back to Bag</button><header className="screen-title"><span>CHECKOUT</span><h1>Almost yours.</h1><p>Choose your delivery address, then review your order.</p></header>
     {error ? <p className="cloud-message" role="alert">{error}</p> : null}
     {pending ? <div className="cloud-message"><p>Your order request is saved. Check its result safely without creating another order.</p><button disabled={busy} onClick={submit}>{busy ? 'Checking order…' : 'Check / retry order'}</button></div> : <div className="checkout-grid">

@@ -54,11 +54,14 @@ create trigger zz_shipment_customer_service_default before insert on public.ship
  for each row execute function private.default_shipment_customer_service();
 
 -- Backfill only mutable, blank fulfillment projections. Historical dispatched rows are untouched.
-update public.shipments s set courier=customer_service->>'courier',service=customer_service->>'service',
- provider='rajaongkir',provider_reference=nullif(customer_service->>'quote_id','')
-from lateral (select private.shipment_customer_service(s.order_id) customer_service) projected
-where s.status in ('pending','ready_to_ship') and btrim(s.courier)='' and btrim(s.service)=''
- and projected.customer_service is not null;
+with projected as (
+ select s.id,private.shipment_customer_service(s.order_id) customer_service
+ from public.shipments s
+ where s.status in ('pending','ready_to_ship') and btrim(s.courier)='' and btrim(s.service)=''
+)
+update public.shipments s set courier=projected.customer_service->>'courier',service=projected.customer_service->>'service',
+ provider='rajaongkir',provider_reference=nullif(projected.customer_service->>'quote_id','')
+from projected where s.id=projected.id and projected.customer_service is not null;
 
 create or replace function private.admin_override_shipment_service(p_shipment_id uuid,p_courier text,p_service text,p_reason text)
 returns public.shipments language plpgsql security definer set search_path='' as $$

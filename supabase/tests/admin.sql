@@ -1,6 +1,6 @@
 -- Disposable fixtures; all writes rolled back, including catalog changes.
 begin;
-\ir checkout_test_helpers.sql
+\ir supabase/tests/checkout_test_helpers.sql
 insert into auth.users(id,email) values
  ('a1000000-0000-4000-8000-000000000001','admin-test@example.invalid'),
  ('a1000000-0000-4000-8000-000000000002','admin-customer@example.invalid'),

@@ -1,5 +1,5 @@
 begin;
-\ir checkout_test_helpers.sql
+\ir supabase/tests/checkout_test_helpers.sql
 insert into auth.users(id,email) values
  ('d1000000-0000-4000-8000-000000000001','shipping-customer@example.invalid'),
  ('d1000000-0000-4000-8000-000000000002','shipping-perfumer-a@example.invalid'),

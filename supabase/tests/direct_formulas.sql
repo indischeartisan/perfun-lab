@@ -1,5 +1,5 @@
 begin;
-\ir checkout_test_helpers.sql
+\ir supabase/tests/checkout_test_helpers.sql
 insert into auth.users(id,email) values('b9100000-0000-4000-8000-000000000001','direct-formula@example.invalid');
 set local role authenticated;
 select set_config('request.jwt.claim.sub','b9100000-0000-4000-8000-000000000001',true);

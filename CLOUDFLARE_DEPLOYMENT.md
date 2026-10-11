@@ -13,11 +13,13 @@ npm ci
 npm run deploy:cloudflare
 ```
 
-Wrangler OAuth login is required only for a deliberate Direct Upload. Production uses the Cloudflare Pages Git integration on `main`; a successful push to `main` starts the automatic production build. Do not use the Direct Upload command to bypass a failed Git-integrated build.
+Wrangler OAuth login is required only for a deliberate Direct Upload. Production uses the Cloudflare Pages Git integration on `main`; a successful push to `main` starts the automatic production build. Do not use the Direct Upload command to bypass a failed Git-integrated build. `wrangler.jsonc` deliberately omits `pages_build_output_dir`: adding that key opts the Pages project into Wrangler-file configuration and can supersede dashboard configuration. The Pages dashboard remains the source of truth for Git-integrated build settings and variables.
 
 The public build variables `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are read from `.env.local` locally or from the Cloudflare Pages build environment. They are compiled into the browser bundle. Do not use a service role key or payment secret here.
 
 For a Git-integrated Pages deployment, set both variables for the **Production** environment (not only Preview), then save and retry a deployment or push a new `main` commit. Verify the deployed JavaScript includes the project URL, without logging the key value. An absent value produces the safe configuration error in the app; it is not an Auth, RLS, or database failure.
+
+Every Vite build reports only `true`/`false` presence for these two variables as `[perfun build] ...`; it never logs their values.
 
 Added `wrangler.jsonc`, pinned Wrangler dev dependency/lockfile, `deploy:cloudflare` script, `.wrangler`/`.dev.vars*` ignores and no-cache headers for index/service worker updates.
 

@@ -1,5 +1,6 @@
 -- Live integration test, entirely rolled back. Does not send emails or touch real customers.
 begin;
+\ir checkout_test_helpers.sql
 insert into auth.users(id,email) values ('c1000000-0000-4000-8000-000000000001','checkout-a@example.invalid'),('c1000000-0000-4000-8000-000000000002','checkout-b@example.invalid');
 set local role authenticated;
 select set_config('request.jwt.claim.sub','c1000000-0000-4000-8000-000000000001',true);
@@ -9,7 +10,7 @@ do $$ declare items jsonb; q jsonb; o uuid; retry uuid; begin
  if (select count(*) from public.addresses where is_default)<>1 then raise exception 'Default switching failed'; end if;
  items := '[{"product_id":"10ml","formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"}],"quantity":2},{"product_id":"30ml","formulas":[{"top":"soapy","middle":"peony","base":"amber"}],"quantity":1},{"product_id":"bundle-3x10ml","formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"},{"top":"soapy","middle":"peony","base":"amber"},{"top":"mint","middle":"tea","base":"honey"}],"quantity":1}]';
  q := public.quote_order('c3000000-0000-4000-8000-000000000001',items);
- if (q->>'subtotal')::bigint<>786000 or (q->>'discount')::bigint<>70000 or (q->>'shipping')::bigint<>0 or (q->>'grand_total')::bigint<>716000 then raise exception 'Incorrect totals: %',q; end if;
+ if (q->>'subtotal')::bigint<>786000 or (q->>'discount')::bigint<>70000 or (q->>'shipping')::bigint<>18000 or (q->>'grand_total')::bigint<>734000 then raise exception 'Incorrect totals: %',q; end if;
  o := (public.place_order('c3000000-0000-4000-8000-000000000001',items,'c4000000-0000-4000-8000-000000000001',q->>'quote_token')->>'order_id')::uuid;
  retry := (public.place_order('c3000000-0000-4000-8000-000000000001',items,'c4000000-0000-4000-8000-000000000001',q->>'quote_token')->>'order_id')::uuid;
  if o<>retry or (select count(*) from public.orders)<>1 or (select count(*) from public.order_items)<>3 then raise exception 'Idempotency failed'; end if;

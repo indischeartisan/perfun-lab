@@ -163,10 +163,6 @@ function createResult(selection: Selection) {
   }
 }
 
-function blendName(blend: CompleteSelection) {
-  return `${blend.top.name} · ${blend.middle.name} · ${blend.base.name}`
-}
-
 function slashBlendName(blend: CompleteSelection) {
   return `${blend.top.name} / ${blend.middle.name} / ${blend.base.name}`
 }

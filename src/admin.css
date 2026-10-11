@@ -23,4 +23,37 @@
 .admin-order-details { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 12px; }
 .admin-order-details dt { color: #68665e; font-size: .8rem; }
 .admin-order-details dd { margin: 6px 0; text-transform: capitalize; }
-@media(max-width:600px) { .admin-phase { grid-template-columns: 1fr; } .admin-metrics { grid-template-columns: 1fr 1fr; gap: 8px; } .admin-metrics article { padding: 12px; } .admin-metrics strong { font-size: 1.1rem; } .admin-tabs button { flex: 1 1 auto; } }
+.vendor-workspace-panel { display: grid; gap: 22px; }
+.admin-kicker { display: block; color: #68665e; font: 700 .68rem Manrope, sans-serif; letter-spacing: .12em; }
+.admin-section-heading { border-top: 1px solid #dedbd2; padding-top: 24px; }
+.admin-section-heading h2,.vendor-workspace-panel h2 { margin: 5px 0; font-size: 1.3rem; }
+.admin-section-heading p { margin: 0; color: #68665e; font-size: .85rem; }
+.vendor-assignment-card { display: grid; gap: 12px; }
+.vendor-assignment-card header { display: flex; gap: 12px; justify-content: space-between; align-items: baseline; }
+.vendor-assignment-card label { display: grid; gap: 7px; max-width: 360px; font-size: .85rem; }
+.vendor-assignment-card .orders-build { justify-self: start; }
+.admin-notice { border-left: 3px solid #719100; background: #edf5d0; padding: 12px; margin: 0; }
+.screen-empty-copy { color: #68665e; margin: 0; }
+.workspace-nav { display: flex; gap: 8px; max-width: 1060px; margin: 14px auto 0; padding: 0 18px; }
+.workspace-nav button { flex: 1; min-height: 48px; border: 1px solid #bcb9ae; background: #fffdf7; border-radius: 10px; font-weight: 700; }
+.workspace-nav button[aria-current="page"] { background: #242724; border-color: #242724; color: #fff; }
+.fulfillment-address-copy { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; align-items: start; }
+.fulfillment-address-copy pre { margin: 8px 0 0; font: inherit; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.fulfillment-address-copy > p { grid-column: 1 / -1; margin: 0; color: #536c00; }
+.packing-card { display: grid; gap: 12px; margin-top: 16px; padding: 16px; border: 1px solid #dedbd2; border-radius: 12px; background: #fffdf7; }
+.packing-card h2,.packing-card p { margin: 0; }
+.packing-card > p { color: #68665e; font-size: .9rem; line-height: 1.5; }
+.packing-checklist { display: grid; gap: 10px; margin: 0; padding: 0; border: 0; }
+.packing-checklist label { display: flex; gap: 10px; align-items: flex-start; line-height: 1.4; }
+.packing-checklist input { width: 18px; height: 18px; flex: 0 0 auto; margin-top: 1px; }
+.shipping-cost-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.shipping-cost-grid label { display: grid; gap: 7px; font-size: .85rem; }
+.shipping-cost-grid input,.shipping-cost-grid select,.packing-card textarea { width: 100%; min-height: 42px; box-sizing: border-box; padding: 9px; border: 1px solid #bcb9ae; border-radius: 8px; background: #fff; color: #27271e; font: inherit; }
+.packing-card textarea { min-height: 76px; resize: vertical; }
+.payout-group,.payout-admin-card { display: grid; gap: 12px; }
+.payout-group { margin-bottom: 14px; }
+.payout-group h2,.payout-group p { margin: 0; }
+.payout-actions { display: grid; grid-template-columns: minmax(190px,1fr) auto auto; gap: 10px; align-items: end; }
+.payout-actions label { display: grid; gap: 7px; font-size: .85rem; }
+.payout-actions input { min-height: 42px; box-sizing: border-box; padding: 9px; border: 1px solid #bcb9ae; border-radius: 8px; font: inherit; }
+@media(max-width:600px) { .admin-phase { grid-template-columns: 1fr; } .admin-metrics { grid-template-columns: 1fr 1fr; gap: 8px; } .admin-metrics article { padding: 12px; } .admin-metrics strong { font-size: 1.1rem; } .admin-tabs button { flex: 1 1 auto; } .fulfillment-address-copy,.shipping-cost-grid,.payout-actions { grid-template-columns: 1fr; } .fulfillment-address-copy > p { grid-column: auto; } }

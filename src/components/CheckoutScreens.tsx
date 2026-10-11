@@ -2,12 +2,15 @@ import { ArrowLeft, PackageCheck } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { formatPrice } from '../lib/currency'
 import { getOrder, placeOrder, quoteOrder, type CustomerOrder, type OrderIntent, type OrderLine, type Quote } from '../lib/orders'
-import { errorMessage } from '../lib/supabase'
+import { checkoutErrorMessage, isShippingCheckoutEnabled, shippingUnavailable } from '../lib/shippingCheckout'
 import { AddressBook, AddressText } from './AddressBook'
+import { ShippingQuotePicker } from './ShippingQuotePicker'
+import type { Address } from '../lib/orders'
+import type { ShippingQuote } from '../lib/shipping'
 import { PaymentActions } from './PaymentActions'
 import { isCheckoutPending } from '../lib/storageValidation'
 
-interface Pending { addressId: string; items: OrderIntent[]; requestId: string; token: string }
+interface Pending { addressId: string; items: OrderIntent[]; shippingQuoteId: string; requestId: string; token: string }
 function clearPending(key: string) { try { sessionStorage.removeItem(key) } catch { /* Storage is optional. */ } }
 function savePending(key: string, value: Pending) { try { sessionStorage.setItem(key, JSON.stringify(value)) } catch { /* The request can still continue in memory. */ } }
 function readPending(key: string, expectedItems: OrderIntent[]): Pending | null {
@@ -27,41 +30,47 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
   const [pending, setPending] = useState<Pending | null>(() => readPending(storageKey, items))
   const [addressId, setAddressId] = useState(() => readPending(storageKey, items)?.addressId ?? '')
   const [quote, setQuote] = useState<Quote | null>(null)
+  const [shippingQuote, setShippingQuote] = useState<ShippingQuote | null>(null)
+  const [address, setAddress] = useState<Address | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const locked = useRef(false)
-  const selectAddress = useCallback((id: string) => { setAddressId(id); setQuote(null); setError('') }, [])
+  const shippingEnabled = isShippingCheckoutEnabled()
+  const selectAddress = useCallback((id: string) => { setAddressId(id); setAddress(null); setShippingQuote(null); setQuote(null); setError('') }, [])
   async function review() {
     if (locked.current) return
+    if (!shippingEnabled) { setError(shippingUnavailable); return }
     locked.current = true; setBusy(true); setError('')
-    try { setQuote(await quoteOrder(addressId, items)) }
-    catch (error) { setError(errorMessage(error)); setQuote(null) }
+    try { if (!shippingQuote) throw new Error('Choose a current shipping service before reviewing your order.'); setQuote(await quoteOrder(addressId, items, shippingQuote.quote_id)) }
+    catch (error) { setError(checkoutErrorMessage(error)); setQuote(null) }
     finally { locked.current = false; setBusy(false) }
   }
   async function submit() {
     if (locked.current || (!quote && !pending)) return
+    if (!shippingEnabled) { setError(shippingUnavailable); return }
     locked.current = true; setBusy(true); setError('')
-    const request = pending ?? { addressId, items, requestId: crypto.randomUUID(), token: quote!.quote_token }
+    const request = pending ?? { addressId, items, shippingQuoteId: shippingQuote!.quote_id, requestId: crypto.randomUUID(), token: quote!.quote_token }
     let committed = false
     try {
       savePending(storageKey, request); setPending(request)
-      const id = await placeOrder(request.addressId, request.items, request.requestId, request.token)
+      const id = await placeOrder(request.addressId, request.items, request.shippingQuoteId, request.requestId, request.token)
       committed = true
       const order = await getOrder(id)
       clearPending(storageKey); setPending(null); onPlaced(order)
     } catch (error) {
-      setError(errorMessage(error))
+      setError(checkoutErrorMessage(error))
       // Only definitive database validation failures clear the intent. Network errors preserve it.
       if (!committed && error && typeof error === 'object' && 'code' in error && ['P0001', '42501', '23514', '22P02'].includes(String(error.code))) {
         clearPending(storageKey); setPending(null); setQuote(null)
       }
     } finally { locked.current = false; setBusy(false) }
   }
+  if (!shippingEnabled) return <section className="checkout-screen app-screen"><button className="checkout-back" onClick={onBack}><ArrowLeft/> Back to Bag</button><header className="screen-title"><span>CHECKOUT</span><h1>Almost yours.</h1><p>{shippingUnavailable}</p></header><div className="cloud-message" role="status"><p>No order or payment request has been created.</p></div></section>
   return <section className="checkout-screen app-screen"><button className="checkout-back" disabled={busy || !!pending} onClick={onBack}><ArrowLeft/> Back to Bag</button><header className="screen-title"><span>CHECKOUT</span><h1>Almost yours.</h1><p>Choose your delivery address, then review your order.</p></header>
     {error ? <p className="cloud-message" role="alert">{error}</p> : null}
     {pending ? <div className="cloud-message"><p>Your order request is saved. Check its result safely without creating another order.</p><button disabled={busy} onClick={submit}>{busy ? 'Checking order…' : 'Check / retry order'}</button></div> : <div className="checkout-grid">
-      {!quote ? <AddressBook selectedId={addressId} onSelect={selectAddress}/> : <div className="guest-form"><h2>Deliver to</h2><AddressText address={quote.address_snapshot}/><button className="checkout-back" disabled={busy} onClick={() => setQuote(null)}>Change address</button></div>}
-      <aside className="checkout-summary"><span>{quote ? 'REVIEW ORDER' : 'ORDER SUMMARY'}</span>{quote ? <><OrderLines items={quote.items}/><OrderTotals totals={quote}/><button disabled={busy} onClick={submit}>{busy ? 'CREATING ORDER…' : 'CREATE ORDER'}</button></> : <><p>{items.length} product selection{items.length === 1 ? '' : 's'} ready.</p><button disabled={!addressId || busy} onClick={review}>{busy ? 'CALCULATING…' : 'REVIEW ORDER'}</button></>}<small>Shipping Rp0 for now. Payment is not collected at this step.</small></aside>
+      {!quote ? <><AddressBook selectedId={addressId} onSelect={selectAddress} onAddressSelect={setAddress}/><ShippingQuotePicker key={address?.id ?? 'no-address'} address={address} items={items} onQuote={setShippingQuote}/></> : <div className="guest-form"><h2>Deliver to</h2><AddressText address={quote.address_snapshot}/><button className="checkout-back" disabled={busy} onClick={() => setQuote(null)}>Change address</button></div>}
+      <aside className="checkout-summary"><span>{quote ? 'REVIEW ORDER' : 'ORDER SUMMARY'}</span>{quote ? <><OrderLines items={quote.items}/><OrderTotals totals={quote}/><button disabled={busy} onClick={submit}>{busy ? 'CREATING ORDER…' : 'CREATE ORDER'}</button></> : <><p>{items.length} product selection{items.length === 1 ? '' : 's'} ready.</p><button disabled={!addressId || !shippingQuote || busy} onClick={review}>{busy ? 'CALCULATING…' : 'REVIEW ORDER'}</button></>}<small>{shippingQuote ? 'Shipping is included in the total. Payment is not collected at this step.' : 'Choose an official destination and shipping service to continue.'}</small></aside>
     </div>}
   </section>
 }

@@ -6,9 +6,14 @@
     "scripts":  {
                     "dev":  "vite",
                     "build":  "tsc -b \u0026\u0026 vite build",
+                    "validate:staging-env": "node scripts/validate-staging-env.mjs",
+                    "build:staging": "tsc -b \u0026\u0026 vite build --mode staging",
                     "preview":  "vite preview",
                     "lint":  "eslint .",
                     "test:payments":  "node --experimental-strip-types --test tests/payments.test.mjs",
+                    "test:shipping":  "node --experimental-strip-types --test tests/shipping-provider.test.mjs",
+                    "test:shipping-checkout":  "node --experimental-strip-types --test tests/shipping-checkout.test.mjs",
+                    "test:client-state":  "node --experimental-strip-types --test tests/storage-validation.test.mjs tests/client-state.test.mjs tests/workspace-routing.test.mjs tests/staging-env.test.mjs tests/staging-seed.test.mjs tests/checkout-availability.test.mjs",
                     "deploy:cloudflare":  "npm run build \u0026\u0026 wrangler pages deploy dist --project-name perfun-lab --branch main"
                 },
     "dependencies":  {

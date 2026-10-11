@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { errorMessage, requireSupabase, supabase } from '../lib/supabase'
+import { errorWithCause } from '../lib/errors'
 
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null)
@@ -37,6 +38,10 @@ export function useAuth() {
     }).catch(error => { if (active) { setError(errorMessage(error)); setLoading(false) } })
     return () => { active = false; subscription.unsubscribe() }
   }, [])
+  useEffect(() => {
+    if (!session?.user.id) return
+    window.dispatchEvent(new CustomEvent('perfun-authenticated', { detail: session.user.id }))
+  }, [session?.user.id])
   async function login() {
     setError('')
     try {
@@ -59,7 +64,7 @@ export function useAuth() {
       if (error) throw error
     } catch (error) {
       const message = errorMessage(error)
-      throw new Error(message)
+      throw errorWithCause(message, error)
     }
   }
   async function signUp(email: string, password: string) {
@@ -71,7 +76,7 @@ export function useAuth() {
       return { requiresVerification: !data.session }
     } catch (error) {
       const message = errorMessage(error)
-      throw new Error(message)
+      throw errorWithCause(message, error)
     }
   }
   async function resetPasswordForEmail(email: string) {
@@ -80,7 +85,7 @@ export function useAuth() {
       const { error } = await requireSupabase().auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: window.location.origin + window.location.pathname })
       if (error) throw error
     } catch (error) {
-      throw new Error(errorMessage(error))
+      throw errorWithCause(errorMessage(error), error)
     }
   }
   async function resendVerificationEmail(email: string) {
@@ -89,7 +94,7 @@ export function useAuth() {
       const { error } = await requireSupabase().auth.resend({ type: 'signup', email: email.trim().toLowerCase(), options: { emailRedirectTo: window.location.origin + window.location.pathname } })
       if (error) throw error
     } catch (error) {
-      throw new Error(errorMessage(error))
+      throw errorWithCause(errorMessage(error), error)
     }
   }
   async function updatePassword(password: string) {
@@ -100,7 +105,7 @@ export function useAuth() {
       setPasswordRecovery(false)
       window.history.replaceState(null, '', window.location.pathname + window.location.search)
     } catch (error) {
-      throw new Error(errorMessage(error))
+      throw errorWithCause(errorMessage(error), error)
     }
   }
   return { user: session?.user ?? null, role: profile?.userId === userId ? profile?.role : null, roleLoading: Boolean(userId && profile?.userId !== userId), loading, passwordRecovery, error, login, signInWithPassword, signUp, resetPasswordForEmail, resendVerificationEmail, updatePassword, logout }

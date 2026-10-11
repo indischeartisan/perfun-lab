@@ -5,8 +5,10 @@ import { formatPrice } from '../lib/currency'
 import { AdminCatalogPanel } from '../components/AdminCatalogPanel'
 import { ProductionPage } from './ProductionPage'
 import { FulfillmentPage } from './FulfillmentPage'
+import { AdminVendorWorkspacePanel } from '../components/AdminVendorWorkspacePanel'
+import { AdminVendorPaymentsPanel } from '../components/AdminVendorPaymentsPanel'
 
-const tabs = ['Overview', 'Orders', 'Customers', 'Notes', 'Products & Pricing', 'Production', 'Fulfillment', 'Revenue'] as const
+const tabs = ['Overview', 'Orders', 'Vendor Workspace', 'Vendor Payments', 'Customers', 'Notes', 'Products & Pricing', 'Production', 'Fulfillment', 'Revenue'] as const
 type Tab = typeof tabs[number]
 const label = (value: string) => value.replaceAll('_', ' ')
 export function AdminPage({ userId }: { userId: string }) {
@@ -17,10 +19,12 @@ export function AdminPage({ userId }: { userId: string }) {
     <div className="admin-content" key={tab}>
       {tab === 'Overview' || tab === 'Revenue' ? <Overview revenueOnly={tab === 'Revenue'}/> : null}
       {tab === 'Orders' ? <AdminOrders/> : null}
+      {tab === 'Vendor Workspace' ? <AdminVendorWorkspacePanel/> : null}
+      {tab === 'Vendor Payments' ? <AdminVendorPaymentsPanel/> : null}
       {tab === 'Customers' ? <AdminCustomers/> : null}
       {tab === 'Notes' || tab === 'Products & Pricing' ? <AdminCatalogPanel section={tab === 'Notes' ? 'notes' : 'products'}/> : null}
       {tab === 'Production' ? <ProductionPage userId={userId} role="admin"/> : null}
-      {tab === 'Fulfillment' ? <FulfillmentPage/> : null}
+      {tab === 'Fulfillment' ? <FulfillmentPage role="admin"/> : null}
     </div>
   </section>
 }

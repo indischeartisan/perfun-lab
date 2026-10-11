@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 
 interface LocalStorageOptions<T> {
   restore?: (value: unknown) => T | null
@@ -25,7 +25,7 @@ function readStoredValue<T>(key: string | null, initialValue: T, options: LocalS
   }
 }
 
-function loadValue<T>(key: string | null, initialValue: T, options: LocalStorageOptions<T>) {
+export function loadValue<T>(key: string | null, initialValue: T, options: LocalStorageOptions<T>) {
   const stored = readStoredValue(key, initialValue, options)
   if (stored !== null) return stored
   if (!key) return initialValue
@@ -41,10 +41,9 @@ function loadValue<T>(key: string | null, initialValue: T, options: LocalStorage
 export function useLocalStorage<T>(key: string | null, initialValue: T, options: LocalStorageOptions<T> = {}) {
   const [stored, setStored] = useState(() => ({ key, value: loadValue(key, initialValue, options) }))
 
-  useLayoutEffect(() => {
-    if (stored.key === key) return
+  if (stored.key !== key) {
     setStored({ key, value: loadValue(key, initialValue, options) })
-  }, [key, initialValue, options, stored.key])
+  }
 
   useEffect(() => {
     if (!key || stored.key !== key) return
@@ -53,6 +52,9 @@ export function useLocalStorage<T>(key: string | null, initialValue: T, options:
     } catch { /* Continue without draft persistence. */ }
   }, [key, stored])
 
-  const setValue: Dispatch<SetStateAction<T>> = next => setStored(current => ({ ...current, value: typeof next === 'function' ? (next as (previous: T) => T)(current.value) : next }))
+  const setValue = useCallback<Dispatch<SetStateAction<T>>>(next => setStored(current => {
+    if (current.key !== key) return current
+    return { ...current, value: typeof next === 'function' ? (next as (previous: T) => T)(current.value) : next }
+  }), [key])
   return [stored.key === key ? stored.value : initialValue, setValue] as const
 }

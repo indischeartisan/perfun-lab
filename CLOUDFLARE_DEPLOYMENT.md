@@ -13,9 +13,11 @@ npm ci
 npm run deploy:cloudflare
 ```
 
-Wrangler OAuth login must be available. This is a Direct Upload project: deployments run from a local build, not automatic Git integration. A later CI pipeline can invoke the same deploy command. Cloudflare's built-in Git integration would require another project.
+Wrangler OAuth login is required only for a deliberate Direct Upload. Production uses the Cloudflare Pages Git integration on `main`; a successful push to `main` starts the automatic production build. Do not use the Direct Upload command to bypass a failed Git-integrated build.
 
-The public build variables `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are read from `.env.local` locally or from the CI build environment. They are compiled into the browser bundle. Do not use a service role key or payment secret here.
+The public build variables `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are read from `.env.local` locally or from the Cloudflare Pages build environment. They are compiled into the browser bundle. Do not use a service role key or payment secret here.
+
+For a Git-integrated Pages deployment, set both variables for the **Production** environment (not only Preview), then save and retry a deployment or push a new `main` commit. Verify the deployed JavaScript includes the project URL, without logging the key value. An absent value produces the safe configuration error in the app; it is not an Auth, RLS, or database failure.
 
 Added `wrangler.jsonc`, pinned Wrangler dev dependency/lockfile, `deploy:cloudflare` script, `.wrangler`/`.dev.vars*` ignores and no-cache headers for index/service worker updates.
 

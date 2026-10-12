@@ -61,3 +61,90 @@
 .payout-actions label { display: grid; gap: 7px; font-size: .85rem; }
 .payout-actions input { min-height: 42px; box-sizing: border-box; padding: 9px; border: 1px solid #bcb9ae; border-radius: 8px; font: inherit; }
 @media(max-width:600px) { .admin-phase { grid-template-columns: 1fr; } .admin-metrics { grid-template-columns: 1fr 1fr; gap: 8px; } .admin-metrics article { padding: 12px; } .admin-metrics strong { font-size: 1.1rem; } .admin-tabs button { flex: 1 1 auto; } .fulfillment-address-copy,.shipping-cost-grid,.payout-actions { grid-template-columns: 1fr; } .fulfillment-address-copy > p { grid-column: auto; } }
+
+/* The Calm Lab workspace: quiet paper, concise cards, responsive navigation. */
+.workspace-app { --lab-paper:#f7f3eb; --lab-card:#fffdf9; --lab-ink:#292b27; --lab-muted:#70736b; --lab-line:#e2ddd3; --lab-lime:#d7ff58; background:var(--lab-paper); }
+.workspace-header { min-height:56px; background:rgba(247,243,235,.92); backdrop-filter:blur(16px); }
+.workspace-header .wordmark img { width:102px; height:auto; display:block; }
+.workspace-header>strong { color:#6b6e65; font-weight:800; }
+.workspace-title { padding-bottom:22px; border:0; }
+.workspace-title h1 { font-size:clamp(34px,5vw,60px); line-height:.98; margin-top:9px; }
+.workspace-title p { max-width:530px; line-height:1.55; }
+.workspace-nav { margin:0; padding:0; max-width:none; gap:0; background:var(--lab-card); border-top:1px solid var(--lab-line); }
+.workspace-nav button { display:grid; place-items:center; gap:4px; min-height:60px; border:0; border-radius:0; background:transparent; color:var(--lab-muted); font-size:10px; font-weight:800; }
+.workspace-nav button.active,.workspace-nav button[aria-current="page"] { background:transparent; border:0; color:var(--lab-ink); }
+.workspace-nav button.active svg,.workspace-nav button[aria-current="page"] svg { color:#668500; }
+.workspace-more { margin:8px 0 18px; border:1px solid var(--lab-line); border-radius:12px; background:var(--lab-card); }
+.workspace-more summary { cursor:pointer; padding:13px 15px; font-size:12px; font-weight:800; }
+.workspace-more-menu { display:grid; grid-template-columns:1fr 1fr; gap:7px; padding:0 12px 12px; }
+.workspace-more-menu button { min-height:42px; text-align:left; padding:10px; border:1px solid var(--lab-line); border-radius:9px; background:#fff; color:var(--lab-ink); font-size:11px; font-weight:700; }
+.workspace-more-menu button[aria-pressed="true"] { background:#eff7d6; border-color:#b8d36d; }
+.overview-section { margin:28px 0; }
+.overview-section>h2 { margin:6px 0 0; font-size:21px; letter-spacing:-.04em; }
+.overview-section .admin-metrics { margin:14px 0 0; }
+.admin-metrics { gap:10px; margin:16px 0 24px; }
+.admin-metrics article,.admin-editor,.customer-order,.packing-card { border-color:var(--lab-line); background:var(--lab-card); border-radius:14px; box-shadow:0 5px 18px rgba(49,46,38,.035); }
+.admin-metrics article { padding:16px; min-height:108px; }
+.admin-metrics span { color:var(--lab-muted); font-size:11px; line-height:1.35; }
+.admin-metrics strong { margin-top:9px; font-size:clamp(22px,3vw,30px); letter-spacing:-.055em; }
+.attention-metrics article:first-child { border-left:4px solid #b7d957; }
+.production-screen,.fulfillment-screen { max-width:100%; padding-top:34px; }
+.production-status-tabs { display:grid; grid-template-columns:repeat(3,1fr); padding:4px; gap:4px; border:1px solid var(--lab-line); border-radius:12px; background:#eeebe4; }
+.production-status-tabs button { border:0; border-radius:8px; padding:11px 6px; background:transparent; font-size:11px; font-weight:800; }
+.production-status-tabs button[aria-pressed="true"] { background:var(--lab-card); box-shadow:0 1px 4px rgba(35,35,30,.09); }
+.production-status-tabs button span,.production-status-tabs button b { display:block; }
+.production-status-tabs button b { margin-top:3px; font-size:16px; letter-spacing:-.05em; }
+.production-list { display:grid; gap:12px; }
+.production-card,.fulfillment-card,.payout-card { padding:17px; }
+.production-card>header,.fulfillment-card>header,.payout-card>header { gap:8px; }
+.production-card h2 { margin:16px 0 8px; font-size:20px; letter-spacing:-.04em; }
+.production-card>p:not(.production-assignment):not(.production-time) { padding:9px 10px; border-radius:8px; background:#f2f5e6; font-size:12px; }
+.production-formula { margin-top:10px; padding:12px; border:1px solid var(--lab-line); border-radius:10px; background:#fcfbf7; }
+.production-formula h3 { margin:0 0 8px; font-size:12px; }
+.production-formula dl { gap:7px; }
+.production-formula dl div { padding:7px 0; }
+.production-formula dt { color:#728100; font-size:9px; letter-spacing:.1em; }
+.production-formula dd { font-size:13px; }
+.production-toolbar { margin:16px 0; padding:8px 0; }
+.production-toolbar button,.fulfillment-document-actions button { border:1px solid var(--lab-line); border-radius:9px; background:var(--lab-card); padding:9px 11px; font-size:11px; font-weight:800; }
+.orders-build,.shipping-actions .orders-build { border-radius:10px; background:#272a25; }
+.fulfillment-document-actions { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+.screen-empty { padding:36px 20px; margin:34px auto; border:1px dashed #cfc9bd; border-radius:14px; background:rgba(255,253,249,.65); }
+.screen-empty h2 { font-size:22px; }
+@media(max-width:767px) {
+  .workspace-app { padding-bottom:70px; }
+  .workspace-header { position:sticky; top:0; }
+  .workspace-header>strong { display:none; }
+  .workspace-header .header-account { margin-left:auto; }
+  .workspace-app>.workspace-nav { position:fixed; z-index:40; left:0; right:0; bottom:0; display:grid; grid-auto-flow:column; grid-auto-columns:1fr; padding-bottom:env(safe-area-inset-bottom); box-shadow:0 -8px 25px rgba(44,42,35,.08); }
+  .admin-dashboard { padding:28px 16px 86px; }
+  .admin-dashboard>.admin-workspace-nav { position:fixed; z-index:40; left:0; right:0; bottom:0; display:grid; grid-template-columns:repeat(4,1fr); padding-bottom:env(safe-area-inset-bottom); box-shadow:0 -8px 25px rgba(44,42,35,.08); }
+  .admin-dashboard>.admin-workspace-nav button { min-height:60px; }
+  .admin-content .app-screen { padding:22px 0 0; }
+  .fulfillment-address-copy { grid-template-columns:1fr; }
+}
+@media(min-width:768px) {
+  .workspace-app { display:grid; grid-template-columns:208px minmax(0,1fr); min-height:100vh; }
+  .workspace-header { grid-column:1/-1; }
+  .workspace-app>.workspace-nav { display:grid; align-content:start; gap:4px; padding:18px 12px; border:0; border-right:1px solid var(--lab-line); background:transparent; }
+  .workspace-app>.workspace-nav button { grid-template-columns:22px 1fr; justify-content:start; min-height:44px; padding:0 12px; border-radius:10px; }
+  .workspace-app>.workspace-nav button span { font-size:12px; }
+  .workspace-app>.workspace-nav button.active { background:#edf5d4; }
+  .workspace-app:not(.workspace-admin)>.app-main { min-width:0; grid-column:2; }
+  .workspace-admin>.app-main { grid-column:1/-1; min-width:0; }
+  .workspace-app>.app-main>.app-screen { max-width:1180px; padding:46px clamp(28px,5vw,72px) 70px; }
+  .admin-dashboard { display:grid; grid-template-columns:180px minmax(0,1fr); column-gap:32px; align-items:start; }
+  .admin-dashboard>.workspace-title { grid-column:1/-1; }
+  .admin-dashboard>.admin-workspace-nav { display:grid; position:sticky; top:78px; border:0; background:transparent; gap:4px; }
+  .admin-dashboard>.admin-workspace-nav button { grid-template-columns:22px 1fr; justify-content:start; min-height:44px; padding:0 12px; border-radius:10px; }
+  .admin-dashboard>.admin-workspace-nav button span { font-size:12px; }
+  .admin-dashboard>.admin-workspace-nav button.active { background:#edf5d4; }
+  .workspace-more { grid-column:1; margin:12px 0 0; position:sticky; top:285px; }
+  .workspace-more-menu { grid-template-columns:1fr; }
+  .admin-dashboard>.admin-content { grid-column:2; grid-row:2 / span 2; }
+  .admin-dashboard .admin-content .app-screen { padding-top:0; }
+  .admin-metrics { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .attention-metrics { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .production-list { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .fulfillment-card { grid-column:1/-1; }
+}

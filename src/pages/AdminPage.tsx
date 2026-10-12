@@ -7,15 +7,22 @@ import { ProductionPage } from './ProductionPage'
 import { FulfillmentPage } from './FulfillmentPage'
 import { AdminVendorWorkspacePanel } from '../components/AdminVendorWorkspacePanel'
 import { AdminVendorPaymentsPanel } from '../components/AdminVendorPaymentsPanel'
+import { AdminWorkspaceNavigation } from '../components/WorkspaceNavigation'
 
 const tabs = ['Overview', 'Orders', 'Vendor Workspace', 'Vendor Payments', 'Customers', 'Notes', 'Products & Pricing', 'Production', 'Fulfillment', 'Revenue'] as const
 type Tab = typeof tabs[number]
 const label = (value: string) => value.replaceAll('_', ' ')
 export function AdminPage({ userId }: { userId: string }) {
   const [tab, setTab] = useState<Tab>('Overview')
+  const mobileTab = tab === 'Overview' || tab === 'Orders' || tab === 'Production' ? tab : 'More'
+  const selectMobileTab = (next: 'Overview' | 'Orders' | 'Production' | 'More') => {
+    if (next === 'More') { setTab(current => current === 'Overview' || current === 'Orders' || current === 'Production' ? 'Vendor Workspace' : current); return }
+    setTab(next)
+  }
   return <section className="app-screen admin-dashboard">
-    <header className="screen-title"><span>PERFUN LAB OPERATIONS</span><h1>Admin Dashboard</h1><p>Orders, catalog and daily operations in one place.</p></header>
-    <nav className="production-filters admin-tabs" aria-label="Admin sections">{tabs.map(value => <button key={value} aria-pressed={tab === value} onClick={() => setTab(value)}>{value}</button>)}</nav>
+    <header className="screen-title workspace-title"><span>PERFUN LAB OPERATIONS</span><h1>Good morning, Lab.</h1><p>A calm view of orders, production, and the work that needs you.</p></header>
+    <AdminWorkspaceNavigation active={mobileTab} onNavigate={selectMobileTab}/>
+    <details className="workspace-more" open={mobileTab === 'More'}><summary>More workspace tools</summary><div className="workspace-more-menu">{tabs.filter(value => !['Overview', 'Orders', 'Production'].includes(value)).map(value => <button key={value} aria-pressed={tab === value} onClick={() => setTab(value)}>{value}</button>)}</div></details>
     <div className="admin-content" key={tab}>
       {tab === 'Overview' || tab === 'Revenue' ? <Overview revenueOnly={tab === 'Revenue'}/> : null}
       {tab === 'Orders' ? <AdminOrders/> : null}
@@ -35,7 +42,7 @@ function Overview({ revenueOnly }: { revenueOnly: boolean }) {
   const revenue: Array<[keyof AdminOverview, string]> = [['paid_gross_sales', 'Paid gross sales'], ['discounts', 'Discounts'], ['shipping_collected', 'Shipping collected'], ['net_transaction_total', 'Net transaction total']]
   return <><AdminLoad error={error} loading={!data && !error} reload={reload}/>
     {data ? <>
-      {!revenueOnly ? <div className="admin-metrics">{operations.map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</div> : null}
+      {!revenueOnly ? <><section className="overview-section"><span className="admin-kicker">Needs attention</span><h2>Keep the queue moving</h2><div className="admin-metrics attention-metrics">{operations.slice(1, 4).map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</div></section><section className="overview-section"><span className="admin-kicker">Today at the Lab</span><h2>What is happening now</h2><div className="admin-metrics">{operations.slice(0, 1).concat(operations.slice(4)).map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</div></section></> : null}
       <h2>Revenue</h2><p className="admin-help">All-time orders currently Paid. Gross − discounts + shipping = net transaction total. Refunded orders are excluded; payment fees are not deducted.</p>
       <div className="admin-metrics">{revenue.map(([key, title]) => <article key={key}><span>{title}</span><strong>{formatPrice(Number(data[key]))}</strong></article>)}</div>
       <p className="admin-help">Today follows Asia/Jakarta. Other counts show current status. Updated {new Date(data.as_of).toLocaleString()}.</p>

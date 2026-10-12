@@ -6,10 +6,18 @@ const labels: Record<ProductionStatus, string> = { queued: 'Queued', in_producti
 
 export function ProductionPage({ userId, role }: { userId: string; role: 'perfumer' | 'admin' | 'vendor' }) {
   const [filter, setFilter] = useState<{ status: ProductionStatus; page: number }>({ status: 'queued', page: 0 })
+  const [summary, setSummary] = useState<Partial<Record<ProductionStatus, number>>>({})
+  useEffect(() => {
+    let active = true
+    void Promise.all((Object.keys(labels) as ProductionStatus[]).map(status => listProductionJobs(status, 0).then(result => [status, result.count] as const))).then(results => {
+      if (active) setSummary(Object.fromEntries(results) as Partial<Record<ProductionStatus, number>>)
+    }).catch(() => { if (active) setSummary({}) })
+    return () => { active = false }
+  }, [role])
   return <section className="app-screen production-screen">
     <header className="screen-title"><span>THE LAB</span><h1>Production Queue</h1><p>{role === 'admin' ? 'View production progress across all jobs.' : role === 'vendor' ? 'Produce only orders assigned to your vendor workspace.' : 'Choose a job and craft each formula as ordered.'}</p></header>
-    <nav className="production-filters" aria-label="Production status">
-      {(Object.keys(labels) as ProductionStatus[]).map(status => <button key={status} aria-pressed={filter.status === status} onClick={() => setFilter({ status, page: 0 })}>{labels[status]}</button>)}
+    <nav className="production-filters production-status-tabs" aria-label="Production status">
+      {(Object.keys(labels) as ProductionStatus[]).map(status => <button key={status} aria-pressed={filter.status === status} onClick={() => setFilter({ status, page: 0 })}><span>{labels[status]}</span><b>{summary[status] ?? '—'}</b></button>)}
     </nav>
     <ProductionList key={`${userId}:${role}:${filter.status}:${filter.page}`} userId={userId} role={role} status={filter.status} page={filter.page} onPage={page => setFilter(current => ({ ...current, page }))}/>
   </section>

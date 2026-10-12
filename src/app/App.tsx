@@ -31,6 +31,7 @@ import { FulfillmentPage } from '../pages/FulfillmentPage'
 import { AdminPage } from '../pages/AdminPage'
 import { VendorPaymentsPage } from '../pages/VendorPaymentsPage'
 import { navigationHash, viewFromHash, workspaceView } from './workspaceRouting'
+import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
 import '../admin.css'
 
 
@@ -251,13 +252,9 @@ function WorkspaceApp({ auth }: { auth: ReturnType<typeof useAuth> }) {
 
   const vendor = role === 'vendor'
   const perfumer = role === 'perfumer'
-  return <div className="app-shell product-app workspace-app">
+  return <div className={`app-shell product-app workspace-app ${role === 'admin' ? 'workspace-admin' : ''}`}>
     <header className="workspace-header"><button className="wordmark" onClick={() => navigate(role === 'admin' ? 'admin' : 'production')} aria-label="Go to workspace"><img src="/brand/perfun-lab-logo.webp" alt="PERFUN LAB"/></button><strong>{role === 'admin' ? 'ADMIN WORKSPACE' : perfumer ? 'PERFUMER WORKSPACE' : 'VENDOR WORKSPACE'}</strong><AccountMenu auth={auth} onLogin={() => {}}/></header>
-    <nav className="workspace-nav" aria-label={`${role} workspace navigation`}>
-      {role === 'admin' ? <button aria-current="page" onClick={() => navigate('admin')}>Dashboard</button> : null}
-      {vendor || perfumer ? <button aria-current={view === 'production' ? 'page' : undefined} onClick={() => navigate('production')}>Production</button> : null}
-      {vendor ? <><button aria-current={view === 'fulfillment' ? 'page' : undefined} onClick={() => navigate('fulfillment')}>Fulfillment</button><button aria-current={view === 'payouts' ? 'page' : undefined} onClick={() => navigate('payouts')}>Payments</button></> : null}
-    </nav>
+    <WorkspaceNavigation role={role} active={view} onNavigate={navigate}/>
     <main className="app-main">
       {role === 'admin' ? <AdminPage key={auth.user.id} userId={auth.user.id}/> : null}
       {view === 'production' && (vendor || perfumer) ? <ProductionPage key={`${auth.user.id}:${role}`} userId={auth.user.id} role={role}/> : null}

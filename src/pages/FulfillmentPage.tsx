@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { fulfillShipment, listShipments, overrideShipmentService, saveActualShipping, saveShipmentPacking, shipmentLabels, type PackingChecklist, type Shipment, type ShipmentStatus, type ShippingDetails, type ShippingPayer } from '../lib/shipments'
+import { fulfillShipment, listShipmentFormulaJobs, listShipments, overrideShipmentService, saveActualShipping, saveShipmentPacking, shipmentLabels, type PackingChecklist, type Shipment, type ShipmentFormulaJob, type ShipmentStatus, type ShippingDetails, type ShippingPayer } from '../lib/shipments'
 import { formatPrice } from '../lib/currency'
 import { errorMessage } from '../lib/supabase'
 import { ShipmentStatus as ShipmentDetails } from '../components/ShipmentStatus'
+import { formatOrderCopy, formatShippingAddress, labelPrintHtml, packingSlipPrintHtml } from '../lib/fulfillmentDocuments'
 
 const tabs: ShipmentStatus[] = ['ready_to_ship', 'shipped', 'delivered', 'pending']
 const packingItems: Array<[keyof PackingChecklist, string]> = [
@@ -17,9 +18,28 @@ const payerLabels: Record<ShippingPayer, string> = { vendor: 'Vendor paid', perf
 function checklistFor(shipment: Shipment): PackingChecklist {
   return shipment.packing_checklist ?? { bottles_checked: false, formula_stickers_checked: false, bottles_sealed: false, packaging_ready: false, recipient_label_checked: false }
 }
-function addressText(shipment: Shipment) {
-  const address = shipment.address_snapshot
-  return [address.recipient_name, address.phone, address.address_line, [address.district, address.city, address.province, address.postal_code].filter(Boolean).join(', '), address.delivery_note ? `Note: ${address.delivery_note}` : ''].filter(Boolean).join('\n')
+function openPrintDocument(html: string) {
+  const popup = window.open('', '_blank', 'width=480,height=720')
+  if (!popup) throw new Error('Print window was blocked. Allow pop-ups and try again.')
+  popup.opener = null
+  popup.document.open()
+  popup.document.write(html)
+  popup.document.close()
+  popup.focus()
+  popup.print()
+}
+
+async function copyText(value: string) {
+  if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(value); return }
+  const textarea = document.createElement('textarea')
+  textarea.value = value
+  textarea.setAttribute('readonly', '')
+  textarea.style.cssText = 'position:fixed;opacity:0;pointer-events:none'
+  document.body.append(textarea)
+  textarea.select()
+  const copied = document.execCommand('copy')
+  textarea.remove()
+  if (!copied) throw new Error('Copy failed')
 }
 
 export function FulfillmentPage({ role }: { role: 'vendor' | 'admin' }) {
@@ -70,12 +90,22 @@ function ShipmentCard({ shipment, role, onChanged }: { shipment: Shipment; role:
   const [overrideReason, setOverrideReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [copyNotice, setCopyNotice] = useState('')
+  const [formulaJobs, setFormulaJobs] = useState<ShipmentFormulaJob[]>([])
+  const [formulaLoading, setFormulaLoading] = useState(true)
   const [error, setError] = useState('')
   const lock = useRef(false)
   const canEdit = role === 'vendor'
   const packed = shipment.packing_status === 'packed'
   const ready = shipment.status === 'ready_to_ship' && shipment.fulfillment_allowed
   const allChecked = packingItems.every(([key]) => checklist[key])
+  useEffect(() => {
+    let active = true
+    void listShipmentFormulaJobs(shipment.order_number)
+      .then(rows => { if (active) setFormulaJobs(rows) })
+      .catch(() => { if (active) setFormulaJobs([]) })
+      .finally(() => { if (active) setFormulaLoading(false) })
+    return () => { active = false }
+  }, [shipment.order_number])
   async function run(action: () => Promise<Shipment>, notice: (result: Shipment) => string) {
     if (lock.current) return
     lock.current = true; setBusy(true); setError('')
@@ -98,8 +128,20 @@ function ShipmentCard({ shipment, role, onChanged }: { shipment: Shipment; role:
     void run(() => overrideShipmentService(shipment.id, details.courier, details.service, overrideReason), result => `${shipment.order_number}: shipping service overridden to ${result.courier} ${result.service}.`)
   }
   async function copyAddress() {
-    try { await navigator.clipboard.writeText(addressText(shipment)); setCopyNotice('Address copied.') }
+    try { await copyText(formatShippingAddress(shipment)); setCopyNotice('Address copied.') }
     catch { setCopyNotice('Copy failed. Select the address text and copy it manually.') }
+  }
+  async function copyOrder() {
+    try { await copyText(formatOrderCopy(shipment, formulaJobs)); setCopyNotice('Order and formula copied.') }
+    catch { setCopyNotice('Copy failed. Select the order details and copy them manually.') }
+  }
+  function printLabel() {
+    try { openPrintDocument(labelPrintHtml(shipment)); setCopyNotice('Print label opened.') }
+    catch (printError) { setError(errorMessage(printError)) }
+  }
+  function printPackingSlip() {
+    try { openPrintDocument(packingSlipPrintHtml(shipment, formulaJobs)); setCopyNotice('Packing slip opened.') }
+    catch (printError) { setError(errorMessage(printError)) }
   }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -108,7 +150,7 @@ function ShipmentCard({ shipment, role, onChanged }: { shipment: Shipment; role:
   }
   return <article className="customer-order fulfillment-card">
     <header><strong>{shipment.order_number}</strong><time dateTime={shipment.ordered_at}>{new Date(shipment.ordered_at).toLocaleString()}</time><b className="order-status">{shipmentLabels[shipment.status]}</b></header>
-    <section className="fulfillment-address fulfillment-address-copy" aria-label="Delivery address"><div><h2>Delivery details</h2><pre>{addressText(shipment)}</pre></div><button type="button" onClick={() => void copyAddress()}>Copy all</button>{copyNotice ? <p role="status">{copyNotice}</p> : null}</section>
+    <section className="fulfillment-address fulfillment-address-copy" aria-label="Shipping information"><div><h2>Shipping information</h2><pre>{formatShippingAddress(shipment)}</pre><p><strong>Courier:</strong> {[shipment.courier, shipment.service].filter(Boolean).join(' / ') || 'Not selected yet'}</p><p><strong>Tracking:</strong> {shipment.tracking_number || 'Not available yet'}</p></div><div className="fulfillment-document-actions"><button type="button" onClick={() => void copyAddress()}>Copy address</button><button type="button" onClick={() => void copyOrder()} disabled={formulaLoading}>Copy order</button><button type="button" onClick={printLabel}>Print label</button><button type="button" onClick={printPackingSlip} disabled={formulaLoading}>Print packing slip</button></div>{formulaLoading ? <p role="status">Loading formula snapshot…</p> : null}{copyNotice ? <p role="status">{copyNotice}</p> : null}</section>
     <ul className="fulfillment-products">{shipment.items_snapshot.map((item, index) => <li key={index}><strong>{item.product.label}</strong><span>{item.product.bottle_count} × {item.product.volume_ml} ml · Quantity: {item.quantity}</span></li>)}</ul>
     <section className="packing-card"><h2>Customer shipping selection</h2>{shipment.customer_shipping ? <><p><strong>{shipment.customer_shipping.courier} / {shipment.customer_shipping.service}</strong></p><p>Customer shipping paid: {formatPrice(shipment.customer_shipping.amount)}. This is separate from the vendor actual shipping cost.</p></> : <p>Legacy order: no customer shipping quote snapshot.</p>}{shipment.shipping_override_history?.length ? <div className="admin-help"><strong>Admin override history</strong>{shipment.shipping_override_history.map(entry => <p key={`${entry.overridden_at}:${entry.new_courier}`}>{entry.original_courier} {entry.original_service} to {entry.new_courier} {entry.new_service}: {entry.reason} ({new Date(entry.overridden_at).toLocaleString()})</p>)}</div> : null}</section>
     <ShipmentDetails shipment={shipment}/>

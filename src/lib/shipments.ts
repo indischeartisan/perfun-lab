@@ -19,12 +19,23 @@ export interface Shipment extends ShipmentSummary {
   customer_shipping: { courier: string; service: string; amount: number; quote_id: string | null } | null
   shipping_override_history: Array<{ original_courier: string; original_service: string; new_courier: string; new_service: string; reason: string; overridden_at: string }>
 }
+export interface ShipmentFormulaJob {
+  id: string; order_number: string; quantity: number
+  product_snapshot: { label: string; volume_ml: number; bottle_count: number }
+  formulas_snapshot: Array<{ top: string | null; middle: string | null; base: string | null }>
+}
 export interface ShippingDetails { courier: string; service: string; tracking_number: string }
 export async function listShipments(status: ShipmentStatus, page: number) {
   const { data, error } = await requireSupabase().rpc('list_fulfillment_shipments', { p_status: status, p_page: page })
   if (error) throw error
   const result = data as { rows: Shipment[]; count: number }
   return { shipments: result.rows, count: result.count }
+}
+export async function listShipmentFormulaJobs(orderNumber: string) {
+  const { data, error } = await requireSupabase().from('production_jobs')
+    .select('id,order_number,quantity,product_snapshot,formulas_snapshot').eq('order_number', orderNumber).order('created_at')
+  if (error) throw error
+  return (data ?? []) as ShipmentFormulaJob[]
 }
 export async function fulfillShipment(id: string, action: 'save' | 'ship' | 'deliver', details?: ShippingDetails) {
   const { data, error } = await requireSupabase().rpc('fulfill_shipment', {

@@ -105,6 +105,10 @@
 .production-formula dl div { padding:7px 0; }
 .production-formula dt { color:#728100; font-size:9px; letter-spacing:.1em; }
 .production-formula dd { font-size:13px; }
+.production-formula .formula-note { display:grid; grid-template-columns:54px minmax(0,1fr); align-items:center; gap:8px; }
+.production-formula .formula-note dt { margin:0; }
+.production-formula .formula-note dd { display:flex; align-items:center; gap:7px; margin:0; min-width:0; }
+.production-formula .formula-note img { width:28px; height:28px; object-fit:contain; flex:0 0 auto; }
 .production-toolbar { margin:16px 0; padding:8px 0; }
 .production-toolbar button,.fulfillment-document-actions button { border:1px solid var(--lab-line); border-radius:9px; background:var(--lab-card); padding:9px 11px; font-size:11px; font-weight:800; }
 .orders-build,.shipping-actions .orders-build { border-radius:10px; background:#272a25; }

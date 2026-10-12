@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { advanceProductionJob, listProductionJobs, type ProductionJob, type ProductionStatus } from '../lib/production'
 import { errorMessage } from '../lib/supabase'
+import { getNoteStickerAsset } from '../lib/noteAssets'
 
 const labels: Record<ProductionStatus, string> = { queued: 'Queued', in_production: 'In Production', completed: 'Completed' }
 
@@ -77,7 +78,7 @@ function ProductionCard({ job, userId, canWork, onChanged }: { job: ProductionJo
     <p className="production-assignment">{job.assigned_to ? mine ? 'Assigned to you' : 'Assigned to another perfumer' : 'Unassigned'}</p>
     {job.formulas_snapshot.map((formula, index) => <section className="production-formula" key={index} aria-label={`Bottle ${index + 1} formula`}>
       <h3>Bottle {index + 1}{job.quantity > 1 ? ` · make ${job.quantity}` : ''}</h3>
-      <dl>{(['top', 'middle', 'base'] as const).map(phase => <div key={phase}><dt>{phase === 'middle' ? 'Mid' : phase === 'top' ? 'Top' : 'Base'} notes</dt><dd>{formula[phase] ?? 'Snapshot unavailable'}</dd></div>)}</dl>
+      <dl>{(['top', 'middle', 'base'] as const).map(phase => <FormulaNote key={phase} phase={phase} note={formula[phase]}/>)}</dl>
     </section>)}
     {job.started_at ? <p className="production-time">Started: <time dateTime={job.started_at}>{new Date(job.started_at).toLocaleString()}</time></p> : null}
     {job.completed_at ? <p className="production-time">Completed: <time dateTime={job.completed_at}>{new Date(job.completed_at).toLocaleString()}</time></p> : null}
@@ -85,4 +86,11 @@ function ProductionCard({ job, userId, canWork, onChanged }: { job: ProductionJo
     {error ? <p role="alert">{error}</p> : null}
     {canWork && job.production_allowed && (job.status === 'queued' || (job.status === 'in_production' && mine)) ? <button className="orders-build" disabled={busy} onClick={() => advance(job.status === 'queued' ? 'start' : 'complete')}>{busy ? 'Saving…' : job.status === 'queued' ? 'Start Production' : 'Complete'}</button> : null}
   </article>
+}
+
+function FormulaNote({ phase, note }: { phase: 'top' | 'middle' | 'base'; note: string | null }) {
+  const noteId = note?.trim().toLowerCase().replaceAll(' ', '-') ?? ''
+  const asset = noteId ? getNoteStickerAsset({ id: noteId }) : null
+  const label = phase === 'middle' ? 'Middle' : phase[0].toUpperCase() + phase.slice(1)
+  return <div className="formula-note"><dt>{label}</dt><dd>{asset ? <img src={asset} alt="" aria-hidden="true"/> : null}<span>{note ?? 'Snapshot unavailable'}</span></dd></div>
 }

@@ -40,6 +40,7 @@ function isComplete(selection: Selection): selection is CompleteSelection {
 }
 
 export default function App() {
+  const auth = useAuth()
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)
@@ -51,11 +52,14 @@ export default function App() {
     window.addEventListener('focus', refresh)
     return () => { active = false; window.removeEventListener('perfun-catalog-updated', refresh); window.removeEventListener('focus', refresh) }
   }, [attempt])
-  if (!catalog) return <div className="app-shell product-app"><Header itemCount={0} activeView="build" onNavigate={() => {}}/><main className="cloud-message">{error ? <><p role="alert">{error}</p><button onClick={() => { setError(''); setAttempt(value => value + 1) }}>Try again</button></> : <p role="status">Loading the lab…</p>}</main></div>
-  return <ConnectedApp catalog={catalog}/>
+  if (auth.loading || (auth.user && auth.roleLoading)) return <RoleLoading/>
+  if (auth.user && auth.role && auth.role !== 'customer') return <WorkspaceApp auth={auth}/>
+  if (auth.user && !auth.role) return <RoleUnavailable auth={auth}/>
+  if (!catalog) return <div className="app-shell product-app"><Header itemCount={0} activeView="build" onNavigate={() => {}} account={<AccountMenu auth={auth} onLogin={() => {}}/>}/><main className="cloud-message">{error ? <><p role="alert">{error}</p><button onClick={() => { setError(''); setAttempt(value => value + 1) }}>Try again</button></> : <p role="status">Loading the lab…</p>}</main></div>
+  return <ConnectedApp catalog={catalog} auth={auth}/>
 }
 
-function ConnectedApp({ catalog }: { catalog: Catalog }) {
+function ConnectedApp({ catalog, auth }: { catalog: Catalog; auth: ReturnType<typeof useAuth> }) {
   const [requestedView, setView] = useState<AppView>(() => viewFromHash(window.location.hash, Boolean(readSessionValue(bagCheckoutResumeKey))))
   const [authDialogOpen, setAuthDialogOpen] = useState(false)
   const [resumeCheckout, setResumeCheckout] = useState(() => readSessionValue(bagCheckoutResumeKey) === '1')
@@ -66,7 +70,6 @@ function ConnectedApp({ catalog }: { catalog: Catalog }) {
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
-  const auth = useAuth()
   const storageOwner = auth.loading ? null : auth.user?.id ?? 'guest'
   const [confirmedOrder, setConfirmedOrder] = useState<CustomerOrder | null>(null)
   const blend = useBlend(catalog.noteGroups, storageOwner)
@@ -78,6 +81,11 @@ function ConnectedApp({ catalog }: { catalog: Catalog }) {
   const [directCheckoutBusy, setDirectCheckoutBusy] = useState(false)
   const [directCheckoutError, setDirectCheckoutError] = useState('')
   const view = workspaceView(auth.role ?? null, requestedView)
+
+  useEffect(() => {
+    if (view === requestedView) return
+    window.history.replaceState(null, '', navigationHash(view, window.location.pathname, window.location.search))
+  }, [requestedView, view])
 
   function scrollToTop() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -195,10 +203,6 @@ function ConnectedApp({ catalog }: { catalog: Catalog }) {
   return <div className="app-shell product-app">
     <Header itemCount={cart.count} activeView={view} onNavigate={navigate} fulfillmentOnly={auth.role === 'vendor'} account={<AccountMenu auth={auth} onLogin={() => setAuthDialogOpen(true)}/>}/>
     {auth.error ? <p className="cloud-message" role="alert">{auth.error}</p> : null}
-    {auth.role === 'vendor' ? <nav className="workspace-nav" aria-label="Vendor workspace"><button aria-current={view === 'production' ? 'page' : undefined} onClick={() => navigate('production')}>Production</button><button aria-current={view === 'fulfillment' ? 'page' : undefined} onClick={() => navigate('fulfillment')}>Fulfillment</button><button aria-current={view === 'payouts' ? 'page' : undefined} onClick={() => navigate('payouts')}>Payments</button></nav> : null}
-    {auth.role === 'perfumer' || auth.role === 'admin' ? <div className="account-bar"><button aria-current={view === 'production' ? 'page' : undefined} onClick={() => navigate('production')}>Production Queue</button></div> : null}
-    {auth.role === 'admin' ? <div className="account-bar"><button aria-current={view === 'fulfillment' ? 'page' : undefined} onClick={() => navigate('fulfillment')}>Vendor Fulfillment</button></div> : null}
-    {auth.role === 'admin' ? <div className="account-bar"><button onClick={() => navigate('admin')}>Admin Dashboard</button></div> : null}
     <main className="app-main">{view === 'bag' && checkoutBusy ? <p className="cloud-message" role="status">Preparing checkout…</p> : null}{view === 'bag' && checkoutError ? <p className="cloud-message" role="alert">{checkoutError}</p> : null}
       {view === 'admin' ? auth.user && auth.role === 'admin' ? <AdminPage key={auth.user.id} userId={auth.user.id}/> : <div className="screen-empty"><h2>{auth.loading || auth.roleLoading ? 'Loading account…' : 'Admin access required'}</h2><p>This page is available to administrators.</p></div> : null}
       {view === 'fulfillment' ? auth.user && (auth.role === 'vendor' || auth.role === 'admin') ? <FulfillmentPage key={`${auth.user.id}:${auth.role}`} role={auth.role}/> : <div className="screen-empty"><h2>{auth.loading || auth.roleLoading ? 'Loading account…' : 'Fulfillment access required'}</h2><p>This page is available to vendors and administrators.</p>{!auth.user && !auth.loading ? <button onClick={auth.login}>Continue with Google</button> : null}</div> : null}
@@ -213,5 +217,52 @@ function ConnectedApp({ catalog }: { catalog: Catalog }) {
     </main>
     {auth.role !== 'vendor' ? <BottomNav active={view} count={cart.count} onNavigate={navigate}/> : null}
     <EmailPasswordDialog auth={auth} open={authDialogOpen} onClose={() => { setAuthDialogOpen(false); if (!auth.user && resumeCheckout) { removeSessionValue(bagCheckoutResumeKey); setResumeCheckout(false) } if (!auth.user && resumeDirectCheckout) { removeSessionValue(directCheckoutResumeKey); setPendingDirectCheckout(null); setResumeDirectCheckout(false) } }} onAuthenticated={() => setAuthDialogOpen(false)}/>
+  </div>
+}
+
+function RoleLoading() {
+  return <div className="app-shell product-app workspace-app"><main className="cloud-message" aria-busy="true"><p role="status">Loading secure workspace…</p></main></div>
+}
+
+function RoleUnavailable({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  return <div className="app-shell product-app workspace-app"><header className="workspace-header"><strong>PERFUN LAB</strong><AccountMenu auth={auth} onLogin={() => {}}/></header><main className="screen-empty"><h2>Workspace unavailable</h2><p>Your account role could not be verified. Please sign out and sign in again.</p></main></div>
+}
+
+function WorkspaceApp({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  const role = auth.role ?? null
+  const [requestedView, setRequestedView] = useState<AppView>(() => viewFromHash(window.location.hash, false))
+  const view = workspaceView(role, requestedView)
+  useEffect(() => {
+    const onHashChange = () => setRequestedView(viewFromHash(window.location.hash, false))
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+  useEffect(() => {
+    if (view === requestedView) return
+    window.history.replaceState(null, '', navigationHash(view, window.location.pathname, window.location.search))
+  }, [requestedView, view])
+  const navigate = useCallback((next: AppView) => {
+    const allowed = workspaceView(role, next)
+    setRequestedView(allowed)
+    window.history.replaceState(null, '', navigationHash(allowed, window.location.pathname, window.location.search))
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [role])
+  if (!auth.user || !role || role === 'customer') return <RoleLoading/>
+
+  const vendor = role === 'vendor'
+  const perfumer = role === 'perfumer'
+  return <div className="app-shell product-app workspace-app">
+    <header className="workspace-header"><button className="wordmark" onClick={() => navigate(role === 'admin' ? 'admin' : 'production')} aria-label="Go to workspace"><img src="/brand/perfun-lab-logo.webp" alt="PERFUN LAB"/></button><strong>{role === 'admin' ? 'ADMIN WORKSPACE' : perfumer ? 'PERFUMER WORKSPACE' : 'VENDOR WORKSPACE'}</strong><AccountMenu auth={auth} onLogin={() => {}}/></header>
+    <nav className="workspace-nav" aria-label={`${role} workspace navigation`}>
+      {role === 'admin' ? <button aria-current="page" onClick={() => navigate('admin')}>Dashboard</button> : null}
+      {vendor || perfumer ? <button aria-current={view === 'production' ? 'page' : undefined} onClick={() => navigate('production')}>Production</button> : null}
+      {vendor ? <><button aria-current={view === 'fulfillment' ? 'page' : undefined} onClick={() => navigate('fulfillment')}>Fulfillment</button><button aria-current={view === 'payouts' ? 'page' : undefined} onClick={() => navigate('payouts')}>Payments</button></> : null}
+    </nav>
+    <main className="app-main">
+      {role === 'admin' ? <AdminPage key={auth.user.id} userId={auth.user.id}/> : null}
+      {view === 'production' && (vendor || perfumer) ? <ProductionPage key={`${auth.user.id}:${role}`} userId={auth.user.id} role={role}/> : null}
+      {view === 'fulfillment' && vendor ? <FulfillmentPage key={auth.user.id} role="vendor"/> : null}
+      {view === 'payouts' && vendor ? <VendorPaymentsPage key={auth.user.id}/> : null}
+    </main>
   </div>
 }

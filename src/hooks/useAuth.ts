@@ -29,7 +29,12 @@ export function useAuth() {
     if (!supabase) return
     let active = true
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, next) => {
-      if (active) { setSession(next); if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true); setLoading(false) }
+      if (active) {
+        setProfile(null)
+        setSession(next)
+        if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
+        setLoading(false)
+      }
     })
     supabase.auth.getSession().then(({ data, error }) => {
       if (!active) return
@@ -54,6 +59,7 @@ export function useAuth() {
     try {
       const { error } = await requireSupabase().auth.signOut()
       if (error) throw error
+      setProfile(null)
       setSession(null)
     } catch (error) { setError(errorMessage(error)) }
   }

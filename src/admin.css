@@ -37,6 +37,10 @@
 .workspace-nav { display: flex; gap: 8px; max-width: 1060px; margin: 14px auto 0; padding: 0 18px; }
 .workspace-nav button { flex: 1; min-height: 48px; border: 1px solid #bcb9ae; background: #fffdf7; border-radius: 10px; font-weight: 700; }
 .workspace-nav button[aria-current="page"] { background: #242724; border-color: #242724; color: #fff; }
+.workspace-header { min-height: 72px; display: flex; align-items: center; gap: 18px; padding: 0 clamp(18px, 4vw, 64px); border-bottom: 1px solid #d8d3ca; background: #f6f2ea; position: sticky; top: 0; z-index: 20; }
+.workspace-header > strong { margin-left: auto; font-size: 11px; letter-spacing: .14em; }
+.workspace-header .header-account { margin-left: 0; }
+@media (max-width: 600px) { .workspace-header { min-height: 62px; padding-inline: 16px; } .workspace-header > strong { font-size: 9px; } }
 .fulfillment-address-copy { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; align-items: start; }
 .fulfillment-address-copy pre { margin: 8px 0 0; font: inherit; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
 .fulfillment-address-copy > p { grid-column: 1 / -1; margin: 0; color: #536c00; }

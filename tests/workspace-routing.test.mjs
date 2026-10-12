@@ -18,6 +18,7 @@ test('staff workspaces reject customer and cross-role routes without broadening 
   assert.equal(workspaceView('admin', 'build'), 'admin')
   assert.equal(workspaceView('customer', 'admin'), 'build')
   assert.equal(workspaceView('customer', 'production'), 'build')
+  assert.equal(workspaceView('customer', 'fulfillment'), 'build')
   assert.equal(workspaceView('perfumer', 'fulfillment'), 'production')
 })
 

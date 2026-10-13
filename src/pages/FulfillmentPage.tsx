@@ -4,6 +4,7 @@ import { formatPrice } from '../lib/currency'
 import { errorMessage } from '../lib/supabase'
 import { ShipmentStatus as ShipmentDetails } from '../components/ShipmentStatus'
 import { formatOrderCopy, formatShippingAddress, labelPrintHtml, packingSlipPrintHtml } from '../lib/fulfillmentDocuments'
+import { WorkspaceCardHeader } from '../components/WorkspacePresentation'
 
 const tabs: ShipmentStatus[] = ['ready_to_ship', 'shipped', 'delivered', 'pending']
 const packingItems: Array<[keyof PackingChecklist, string]> = [
@@ -149,7 +150,7 @@ function ShipmentCard({ shipment, role, onChanged }: { shipment: Shipment; role:
     fulfill(submitter?.value === 'save' ? 'save' : 'ship')
   }
   return <article className="customer-order fulfillment-card">
-    <header><strong>{shipment.order_number}</strong><time dateTime={shipment.ordered_at}>{new Date(shipment.ordered_at).toLocaleString()}</time><b className="order-status">{shipmentLabels[shipment.status]}</b></header>
+    <WorkspaceCardHeader orderNumber={shipment.order_number} time={new Date(shipment.ordered_at).toLocaleString()} status={shipmentLabels[shipment.status]}/>
     <section className="fulfillment-address fulfillment-address-copy" aria-label="Shipping information"><div><h2>Shipping information</h2><pre>{formatShippingAddress(shipment)}</pre><p><strong>Courier:</strong> {[shipment.courier, shipment.service].filter(Boolean).join(' / ') || 'Not selected yet'}</p><p><strong>Tracking:</strong> {shipment.tracking_number || 'Not available yet'}</p></div><div className="fulfillment-document-actions"><button type="button" onClick={() => void copyAddress()}>Copy address</button><button type="button" onClick={() => void copyOrder()} disabled={formulaLoading}>Copy order</button><button type="button" onClick={printLabel}>Print label</button><button type="button" onClick={printPackingSlip} disabled={formulaLoading}>Print packing slip</button></div>{formulaLoading ? <p role="status">Loading formula snapshot…</p> : null}{copyNotice ? <p role="status">{copyNotice}</p> : null}</section>
     <ul className="fulfillment-products">{shipment.items_snapshot.map((item, index) => <li key={index}><strong>{item.product.label}</strong><span>{item.product.bottle_count} × {item.product.volume_ml} ml · Quantity: {item.quantity}</span></li>)}</ul>
     <section className="packing-card"><h2>Customer shipping selection</h2>{shipment.customer_shipping ? <><p><strong>{shipment.customer_shipping.courier} / {shipment.customer_shipping.service}</strong></p><p>Customer shipping paid: {formatPrice(shipment.customer_shipping.amount)}. This is separate from the vendor actual shipping cost.</p></> : <p>Legacy order: no customer shipping quote snapshot.</p>}{shipment.shipping_override_history?.length ? <div className="admin-help"><strong>Admin override history</strong>{shipment.shipping_override_history.map(entry => <p key={`${entry.overridden_at}:${entry.new_courier}`}>{entry.original_courier} {entry.original_service} to {entry.new_courier} {entry.new_service}: {entry.reason} ({new Date(entry.overridden_at).toLocaleString()})</p>)}</div> : null}</section>

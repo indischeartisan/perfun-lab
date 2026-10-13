@@ -8,6 +8,7 @@ import { FulfillmentPage } from './FulfillmentPage'
 import { AdminVendorWorkspacePanel } from '../components/AdminVendorWorkspacePanel'
 import { AdminVendorPaymentsPanel } from '../components/AdminVendorPaymentsPanel'
 import { AdminWorkspaceNavigation } from '../components/WorkspaceNavigation'
+import { WorkspaceCardHeader } from '../components/WorkspacePresentation'
 
 const tabs = ['Overview', 'Orders', 'Vendor Workspace', 'Vendor Payments', 'Customers', 'Notes', 'Products & Pricing', 'Production', 'Fulfillment', 'Revenue'] as const
 type Tab = typeof tabs[number]
@@ -72,7 +73,7 @@ function OrderResults({ filter, onPage }: { filter: AdminOrderFilters; onPage: (
   return <><AdminLoad error={error} loading={!data && !error} reload={reload}/>
     {data?.rows.length === 0 ? <p>No matching orders.</p> : null}
     <div className="production-list">{data?.rows.map(order => <article className="customer-order" key={order.id}>
-      <header><strong>{order.order_number}</strong><time dateTime={order.created_at}>{new Date(order.created_at).toLocaleString()}</time></header>
+      <WorkspaceCardHeader orderNumber={order.order_number} time={new Date(order.created_at).toLocaleString()} status={label(order.payment_status)}/>
       <p><strong>{order.customer.name || 'Customer'}</strong> · {order.customer.email}</p>
       <ul className="fulfillment-products">{order.products.map((product, index) => <li key={index}>{product.label} · {product.bottle_count} × {product.volume_ml} ml · Qty {product.quantity}</li>)}</ul>
       <dl className="admin-order-details"><div><dt>Grand total</dt><dd>{formatPrice(order.grand_total)}</dd></div><div><dt>Payment</dt><dd>{label(order.payment_status)}</dd></div><div><dt>Production</dt><dd>{label(order.production_status)} · {order.completed}/{order.item_count} jobs completed</dd></div><div><dt>Shipment</dt><dd>{label(order.shipment_status)}</dd></div></dl>

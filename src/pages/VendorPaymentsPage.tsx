@@ -3,6 +3,7 @@ import { AdminPagination, AdminLoad } from './AdminPage'
 import { useAdminData } from '../hooks/useAdminData'
 import { getVendorPayoutDashboard, type VendorPayout } from '../lib/payouts'
 import { formatPrice } from '../lib/currency'
+import { WorkspaceCardHeader } from '../components/WorkspacePresentation'
 
 export function VendorPaymentsPage() {
   const [page, setPage] = useState(0)
@@ -19,7 +20,7 @@ export function VendorPaymentsPage() {
 }
 
 export function PayoutCard({ payout, admin }: { payout: VendorPayout; admin?: boolean }) {
-  return <article className="customer-order payout-card"><header><strong>{payout.payout_date}</strong><time dateTime={payout.created_at}>{new Date(payout.created_at).toLocaleString()}</time><b className="order-status">{payout.status}</b></header>
+  return <article className="customer-order payout-card"><WorkspaceCardHeader orderNumber={payout.payout_date} time={new Date(payout.created_at).toLocaleString()} status={payout.status}/>
     {admin ? <p><strong>Vendor:</strong> {payout.vendor.name || payout.vendor.email || payout.vendor_id}</p> : null}
     <p><strong>Total: {formatPrice(payout.total)}</strong></p>
     {payout.transfer_reference ? <p>Transfer reference: {payout.transfer_reference}</p> : null}

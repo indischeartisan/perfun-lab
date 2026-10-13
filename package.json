@@ -5,6 +5,7 @@
     "type":  "module",
     "scripts":  {
                     "dev":  "vite",
+                    "dev:fixtures": "vite --mode fixtures --open /fixtures.html",
                     "build":  "tsc -b \u0026\u0026 vite build",
                     "validate:staging-env": "node scripts/validate-staging-env.mjs",
                     "build:staging": "tsc -b \u0026\u0026 vite build --mode staging",

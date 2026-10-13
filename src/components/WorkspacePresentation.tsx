@@ -1,0 +1,25 @@
+import type { ReactNode } from 'react'
+import { getNoteStickerAsset } from '../lib/noteAssets'
+
+export type FormulaSnapshot = { top: string | null; middle: string | null; base: string | null }
+
+export function BottleSizeDisplay({ volumeMl, bottleCount, playSet = false, variant = 'compact' }: { volumeMl: number; bottleCount: number; playSet?: boolean; variant?: 'compact' | 'detail' }) {
+  const quantity = `${bottleCount} ${bottleCount === 1 ? 'bottle' : 'bottles'}`
+  return <div className={`bottle-size-display bottle-size-display--${variant}`}><strong>{playSet ? `${bottleCount} × ${volumeMl} ml` : `${volumeMl} ml`}</strong><span>{playSet ? 'Play Set' : quantity}</span>{playSet ? <small>{quantity}</small> : null}</div>
+}
+
+export function WorkspaceCardHeader({ orderNumber, status, time }: { orderNumber: string; status?: string; time?: ReactNode }) {
+  return <header className="workspace-card-header"><strong>{orderNumber}</strong>{time ? <time>{time}</time> : null}{status ? <b className="order-status">{status}</b> : null}</header>
+}
+
+export function FormulaNotes({ formula, title = 'Formula', variant = 'compact' }: { formula: FormulaSnapshot; title?: string; variant?: 'compact' | 'cards' }) {
+  return <section className={`production-formula production-formula--${variant}`} aria-label={title}><h3>{title}</h3><dl>{(['top', 'middle', 'base'] as const).map(phase => {
+    const note = formula[phase]
+    const asset = note ? getNoteStickerAsset({ id: note.trim().toLowerCase().replaceAll(' ', '-') }) : null
+    return <div className="formula-note" key={phase}><dt>{phase === 'middle' ? 'Middle' : phase[0].toUpperCase() + phase.slice(1)}</dt><dd>{asset ? <img src={asset} alt="" aria-hidden="true"/> : null}<span>{note ?? 'Snapshot unavailable'}</span></dd></div>
+  })}</dl></section>
+}
+
+export function ProductionAction({ label, onClick, disabled = false }: { label: string; onClick?: () => void; disabled?: boolean }) {
+  return <button type="button" className="orders-build" disabled={disabled} onClick={onClick}>{label}</button>
+}

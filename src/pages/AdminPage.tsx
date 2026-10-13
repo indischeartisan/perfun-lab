@@ -8,7 +8,7 @@ import { FulfillmentPage } from './FulfillmentPage'
 import { AdminVendorWorkspacePanel } from '../components/AdminVendorWorkspacePanel'
 import { AdminVendorPaymentsPanel } from '../components/AdminVendorPaymentsPanel'
 import { AdminWorkspaceNavigation } from '../components/WorkspaceNavigation'
-import { WorkspaceCardHeader } from '../components/WorkspacePresentation'
+import { BottleSizeDisplay, WorkspaceCardHeader } from '../components/WorkspacePresentation'
 
 const tabs = ['Overview', 'Orders', 'Vendor Workspace', 'Vendor Payments', 'Customers', 'Notes', 'Products & Pricing', 'Production', 'Fulfillment', 'Revenue'] as const
 type Tab = typeof tabs[number]
@@ -61,7 +61,7 @@ function AdminOrders() {
   const initial: AdminOrderFilters = { search: '', payment: '', production: '', shipment: '', page: 0 }
   const [draft, setDraft] = useState(initial)
   const [filter, setFilter] = useState(initial)
-  return <><form className="admin-filters" onSubmit={event => { event.preventDefault(); setFilter({ ...draft, page: 0 }) }}>
+  return <><form className="admin-filters calm-order-toolbar" onSubmit={event => { event.preventDefault(); setFilter({ ...draft, page: 0 }) }}>
     <label>Search orders or customer<input maxLength={100} value={draft.search} onChange={event => setDraft({ ...draft, search: event.target.value })}/></label>
     {([['payment', ['pending', 'paid', 'failed', 'expired', 'refunded']], ['production', ['not_started', 'queued', 'in_production', 'completed']], ['shipment', ['not_created', 'pending', 'ready_to_ship', 'shipped', 'delivered']]] as const).map(([key, options]) => <label key={key}>{label(key)} status<select value={draft[key]} onChange={event => setDraft({ ...draft, [key]: event.target.value })}><option value="">All</option>{options.map(value => <option key={value} value={value}>{label(value)}</option>)}</select></label>)}
     <button type="submit">Apply filters</button>
@@ -72,10 +72,11 @@ function OrderResults({ filter, onPage }: { filter: AdminOrderFilters; onPage: (
   const { data, error, reload } = useAdminData(load, true)
   return <><AdminLoad error={error} loading={!data && !error} reload={reload}/>
     {data?.rows.length === 0 ? <p>No matching orders.</p> : null}
-    <div className="production-list">{data?.rows.map(order => <article className="customer-order" key={order.id}>
+    <div className="production-list admin-order-list">{data?.rows.map(order => <article className="customer-order admin-order-card" key={order.id}>
       <WorkspaceCardHeader orderNumber={order.order_number} time={new Date(order.created_at).toLocaleString()} status={label(order.payment_status)}/>
       <p><strong>{order.customer.name || 'Customer'}</strong> · {order.customer.email}</p>
       <ul className="fulfillment-products">{order.products.map((product, index) => <li key={index}>{product.label} · {product.bottle_count} × {product.volume_ml} ml · Qty {product.quantity}</li>)}</ul>
+      <div className="workspace-item-sizes" aria-label="Bottle sizes">{order.products.map((product, index) => <div key={index}><strong>{product.label}</strong><BottleSizeDisplay volumeMl={product.volume_ml} bottleCount={product.bottle_count}/><span>Order quantity: {product.quantity}</span></div>)}</div>
       <dl className="admin-order-details"><div><dt>Grand total</dt><dd>{formatPrice(order.grand_total)}</dd></div><div><dt>Payment</dt><dd>{label(order.payment_status)}</dd></div><div><dt>Production</dt><dd>{label(order.production_status)} · {order.completed}/{order.item_count} jobs completed</dd></div><div><dt>Shipment</dt><dd>{label(order.shipment_status)}</dd></div></dl>
     </article>)}</div>
     {data ? <AdminPagination count={data.count} page={filter.page} onPage={onPage}/> : null}

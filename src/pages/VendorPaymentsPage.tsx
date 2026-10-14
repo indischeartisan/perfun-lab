@@ -21,9 +21,8 @@ export function VendorPaymentsPage() {
 }
 
 export function PayoutCard({ payout, admin }: { payout: VendorPayout; admin?: boolean }) {
-  return <article className="customer-order payout-card"><WorkspaceCardHeader orderNumber={payout.payout_date} time={new Date(payout.created_at).toLocaleString()} status={payout.status}/>
-    {admin ? <p><strong>Vendor:</strong> {payout.vendor.name || payout.vendor.email || payout.vendor_id}</p> : null}
-    <p><strong>Total: {formatPrice(payout.total)}</strong></p>
+  return <article className="customer-order payout-card calm-payout-card"><WorkspaceCardHeader orderNumber={payout.payout_date} time={new Date(payout.created_at).toLocaleString()} status={payout.status}/>
+    <section className="payout-card-summary">{admin ? <p><strong>Vendor:</strong> {payout.vendor.name || payout.vendor.email || payout.vendor_id}</p> : null}<p><strong>Total: {formatPrice(payout.total)}</strong></p></section>
     {payout.transfer_reference ? <p>Transfer reference: {payout.transfer_reference}</p> : null}
     {payout.void_reason ? <p>Void reason: {payout.void_reason}</p> : null}
     <ul className="fulfillment-products">{payout.items.map(item => <li key={item.id}><strong>{item.order_number}</strong><span>Service {formatPrice(item.vendor_fee_amount)} · Shipping reimbursement {formatPrice(item.shipping_reimbursement)} · Total {formatPrice(item.total_amount)}</span></li>)}</ul>

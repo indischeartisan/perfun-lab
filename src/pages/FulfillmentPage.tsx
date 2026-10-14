@@ -149,7 +149,7 @@ function ShipmentCard({ shipment, role, onChanged }: { shipment: Shipment; role:
     const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null
     fulfill(submitter?.value === 'save' ? 'save' : 'ship')
   }
-  return <article className="customer-order fulfillment-card">
+  return <article className="customer-order fulfillment-card calm-work-card">
     <WorkspaceCardHeader orderNumber={shipment.order_number} time={new Date(shipment.ordered_at).toLocaleString()} status={shipmentLabels[shipment.status]}/>
     <section className="fulfillment-address fulfillment-address-copy" aria-label="Shipping information"><div><h2>Shipping information</h2><pre>{formatShippingAddress(shipment)}</pre><p><strong>Courier:</strong> {[shipment.courier, shipment.service].filter(Boolean).join(' / ') || 'Not selected yet'}</p><p><strong>Tracking:</strong> {shipment.tracking_number || 'Not available yet'}</p></div><div className="fulfillment-document-actions"><button type="button" onClick={() => void copyAddress()}>Copy address</button><button type="button" onClick={() => void copyOrder()} disabled={formulaLoading}>Copy order</button><button type="button" onClick={printLabel}>Print label</button><button type="button" onClick={printPackingSlip} disabled={formulaLoading}>Print packing slip</button></div>{formulaLoading ? <p role="status">Loading formula snapshot…</p> : null}{copyNotice ? <p role="status">{copyNotice}</p> : null}</section>
     <ul className="fulfillment-products">{shipment.items_snapshot.map((item, index) => <li key={index}><strong>{item.product.label}</strong><span>{item.product.bottle_count} × {item.product.volume_ml} ml · Quantity: {item.quantity}</span></li>)}</ul>

@@ -69,11 +69,9 @@ function ProductionCard({ job, userId, canWork, onChanged }: { job: ProductionJo
     } catch (error) { setError(errorMessage(error)) }
     finally { lock.current = false; setBusy(false) }
   }
-  return <article className="customer-order production-card">
+  return <article className="customer-order production-card calm-work-card">
     <WorkspaceCardHeader orderNumber={job.order_number} status={labels[job.status]} time={new Date(job.ordered_at).toLocaleString()}/>
-    <h2>{job.product_snapshot.label}</h2>
-    <BottleSizeDisplay volumeMl={job.product_snapshot.volume_ml} bottleCount={job.product_snapshot.bottle_count} variant="detail"/>
-    <p>Order quantity: {job.quantity}</p>
+    <section className="production-card-summary"><h2>{job.product_snapshot.label}</h2><BottleSizeDisplay volumeMl={job.product_snapshot.volume_ml} bottleCount={job.product_snapshot.bottle_count} variant="detail"/><p>Order quantity: {job.quantity}</p></section>
     <p className="production-assignment">{job.assigned_to ? mine ? 'Assigned to you' : 'Assigned to another perfumer' : 'Unassigned'}</p>
     {job.formulas_snapshot.map((formula, index) => <FormulaNotes key={index} formula={formula} title={`Bottle ${index + 1}${job.quantity > 1 ? ` · make ${job.quantity}` : ''}`}/>)}
     {job.started_at ? <p className="production-time">Started: <time dateTime={job.started_at}>{new Date(job.started_at).toLocaleString()}</time></p> : null}

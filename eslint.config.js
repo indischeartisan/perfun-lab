@@ -15,5 +15,12 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }]
     }
+  },
+  {
+    files: ['src/simulator/main.tsx'],
+    rules: {
+      // The preview-only generator uses a timestamp only to identify a synthetic item on submit.
+      'react-hooks/purity': 'off'
+    }
   }
 )

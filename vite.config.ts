@@ -6,7 +6,7 @@ import { reportPublicBuildEnvironment } from './scripts/public-build-env.mjs'
 
 export default defineConfig(({ mode }) => {
   const environment = loadEnv(mode, '.', '')
-  const simulatorEnabled = environment.VITE_ENABLE_OPERATIONS_SIMULATOR === 'true'
+  const simulatorEnabled = (process.env.VITE_ENABLE_OPERATIONS_SIMULATOR ?? environment.VITE_ENABLE_OPERATIONS_SIMULATOR) === 'true'
   reportPublicBuildEnvironment(environment)
   if (mode === 'staging') assertStagingBuildEnvironment()
   return {

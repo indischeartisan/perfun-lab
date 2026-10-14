@@ -12,7 +12,8 @@ export type DemoItem = {
   bottleCount: number
   quantity: number
   playSet?: boolean
-  formula: FormulaSnapshot
+  formulas: FormulaSnapshot[]
+  production: Exclude<DemoProductionStatus, 'unassigned'>
 }
 
 export type DemoOrder = {
@@ -25,7 +26,6 @@ export type DemoOrder = {
   production: DemoProductionStatus
   fulfillment: DemoFulfillmentStatus
   vendorId?: string
-  packing: { bottle: boolean; label: boolean; seal: boolean }
   courier?: string
   service?: string
   tracking?: string

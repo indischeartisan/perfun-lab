@@ -1,36 +1,34 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { canTransition, createDemoOrder, initialDemoState, isPackingComplete, itemBottleTotal, makePayout } from '../src/simulator/store.ts'
+import { canTransition, createDemoOrder, initialDemoState, itemBottleTotal, makePayout, orderProduction } from '../src/simulator/store.ts'
 
-test('demo order follows payment, assignment, production, packing, and shipment guards', () => {
-  const [pending, assignable, queued, producing, ready, packed] = initialDemoState().orders
+test('demo order follows payment, assignment, production, and shipment guards', () => {
+  const [pending, exception, queued, producing, ready] = initialDemoState().orders
   assert.equal(canTransition(pending, 'pay'), true)
-  assert.equal(canTransition(pending, 'assign'), false)
-  assert.equal(canTransition(assignable, 'assign'), true)
+  assert.equal(canTransition(exception, 'assign'), true)
   assert.equal(canTransition(queued, 'start'), true)
   assert.equal(canTransition(producing, 'complete'), true)
-  assert.equal(canTransition(ready, 'pack'), false)
-  assert.equal(canTransition({ ...ready, packing: { bottle: true, label: true, seal: true } }, 'pack'), true)
-  assert.equal(isPackingComplete(packed), true)
-  assert.equal(canTransition(packed, 'ship'), true)
+  assert.equal(canTransition(ready, 'ship'), false)
+  assert.equal(canTransition({ ...ready, courier: 'JNE', service: 'REG', tracking: 'DEMO', shippingCost: 18000 }, 'ship'), true)
 })
 
-test('new demo orders are always pending and do not alter existing records', () => {
+test('play set preserves three individual formula snapshots; multi-item orders wait for every job', () => {
+  const order = initialDemoState().orders.find(value => value.number === 'DEMO-1026')
+  assert.equal(order.items[0].formulas.length, 3)
+  assert.notDeepEqual(order.items[0].formulas[0], order.items[0].formulas[1])
+  assert.notDeepEqual(order.items[0].formulas[1], order.items[0].formulas[2])
+  const multiItem = initialDemoState().orders.find(value => value.number === 'DEMO-1023')
+  const partial = { ...multiItem, items: [{ ...multiItem.items[0], production: 'completed' }, { ...multiItem.items[1], production: 'in_production' }] }
+  assert.equal(orderProduction(partial), 'in_production')
+})
+
+test('new demo orders remain synthetic and payouts include only completed work', () => {
   const state = initialDemoState()
-  const next = createDemoOrder(state, { name: 'Synthetic Person', phone: '0812-0000-0000', address: 'Jl. Test No. 1', city: 'Bandung', province: 'Jawa Barat', postalCode: '40123', item: { id: 'new', product: 'Play Set', volumeMl: 10, bottleCount: 3, quantity: 2, playSet: true, formula: { top: 'Yuzu', middle: 'Matcha', base: 'Clean Musk' } } })
+  const item = { id: 'new', product: 'Play Set', volumeMl: 10, bottleCount: 3, quantity: 1, playSet: true, formulas: [{ top: 'Yuzu', middle: 'Matcha', base: 'Clean Musk' }, { top: 'Peony', middle: 'Tea', base: 'Amber' }, { top: 'Mint', middle: 'Jasmine', base: 'Vanilla' }], production: 'queued' }
+  const next = createDemoOrder(state, { name: 'Synthetic Person', phone: '0812-0000-0000', address: 'Jl. Test No. 1', city: 'Bandung', province: 'Jawa Barat', postalCode: '40123', item })
   assert.equal(next.orders.length, state.orders.length + 1)
   assert.equal(next.orders[0].payment, 'pending')
-  assert.equal(next.orders[0].production, 'unassigned')
-  assert.equal(next.orders[0].items[0].bottleCount, 3)
-  assert.equal(itemBottleTotal(next.orders[0]), 6)
-})
-
-test('payouts only include completed assigned jobs and use the explicit demo rate', () => {
-  const state = initialDemoState()
   const completed = state.orders.find(order => order.production === 'completed')
-  const pending = state.orders.find(order => order.production !== 'completed')
-  const next = makePayout(state, [completed.id, pending.id], 18000)
-  assert.equal(next.payouts.length, 1)
-  assert.deepEqual(next.payouts[0].orderIds, [completed.id])
-  assert.equal(next.payouts[0].total, itemBottleTotal(completed) * 18000)
+  const payout = makePayout(state, [completed.id], 18000)
+  assert.equal(payout.payouts[0].total, itemBottleTotal(completed) * 18000)
 })

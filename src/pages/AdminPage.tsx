@@ -77,7 +77,7 @@ function AdminOrders() {
   const [filter, setFilter] = useState(initial)
   return <section className="workspace-list-page admin-orders-page"><WorkspacePageHeader eyebrow="ADMIN WORKSPACE" title="Orders">Search, filter, and scan customer orders.</WorkspacePageHeader><form className="admin-filters calm-order-toolbar" onSubmit={event => { event.preventDefault(); setFilter({ ...draft, page: 0 }) }}>
     <label>Search orders or customer<input maxLength={100} value={draft.search} onChange={event => setDraft({ ...draft, search: event.target.value })}/></label>
-    {([['payment', ['pending', 'paid', 'failed', 'expired', 'refunded']], ['production', ['not_started', 'queued', 'in_production', 'completed']], ['shipment', ['not_created', 'pending', 'ready_to_ship', 'shipped', 'delivered']]] as const).map(([key, options]) => <label key={key}>{label(key)} status<select value={draft[key]} onChange={event => setDraft({ ...draft, [key]: event.target.value })}><option value="">All</option>{options.map(value => <option key={value} value={value}>{label(value)}</option>)}</select></label>)}
+    <details className="calm-order-filters"><summary>Filter status</summary><div>{([['payment', ['pending', 'paid', 'failed', 'expired', 'refunded']], ['production', ['not_started', 'queued', 'in_production', 'completed']], ['shipment', ['not_created', 'pending', 'ready_to_ship', 'shipped', 'delivered']]] as const).map(([key, options]) => <label key={key}>{label(key)} status<select value={draft[key]} onChange={event => setDraft({ ...draft, [key]: event.target.value })}><option value="">All</option>{options.map(value => <option key={value} value={value}>{label(value)}</option>)}</select></label>)}</div></details>
     <button type="submit">Apply filters</button>
   </form><OrderResults key={JSON.stringify(filter)} filter={filter} onPage={page => setFilter(current => ({ ...current, page }))}/></section>
 }
@@ -90,7 +90,7 @@ function OrderResults({ filter, onPage }: { filter: AdminOrderFilters; onPage: (
       <WorkspaceCardHeader orderNumber={order.order_number} time={new Date(order.created_at).toLocaleString()} status={label(order.payment_status)}/>
       <section className="calm-order-card-main"><div className="workspace-card-identity"><strong>{order.customer.name || 'Customer'}</strong><span>{order.customer.email}</span></div><b className="calm-order-total">{formatPrice(order.grand_total)}</b></section>
       <section className="calm-order-items" aria-label="Order items">{order.products.map((product, index) => <div key={index}><strong>{product.label}</strong><BottleSizeDisplay volumeMl={product.volume_ml} bottleCount={product.bottle_count}/><span>Quantity {product.quantity}</span></div>)}</section>
-      <footer className="calm-order-meta"><span>Production <b>{label(order.production_status)}</b></span><span>{order.completed}/{order.item_count} jobs complete</span><span>Shipment <b>{label(order.shipment_status)}</b></span></footer>
+      <div className="calm-order-meta"><span>Production <b>{label(order.production_status)}</b></span><span>{order.completed}/{order.item_count} jobs complete</span><span>Shipment <b>{label(order.shipment_status)}</b></span></div>
     </article>)}</div>
     {data ? <AdminPagination count={data.count} page={filter.page} onPage={onPage}/> : null}
   </>

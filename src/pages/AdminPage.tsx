@@ -8,7 +8,7 @@ import { FulfillmentPage } from './FulfillmentPage'
 import { AdminVendorWorkspacePanel } from '../components/AdminVendorWorkspacePanel'
 import { AdminVendorPaymentsPanel } from '../components/AdminVendorPaymentsPanel'
 import { AdminWorkspaceNavigation } from '../components/WorkspaceNavigation'
-import { BottleSizeDisplay, WorkspaceCardHeader } from '../components/WorkspacePresentation'
+import { BottleSizeDisplay, WorkspaceCardHeader, WorkspaceMetricGrid, WorkspacePageHeader, WorkspaceSection } from '../components/WorkspacePresentation'
 
 const tabs = ['Overview', 'Orders', 'Vendor Workspace', 'Vendor Payments', 'Customers', 'Notes', 'Products & Pricing', 'Production', 'Fulfillment', 'Revenue'] as const
 type Tab = typeof tabs[number]
@@ -21,10 +21,11 @@ export function AdminPage({ userId }: { userId: string }) {
     setTab(next)
   }
   return <section className="app-screen admin-dashboard">
-    <header className="screen-title workspace-title"><span>PERFUN LAB OPERATIONS</span><h1>Good morning, Lab.</h1><p>A calm view of orders, production, and the work that needs you.</p></header>
+    {tab === 'Overview' ? <WorkspacePageHeader eyebrow="PERFUN LAB OPERATIONS" title="Good morning, Lab.">A calm view of orders, production, and the work that needs you.</WorkspacePageHeader> : null}
     <AdminWorkspaceNavigation active={mobileTab} onNavigate={selectMobileTab}/>
     <details className="workspace-more" open={mobileTab === 'More'}><summary>More workspace tools</summary><div className="workspace-more-menu">{tabs.filter(value => !['Overview', 'Orders', 'Production'].includes(value)).map(value => <button key={value} aria-pressed={tab === value} onClick={() => setTab(value)}>{value}</button>)}</div></details>
     <div className="admin-content" key={tab}>
+      {['Vendor Workspace', 'Vendor Payments', 'Customers', 'Notes', 'Products & Pricing', 'Revenue'].includes(tab) ? <WorkspacePageHeader eyebrow="ADMIN WORKSPACE" title={tab}>{tab === 'Vendor Workspace' ? 'Assign the right production partner to paid orders.' : tab === 'Vendor Payments' ? 'Review vendor billing and payout records.' : 'Manage your lab workspace.'}</WorkspacePageHeader> : null}
       {tab === 'Overview' || tab === 'Revenue' ? <Overview revenueOnly={tab === 'Revenue'}/> : null}
       {tab === 'Orders' ? <AdminOrders/> : null}
       {tab === 'Vendor Workspace' ? <AdminVendorWorkspacePanel/> : null}
@@ -43,9 +44,9 @@ function Overview({ revenueOnly }: { revenueOnly: boolean }) {
   const revenue: Array<[keyof AdminOverview, string]> = [['paid_gross_sales', 'Paid gross sales'], ['discounts', 'Discounts'], ['shipping_collected', 'Shipping collected'], ['net_transaction_total', 'Net transaction total']]
   return <><AdminLoad error={error} loading={!data && !error} reload={reload}/>
     {data ? <>
-      {!revenueOnly ? <><section className="overview-section"><span className="admin-kicker">Needs attention</span><h2>Keep the queue moving</h2><div className="admin-metrics attention-metrics">{operations.slice(1, 4).map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</div></section><section className="overview-section"><span className="admin-kicker">Today at the Lab</span><h2>What is happening now</h2><div className="admin-metrics">{operations.slice(0, 1).concat(operations.slice(4)).map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</div></section></> : null}
+      {!revenueOnly ? <><WorkspaceSection eyebrow="Needs attention" title="Keep the queue moving" className="overview-section"><WorkspaceMetricGrid className="attention-metrics">{operations.slice(1, 4).map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</WorkspaceMetricGrid></WorkspaceSection><WorkspaceSection eyebrow="Today at the Lab" title="What is happening now" className="overview-section"><WorkspaceMetricGrid>{operations.slice(0, 1).concat(operations.slice(4)).map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</WorkspaceMetricGrid></WorkspaceSection></> : null}
       <h2>Revenue</h2><p className="admin-help">All-time orders currently Paid. Gross − discounts + shipping = net transaction total. Refunded orders are excluded; payment fees are not deducted.</p>
-      <div className="admin-metrics">{revenue.map(([key, title]) => <article key={key}><span>{title}</span><strong>{formatPrice(Number(data[key]))}</strong></article>)}</div>
+      <WorkspaceMetricGrid>{revenue.map(([key, title]) => <article key={key}><span>{title}</span><strong>{formatPrice(Number(data[key]))}</strong></article>)}</WorkspaceMetricGrid>
       <p className="admin-help">Today follows Asia/Jakarta. Other counts show current status. Updated {new Date(data.as_of).toLocaleString()}.</p>
     </> : null}
   </>
@@ -61,11 +62,11 @@ function AdminOrders() {
   const initial: AdminOrderFilters = { search: '', payment: '', production: '', shipment: '', page: 0 }
   const [draft, setDraft] = useState(initial)
   const [filter, setFilter] = useState(initial)
-  return <><form className="admin-filters calm-order-toolbar" onSubmit={event => { event.preventDefault(); setFilter({ ...draft, page: 0 }) }}>
+  return <section className="workspace-list-page admin-orders-page"><WorkspacePageHeader eyebrow="ADMIN WORKSPACE" title="Orders">Search, filter, and scan customer orders.</WorkspacePageHeader><form className="admin-filters calm-order-toolbar" onSubmit={event => { event.preventDefault(); setFilter({ ...draft, page: 0 }) }}>
     <label>Search orders or customer<input maxLength={100} value={draft.search} onChange={event => setDraft({ ...draft, search: event.target.value })}/></label>
     {([['payment', ['pending', 'paid', 'failed', 'expired', 'refunded']], ['production', ['not_started', 'queued', 'in_production', 'completed']], ['shipment', ['not_created', 'pending', 'ready_to_ship', 'shipped', 'delivered']]] as const).map(([key, options]) => <label key={key}>{label(key)} status<select value={draft[key]} onChange={event => setDraft({ ...draft, [key]: event.target.value })}><option value="">All</option>{options.map(value => <option key={value} value={value}>{label(value)}</option>)}</select></label>)}
     <button type="submit">Apply filters</button>
-  </form><OrderResults key={JSON.stringify(filter)} filter={filter} onPage={page => setFilter(current => ({ ...current, page }))}/></>
+  </form><OrderResults key={JSON.stringify(filter)} filter={filter} onPage={page => setFilter(current => ({ ...current, page }))}/></section>
 }
 function OrderResults({ filter, onPage }: { filter: AdminOrderFilters; onPage: (page: number) => void }) {
   const load = useCallback(() => getAdminOrders(filter), [filter])
@@ -74,7 +75,7 @@ function OrderResults({ filter, onPage }: { filter: AdminOrderFilters; onPage: (
     {data?.rows.length === 0 ? <p>No matching orders.</p> : null}
     <div className="production-list admin-order-list">{data?.rows.map(order => <article className="customer-order admin-order-card" key={order.id}>
       <WorkspaceCardHeader orderNumber={order.order_number} time={new Date(order.created_at).toLocaleString()} status={label(order.payment_status)}/>
-      <p><strong>{order.customer.name || 'Customer'}</strong> · {order.customer.email}</p>
+      <div className="workspace-card-identity"><strong>{order.customer.name || 'Customer'}</strong><span>{order.customer.email}</span></div>
       <ul className="fulfillment-products">{order.products.map((product, index) => <li key={index}>{product.label} · {product.bottle_count} × {product.volume_ml} ml · Qty {product.quantity}</li>)}</ul>
       <div className="workspace-item-sizes" aria-label="Bottle sizes">{order.products.map((product, index) => <div key={index}><strong>{product.label}</strong><BottleSizeDisplay volumeMl={product.volume_ml} bottleCount={product.bottle_count}/><span>Order quantity: {product.quantity}</span></div>)}</div>
       <dl className="admin-order-details"><div><dt>Grand total</dt><dd>{formatPrice(order.grand_total)}</dd></div><div><dt>Payment</dt><dd>{label(order.payment_status)}</dd></div><div><dt>Production</dt><dd>{label(order.production_status)} · {order.completed}/{order.item_count} jobs completed</dd></div><div><dt>Shipment</dt><dd>{label(order.shipment_status)}</dd></div></dl>

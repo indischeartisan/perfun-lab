@@ -3,13 +3,14 @@ import { AdminPagination, AdminLoad } from './AdminPage'
 import { useAdminData } from '../hooks/useAdminData'
 import { getVendorPayoutDashboard, type VendorPayout } from '../lib/payouts'
 import { formatPrice } from '../lib/currency'
-import { WorkspaceCardHeader } from '../components/WorkspacePresentation'
+import { WorkspaceCardHeader, WorkspacePageHeader } from '../components/WorkspacePresentation'
 
 export function VendorPaymentsPage() {
   const [page, setPage] = useState(0)
   const load = useCallback(() => getVendorPayoutDashboard(page), [page])
   const { data, error, reload } = useAdminData(load, true)
-  return <section className="app-screen admin-dashboard">
+  return <section className="app-screen admin-dashboard workspace-list-page vendor-payments-page">
+    <WorkspacePageHeader eyebrow="VENDOR WORKSPACE" title="Payments">Payout history and its current status.</WorkspacePageHeader>
     <header className="screen-title"><span>VENDOR WORKSPACE</span><h1>Payments</h1><p>Payout records are prepared by Admin. “Paid” records a manual transfer reference; it is not bank confirmation.</p></header>
     <AdminLoad error={error} loading={!data && !error} reload={reload}/>
     {data ? <><div className="admin-metrics"><article><span>Earned today · WIB</span><strong>{formatPrice(data.earned_today)}</strong></article><article><span>Unpaid total</span><strong>{formatPrice(data.unpaid_total)}</strong></article><article><span>Paid total</span><strong>{formatPrice(data.paid_total)}</strong></article></div>

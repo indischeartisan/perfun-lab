@@ -4,7 +4,7 @@ import { formatPrice } from '../lib/currency'
 import { errorMessage } from '../lib/supabase'
 import { ShipmentStatus as ShipmentDetails } from '../components/ShipmentStatus'
 import { formatOrderCopy, formatShippingAddress, labelPrintHtml, packingSlipPrintHtml } from '../lib/fulfillmentDocuments'
-import { WorkspaceCardHeader } from '../components/WorkspacePresentation'
+import { BottleSizeDisplay, WorkspaceCardHeader, WorkspacePageHeader, WorkspaceStatusTabs } from '../components/WorkspacePresentation'
 
 const tabs: ShipmentStatus[] = ['ready_to_ship', 'shipped', 'delivered', 'pending']
 const packingItems: Array<[keyof PackingChecklist, string]> = [
@@ -45,9 +45,9 @@ async function copyText(value: string) {
 
 export function FulfillmentPage({ role }: { role: 'vendor' | 'admin' }) {
   const [filter, setFilter] = useState<{ status: ShipmentStatus; page: number }>({ status: 'ready_to_ship', page: 0 })
-  return <section className="app-screen fulfillment-screen">
-    <header className="screen-title"><span>FULFILLMENT</span><h1>{role === 'vendor' ? 'Packing & Shipping' : 'Shipping Queue'}</h1><p>{role === 'vendor' ? 'Pack completed orders, finalize delivery cost, then dispatch.' : 'Monitor packing and delivery handled by assigned vendors.'}</p></header>
-    <nav className="production-filters" aria-label="Shipment status">{tabs.map(status => <button key={status} aria-pressed={status === filter.status} onClick={() => setFilter({ status, page: 0 })}>{shipmentLabels[status]}</button>)}</nav>
+  return <section className="app-screen fulfillment-screen workspace-list-page">
+    <WorkspacePageHeader eyebrow={role === 'vendor' ? 'VENDOR WORKSPACE' : 'FULFILLMENT'} title={role === 'vendor' ? 'Fulfillment' : 'Shipping Queue'}>{role === 'vendor' ? 'Pack completed orders, finalize delivery cost, then dispatch.' : 'Monitor packing and delivery handled by assigned vendors.'}</WorkspacePageHeader>
+    <WorkspaceStatusTabs label="Shipment status" items={tabs.map(status => ({ id: status, label: shipmentLabels[status], active: status === filter.status, onClick: () => setFilter({ status, page: 0 }) }))}/>
     <FulfillmentList key={`${filter.status}:${filter.page}:${role}`} role={role} status={filter.status} page={filter.page} onPage={page => setFilter(current => ({ ...current, page }))}/>
   </section>
 }
@@ -154,6 +154,7 @@ function ShipmentCard({ shipment, role, onChanged }: { shipment: Shipment; role:
     <section className="fulfillment-address fulfillment-address-copy" aria-label="Shipping information"><div><h2>Shipping information</h2><pre>{formatShippingAddress(shipment)}</pre><p><strong>Courier:</strong> {[shipment.courier, shipment.service].filter(Boolean).join(' / ') || 'Not selected yet'}</p><p><strong>Tracking:</strong> {shipment.tracking_number || 'Not available yet'}</p></div><div className="fulfillment-document-actions"><button type="button" onClick={() => void copyAddress()}>Copy address</button><button type="button" onClick={() => void copyOrder()} disabled={formulaLoading}>Copy order</button><button type="button" onClick={printLabel}>Print label</button><button type="button" onClick={printPackingSlip} disabled={formulaLoading}>Print packing slip</button></div>{formulaLoading ? <p role="status">Loading formula snapshot…</p> : null}{copyNotice ? <p role="status">{copyNotice}</p> : null}</section>
     <ul className="fulfillment-products">{shipment.items_snapshot.map((item, index) => <li key={index}><strong>{item.product.label}</strong><span>{item.product.bottle_count} × {item.product.volume_ml} ml · Quantity: {item.quantity}</span></li>)}</ul>
     <section className="packing-card"><h2>Customer shipping selection</h2>{shipment.customer_shipping ? <><p><strong>{shipment.customer_shipping.courier} / {shipment.customer_shipping.service}</strong></p><p>Customer shipping paid: {formatPrice(shipment.customer_shipping.amount)}. This is separate from the vendor actual shipping cost.</p></> : <p>Legacy order: no customer shipping quote snapshot.</p>}{shipment.shipping_override_history?.length ? <div className="admin-help"><strong>Admin override history</strong>{shipment.shipping_override_history.map(entry => <p key={`${entry.overridden_at}:${entry.new_courier}`}>{entry.original_courier} {entry.original_service} to {entry.new_courier} {entry.new_service}: {entry.reason} ({new Date(entry.overridden_at).toLocaleString()})</p>)}</div> : null}</section>
+    <section className="fulfillment-size-summary" aria-label="Order bottle sizes">{shipment.items_snapshot.map((item, index) => <div key={`size-${index}`}><strong>{item.product.label}</strong><BottleSizeDisplay volumeMl={item.product.volume_ml} bottleCount={item.product.bottle_count}/><span>Order quantity: {item.quantity}</span></div>)}</section>
     <ShipmentDetails shipment={shipment}/>
     {shipment.packing_status === 'legacy_unknown' ? <p className="admin-help">Packing record predates this workflow; historical dispatch remains unchanged.</p> : null}
     {ready && shipment.packing_status !== 'legacy_unknown' ? <section className="packing-card"><h2>Packing</h2><p>{packed ? `Packed${shipment.packed_at ? ` on ${new Date(shipment.packed_at).toLocaleString()}` : ''}.` : 'Complete every item before marking packing complete.'}</p><fieldset className="packing-checklist" disabled={!canEdit || packed || busy}>{packingItems.map(([key, label]) => <label key={key}><input type="checkbox" checked={checklist[key]} onChange={event => setChecklist(current => ({ ...current, [key]: event.target.checked }))}/>{label}</label>)}</fieldset>{canEdit && !packed ? <div className="shipping-actions"><button type="button" disabled={busy} onClick={() => savePacking(false)}>Save checklist</button><button type="button" className="orders-build" disabled={busy || !allChecked} onClick={() => savePacking(true)}>Packing complete</button></div> : null}</section> : null}

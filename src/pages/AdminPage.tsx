@@ -7,24 +7,17 @@ import { ProductionPage } from './ProductionPage'
 import { FulfillmentPage } from './FulfillmentPage'
 import { AdminVendorWorkspacePanel } from '../components/AdminVendorWorkspacePanel'
 import { AdminVendorPaymentsPanel } from '../components/AdminVendorPaymentsPanel'
-import { AdminWorkspaceNavigation } from '../components/WorkspaceNavigation'
+import { AdminMoreMenu, AdminWorkspaceNavigation, type AdminWorkspaceTab } from '../components/WorkspaceNavigation'
 import { BottleSizeDisplay, WorkspaceCardHeader, WorkspaceMetricGrid, WorkspacePageHeader, WorkspaceSection } from '../components/WorkspacePresentation'
 
-const tabs = ['Overview', 'Orders', 'Vendor Workspace', 'Vendor Payments', 'Customers', 'Notes', 'Products & Pricing', 'Production', 'Fulfillment', 'Revenue'] as const
-type Tab = typeof tabs[number]
 const label = (value: string) => value.replaceAll('_', ' ')
 export function AdminPage({ userId }: { userId: string }) {
-  const [tab, setTab] = useState<Tab>('Overview')
-  const mobileTab = tab === 'Overview' || tab === 'Orders' || tab === 'Production' ? tab : 'More'
-  const selectMobileTab = (next: 'Overview' | 'Orders' | 'Production' | 'More') => {
-    if (next === 'More') { setTab(current => current === 'Overview' || current === 'Orders' || current === 'Production' ? 'Vendor Workspace' : current); return }
-    setTab(next)
-  }
+  const [tab, setTab] = useState<AdminWorkspaceTab>('Overview')
   return <section className="app-screen admin-dashboard">
     {tab === 'Overview' ? <WorkspacePageHeader eyebrow="PERFUN LAB OPERATIONS" title="Good morning, Lab.">A calm view of orders, production, and the work that needs you.</WorkspacePageHeader> : null}
-    <AdminWorkspaceNavigation active={mobileTab} onNavigate={selectMobileTab}/>
-    <details className="workspace-more" open={mobileTab === 'More'}><summary>More workspace tools</summary><div className="workspace-more-menu">{tabs.filter(value => !['Overview', 'Orders', 'Production'].includes(value)).map(value => <button key={value} aria-pressed={tab === value} onClick={() => setTab(value)}>{value}</button>)}</div></details>
+    <AdminWorkspaceNavigation active={tab} onNavigate={setTab}/>
     <div className="admin-content" key={tab}>
+      {tab === 'More' ? <AdminMoreMenu active={tab} onNavigate={setTab}/> : null}
       {['Vendor Workspace', 'Vendor Payments', 'Customers', 'Notes', 'Products & Pricing', 'Revenue'].includes(tab) ? <WorkspacePageHeader eyebrow="ADMIN WORKSPACE" title={tab}>{tab === 'Vendor Workspace' ? 'Assign the right production partner to paid orders.' : tab === 'Vendor Payments' ? 'Review vendor billing and payout records.' : 'Manage your lab workspace.'}</WorkspacePageHeader> : null}
       {tab === 'Overview' || tab === 'Revenue' ? <Overview revenueOnly={tab === 'Revenue'}/> : null}
       {tab === 'Orders' ? <AdminOrders/> : null}

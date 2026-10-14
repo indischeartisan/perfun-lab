@@ -1,5 +1,4 @@
 import { defineConfig, loadEnv } from 'vite'
-import { resolve } from 'node:path'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { assertStagingBuildEnvironment } from './scripts/staging-env.mjs'
@@ -11,7 +10,7 @@ export default defineConfig(({ mode }) => {
   reportPublicBuildEnvironment(environment)
   if (mode === 'staging') assertStagingBuildEnvironment()
   return {
-    build: simulatorEnabled ? { rollupOptions: { input: { main: resolve('.', 'index.html'), simulator: resolve('.', 'simulator.html') } } } : undefined,
+    build: simulatorEnabled ? { rollupOptions: { input: { main: 'index.html', simulator: 'simulator.html' } } } : undefined,
     plugins: [
       react(),
       VitePWA({

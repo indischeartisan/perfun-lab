@@ -36,3 +36,20 @@ Open `http://localhost:5173/simulator.html` and use the Admin/Vendor switch in t
 - The simulator is not an authentication bypass and is not linked from the production application.
 - Print documents include a DEMO watermark and use synthetic data only.
 - Copy, packing checklist, tracking, and payouts stay in localStorage.
+
+## Admin workspace coverage
+
+| Production Admin feature | Simulator location | Coverage |
+| --- | --- | --- |
+| Dashboard | Dashboard | Simulated with derived operational counts |
+| Orders | Orders | Simulated: payment and assignment transitions |
+| Production | Operations → Production | Simulated status monitor |
+| Fulfillment | Operations → Fulfillment / Vendor → Kirim | Simulated shipping handoff, copy, and DEMO print |
+| Vendor Assignment | Operations → Assignment exceptions | Simulated assignment transition |
+| Customers | More → Customers | Available as read-only synthetic directory |
+| Notes | More → Notes | Simulated local availability toggle |
+| Products & Pricing | More → Products & Pricing | Simulated local availability toggle; price display is read-only |
+| Vendor Payments | More → Vendor Payments | Simulated draft and paid lifecycle |
+| Revenue | More → Revenue | Available as a derived synthetic sales snapshot |
+
+The simulator deliberately does not imitate production-only concurrent-editing, catalog versioning, or external payment and shipping services. Those interactions have no fake buttons.

@@ -34,6 +34,8 @@ export type DemoOrder = {
 }
 
 export type DemoPayout = { id: string; orderIds: string[]; vendorId: string; ratePerBottle: number; total: number; status: DemoPayoutStatus; reference?: string; createdAt: string }
-export type DemoState = { orders: DemoOrder[]; payouts: DemoPayout[] }
+export type DemoCatalogNote = { id: string; name: string; category: string; active: boolean; phases: Array<'top' | 'middle' | 'base'> }
+export type DemoCatalogProduct = { id: string; label: string; active: boolean; regularPrice: number; salePrice: number | null }
+export type DemoState = { orders: DemoOrder[]; payouts: DemoPayout[]; catalog: { notes: DemoCatalogNote[]; products: DemoCatalogProduct[] } }
 
 export const demoVendor = { id: 'demo-vendor-01', name: 'Nara Atelier', ratePerBottle: 18000 }

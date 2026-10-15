@@ -32,3 +32,10 @@ test('new demo orders remain synthetic and payouts include only completed work',
   const payout = makePayout(state, [completed.id], 18000)
   assert.equal(payout.payouts[0].total, itemBottleTotal(completed) * 18000)
 })
+
+test('management catalog is local simulator state with the production menu coverage', () => {
+  const state = initialDemoState()
+  assert.deepEqual(state.catalog.notes.map(note => note.name), ['Yuzu', 'Matcha', 'Clean Musk', 'Peony'])
+  assert.deepEqual(state.catalog.products.map(product => product.label), ['Eau de Parfum · 10 ml', 'Eau de Parfum · 30 ml', 'Play Set · 3 × 10 ml'])
+  assert.equal(state.catalog.notes.every(note => note.active), true)
+})

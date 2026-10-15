@@ -23,9 +23,18 @@ export const initialDemoState = (): DemoState => ({ orders: [
   { id: 'demo-1025', number: 'DEMO-1025', createdAt: now, customer: address(3), items: [{ ...item('i-4', 'Eau de Parfum', 30, 1, 1, 3), production: 'in_production' }], payment: 'paid', production: 'in_production', fulfillment: 'waiting', vendorId: 'demo-vendor-01', total: 299000 },
   { id: 'demo-1024', number: 'DEMO-1024', createdAt: now, customer: address(4), items: [{ ...item('i-5', 'Eau de Parfum', 10, 1, 3, 0), production: 'completed' }], payment: 'paid', production: 'completed', fulfillment: 'ready', vendorId: 'demo-vendor-01', total: 597000 },
   { id: 'demo-1023', number: 'DEMO-1023', createdAt: now, customer: address(5), items: [{ ...item('i-6', 'Eau de Parfum', 10, 1, 1, 1), production: 'completed' }, { ...item('i-7', 'Eau de Parfum', 30, 1, 1, 3), production: 'completed' }], payment: 'paid', production: 'completed', fulfillment: 'ready', vendorId: 'demo-vendor-01', courier: 'JNE', service: 'REG', tracking: 'DEMOJNE1023', shippingCost: 18000, total: 498000 },
-], payouts: [] })
+], payouts: [], catalog: { notes: [
+  { id: 'yuzu', name: 'Yuzu', category: 'Citrus', active: true, phases: ['top'] },
+  { id: 'matcha', name: 'Matcha', category: 'Green', active: true, phases: ['middle'] },
+  { id: 'clean-musk', name: 'Clean Musk', category: 'Musk', active: true, phases: ['base'] },
+  { id: 'peony', name: 'Peony', category: 'Floral', active: true, phases: ['middle'] },
+], products: [
+  { id: 'edp-10', label: 'Eau de Parfum · 10 ml', active: true, regularPrice: 199000, salePrice: null },
+  { id: 'edp-30', label: 'Eau de Parfum · 30 ml', active: true, regularPrice: 299000, salePrice: null },
+  { id: 'play-set', label: 'Play Set · 3 × 10 ml', active: true, regularPrice: 499000, salePrice: null },
+] } })
 
-export function loadDemoState(): DemoState { try { const value = globalThis.localStorage?.getItem(SIMULATOR_STORAGE_KEY); if (value) return JSON.parse(value) as DemoState } catch { /* fall back */ } return initialDemoState() }
+export function loadDemoState(): DemoState { const seed = initialDemoState(); try { const value = globalThis.localStorage?.getItem(SIMULATOR_STORAGE_KEY); if (value) { const parsed = JSON.parse(value) as Partial<DemoState>; return { ...seed, ...parsed, catalog: { ...seed.catalog, ...parsed.catalog } } } } catch { /* fall back */ } return seed }
 export function saveDemoState(state: DemoState) { globalThis.localStorage?.setItem(SIMULATOR_STORAGE_KEY, JSON.stringify(state)) }
 export function itemBottleTotal(order: DemoOrder) { return order.items.reduce((sum, value) => sum + value.bottleCount * value.quantity, 0) }
 export function demoAddress(order: DemoOrder) { const c = order.customer; return `${c.name}\n${c.phone}\n${c.address}\n${c.city}, ${c.province} ${c.postalCode}` }

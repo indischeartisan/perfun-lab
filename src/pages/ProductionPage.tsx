@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BottleSizeDisplay, FormulaNotes, ProductionAction, WorkspaceCardHeader } from '../components/WorkspacePresentation'
+import { BottleSizeDisplay, FormulaNotes, ProductionAction, WorkspaceCardHeader, WorkspacePageHeader, WorkspaceStatusTabs } from '../components/WorkspacePresentation'
 import { advanceProductionJob, listProductionJobs, type ProductionJob, type ProductionStatus } from '../lib/production'
 import { errorMessage } from '../lib/supabase'
 
@@ -15,11 +15,9 @@ export function ProductionPage({ userId, role }: { userId: string; role: 'perfum
     }).catch(() => { if (active) setSummary({}) })
     return () => { active = false }
   }, [role])
-  return <section className="app-screen production-screen">
-    <header className="screen-title"><span>THE LAB</span><h1>Production Queue</h1><p>{role === 'admin' ? 'View production progress across all jobs.' : role === 'vendor' ? 'Produce only orders assigned to your vendor workspace.' : 'Choose a job and craft each formula as ordered.'}</p></header>
-    <nav className="production-filters production-status-tabs" aria-label="Production status">
-      {(Object.keys(labels) as ProductionStatus[]).map(status => <button key={status} aria-pressed={filter.status === status} onClick={() => setFilter({ status, page: 0 })}><span>{labels[status]}</span><b>{summary[status] ?? '-'}</b></button>)}
-    </nav>
+  return <section className="app-screen production-screen workspace-list-page">
+    <WorkspacePageHeader eyebrow={role === 'admin' ? 'THE LAB' : 'VENDOR WORKSPACE'} title={role === 'vendor' ? "Today's Production" : 'Production Queue'}>{role === 'admin' ? 'View production progress across all jobs.' : role === 'vendor' ? 'Produce only orders assigned to your vendor workspace.' : 'Choose a job and craft each formula as ordered.'}</WorkspacePageHeader>
+    <WorkspaceStatusTabs label="Production status" items={(Object.keys(labels) as ProductionStatus[]).map(status => ({ id: status, label: labels[status], count: summary[status] ?? '-', active: filter.status === status, onClick: () => setFilter({ status, page: 0 }) }))}/>
     <ProductionList key={`${userId}:${role}:${filter.status}:${filter.page}`} userId={userId} role={role} status={filter.status} page={filter.page} onPage={page => setFilter(current => ({ ...current, page }))}/>
   </section>
 }
@@ -71,11 +69,9 @@ function ProductionCard({ job, userId, canWork, onChanged }: { job: ProductionJo
     } catch (error) { setError(errorMessage(error)) }
     finally { lock.current = false; setBusy(false) }
   }
-  return <article className="customer-order production-card">
+  return <article className="customer-order production-card calm-work-card">
     <WorkspaceCardHeader orderNumber={job.order_number} status={labels[job.status]} time={new Date(job.ordered_at).toLocaleString()}/>
-    <h2>{job.product_snapshot.label}</h2>
-    <BottleSizeDisplay volumeMl={job.product_snapshot.volume_ml} bottleCount={job.product_snapshot.bottle_count} variant="detail"/>
-    <p>Order quantity: {job.quantity}</p>
+    <section className="production-card-summary"><h2>{job.product_snapshot.label}</h2><BottleSizeDisplay volumeMl={job.product_snapshot.volume_ml} bottleCount={job.product_snapshot.bottle_count} variant="detail"/><p>Order quantity: {job.quantity}</p></section>
     <p className="production-assignment">{job.assigned_to ? mine ? 'Assigned to you' : 'Assigned to another perfumer' : 'Unassigned'}</p>
     {job.formulas_snapshot.map((formula, index) => <FormulaNotes key={index} formula={formula} title={`Bottle ${index + 1}${job.quantity > 1 ? ` · make ${job.quantity}` : ''}`}/>)}
     {job.started_at ? <p className="production-time">Started: <time dateTime={job.started_at}>{new Date(job.started_at).toLocaleString()}</time></p> : null}

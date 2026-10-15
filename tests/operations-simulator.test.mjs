@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { canTransition, createDemoOrder, initialDemoState, itemBottleTotal, makePayout, orderProduction } from '../src/simulator/store.ts'
+import { canTransition, courierForProvince, courierServices, createDemoOrder, initialDemoState, itemBottleTotal, makePayout, mutateDemoState, orderProduction, SIMULATOR_STORAGE_KEY } from '../src/simulator/store.ts'
 
 test('demo order follows payment, assignment, production, and shipment guards', () => {
   const [pending, exception, queued, producing, ready] = initialDemoState().orders
@@ -38,4 +38,27 @@ test('management catalog is local simulator state with the production menu cover
   assert.deepEqual(state.catalog.notes.map(note => note.name), ['Yuzu', 'Matcha', 'Clean Musk', 'Peony'])
   assert.deepEqual(state.catalog.products.map(product => product.label), ['Eau de Parfum · 10 ml', 'Eau de Parfum · 30 ml', 'Play Set · 3 × 10 ml'])
   assert.equal(state.catalog.notes.every(note => note.active), true)
+})
+
+test('courier selection uses the explicit province snapshot and simulator-only services', () => {
+  assert.equal(courierForProvince('Jawa Barat'), 'J&T')
+  assert.equal(courierForProvince('DKI Jakarta'), 'J&T')
+  assert.equal(courierForProvince('Sulawesi Selatan'), 'Anteraja')
+  assert.deepEqual(courierServices('J&T'), [{ value: 'J&T Standard', label: 'J&T Standard (simulator)' }])
+  assert.deepEqual(courierServices('Anteraja'), [{ value: 'Anteraja Regular', label: 'Anteraja Regular (simulator)' }])
+})
+
+test('simulator mutations read the latest shared storage snapshot before writing', () => {
+  const prior = globalThis.localStorage
+  const values = new Map()
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } })
+  try {
+    const seeded = initialDemoState()
+    values.set(SIMULATOR_STORAGE_KEY, JSON.stringify(seeded))
+    mutateDemoState(state => ({ ...state, orders: state.orders.map(order => order.id === 'demo-1028' ? { ...order, payment: 'paid' } : order) }))
+    const next = mutateDemoState(state => ({ ...state, orders: state.orders.map(order => order.id === 'demo-1028' ? { ...order, vendorId: 'demo-vendor-01', production: 'queued' } : order) }))
+    const order = next.orders.find(value => value.id === 'demo-1028')
+    assert.equal(order.payment, 'paid')
+    assert.equal(order.production, 'queued')
+  } finally { Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: prior }) }
 })

@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
   reportPublicBuildEnvironment(environment)
   if (mode === 'staging') assertStagingBuildEnvironment()
   return {
-    build: simulatorEnabled ? { rollupOptions: { input: { main: 'index.html', simulator: 'simulator.html' } } } : undefined,
+    build: simulatorEnabled ? { rollupOptions: { input: { main: 'index.html', simulator: 'simulator.html', simulatorAdmin: 'simulator-admin.html', simulatorVendor: 'simulator-vendor.html' } } } : undefined,
     plugins: [
       react(),
       VitePWA({

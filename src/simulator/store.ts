@@ -1,6 +1,11 @@
 import type { DemoItem, DemoOrder, DemoPayout, DemoState, DemoProductionStatus } from './types'
 
 export const SIMULATOR_STORAGE_KEY = 'perfun-lab:operations-simulator:v1.1'
+export const JAVA_PROVINCES = ['Banten', 'DKI Jakarta', 'Jawa Barat', 'Jawa Tengah', 'DI Yogyakarta', 'Jawa Timur'] as const
+export type SimulatorCourier = 'J&T' | 'Anteraja'
+export const isJavaProvince = (province: string) => JAVA_PROVINCES.includes(province.trim() as typeof JAVA_PROVINCES[number])
+export const courierForProvince = (province: string): SimulatorCourier => isJavaProvince(province) ? 'J&T' : 'Anteraja'
+export const courierServices = (courier: SimulatorCourier) => courier === 'J&T' ? [{ value: 'J&T Standard', label: 'J&T Standard (simulator)' }] : [{ value: 'Anteraja Regular', label: 'Anteraja Regular (simulator)' }]
 const now = '2026-10-14T09:30:00.000Z'
 const formulas = [{ top: 'Yuzu', middle: 'Matcha', base: 'Clean Musk' }, { top: 'Pink Pepper', middle: 'Peony', base: 'Sandalwood' }, { top: 'Sea Breeze', middle: 'Jasmine', base: 'Amber' }, { top: 'Mint', middle: 'Green Leaves', base: 'Vanilla' }]
 const names = ['Alya Prameswari', 'Bagas Mahendra', 'Celine Arta', 'Dion Pratama', 'Eka Wulandari', 'Farhan Putra']
@@ -22,7 +27,7 @@ export const initialDemoState = (): DemoState => ({ orders: [
   { id: 'demo-1026', number: 'DEMO-1026', createdAt: now, customer: address(2), items: [item('i-3', 'Play Set', 10, 3, 1, 2, true)], payment: 'paid', production: 'queued', fulfillment: 'waiting', vendorId: 'demo-vendor-01', total: 499000 },
   { id: 'demo-1025', number: 'DEMO-1025', createdAt: now, customer: address(3), items: [{ ...item('i-4', 'Eau de Parfum', 30, 1, 1, 3), production: 'in_production' }], payment: 'paid', production: 'in_production', fulfillment: 'waiting', vendorId: 'demo-vendor-01', total: 299000 },
   { id: 'demo-1024', number: 'DEMO-1024', createdAt: now, customer: address(4), items: [{ ...item('i-5', 'Eau de Parfum', 10, 1, 3, 0), production: 'completed' }], payment: 'paid', production: 'completed', fulfillment: 'ready', vendorId: 'demo-vendor-01', total: 597000 },
-  { id: 'demo-1023', number: 'DEMO-1023', createdAt: now, customer: address(5), items: [{ ...item('i-6', 'Eau de Parfum', 10, 1, 1, 1), production: 'completed' }, { ...item('i-7', 'Eau de Parfum', 30, 1, 1, 3), production: 'completed' }], payment: 'paid', production: 'completed', fulfillment: 'ready', vendorId: 'demo-vendor-01', courier: 'JNE', service: 'REG', tracking: 'DEMOJNE1023', shippingCost: 18000, total: 498000 },
+  { id: 'demo-1023', number: 'DEMO-1023', createdAt: now, customer: address(5), items: [{ ...item('i-6', 'Eau de Parfum', 10, 1, 1, 1), production: 'completed' }, { ...item('i-7', 'Eau de Parfum', 30, 1, 1, 3), production: 'completed' }], payment: 'paid', production: 'completed', fulfillment: 'ready', vendorId: 'demo-vendor-01', courier: 'Anteraja', service: 'Anteraja Regular', tracking: 'DEMOANT1023', shippingCost: 18000, total: 498000 },
 ], payouts: [], catalog: { notes: [
   { id: 'yuzu', name: 'Yuzu', category: 'Citrus', active: true, phases: ['top'] },
   { id: 'matcha', name: 'Matcha', category: 'Green', active: true, phases: ['middle'] },
@@ -36,6 +41,8 @@ export const initialDemoState = (): DemoState => ({ orders: [
 
 export function loadDemoState(): DemoState { const seed = initialDemoState(); try { const value = globalThis.localStorage?.getItem(SIMULATOR_STORAGE_KEY); if (value) { const parsed = JSON.parse(value) as Partial<DemoState>; return { ...seed, ...parsed, catalog: { ...seed.catalog, ...parsed.catalog } } } } catch { /* fall back */ } return seed }
 export function saveDemoState(state: DemoState) { globalThis.localStorage?.setItem(SIMULATOR_STORAGE_KEY, JSON.stringify(state)) }
+/** Always reads the latest same-origin snapshot before committing a local simulator mutation. */
+export function mutateDemoState(transform: (state: DemoState) => DemoState) { const next = transform(loadDemoState()); saveDemoState(next); return next }
 export function itemBottleTotal(order: DemoOrder) { return order.items.reduce((sum, value) => sum + value.bottleCount * value.quantity, 0) }
 export function demoAddress(order: DemoOrder) { const c = order.customer; return `${c.name}\n${c.phone}\n${c.address}\n${c.city}, ${c.province} ${c.postalCode}` }
 export function demoOrderText(order: DemoOrder) { return `${order.number}\n${demoAddress(order)}\n\n${order.items.flatMap(entry => entry.formulas.map((formula, index) => `${entry.product} — Botol ${index + 1}: ${entry.volumeMl} ml\nTop: ${formula.top}; Middle: ${formula.middle}; Base: ${formula.base}`)).join('\n\n')}` }

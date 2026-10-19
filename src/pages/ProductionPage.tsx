@@ -6,7 +6,7 @@ import { errorMessage } from '../lib/supabase'
 
 const labels: Record<ProductionStatus, string> = { queued: 'Queued', in_production: 'In Production', completed: 'Completed' }
 
-export function ProductionPage({ userId, role, initialStatus = 'queued', hideStatusTabs = false, onStarted }: { userId: string; role: 'perfumer' | 'admin' | 'vendor'; initialStatus?: ProductionStatus; hideStatusTabs?: boolean; onStarted?: () => void }) {
+export function ProductionPage({ userId, role, initialStatus = 'queued', hideStatusTabs = false, onStarted, onCompleted }: { userId: string; role: 'perfumer' | 'admin' | 'vendor'; initialStatus?: ProductionStatus; hideStatusTabs?: boolean; onStarted?: () => void; onCompleted?: (orderNumber: string) => void }) {
   const [filter, setFilter] = useState<{ status: ProductionStatus; page: number }>({ status: initialStatus, page: 0 })
   const [summary, setSummary] = useState<Partial<Record<ProductionStatus, number>>>({})
   const [summaryRevision, setSummaryRevision] = useState(0)
@@ -21,11 +21,11 @@ export function ProductionPage({ userId, role, initialStatus = 'queued', hideSta
   return <section className="app-screen production-screen">
     <OperationsPageHeader title="Production Queue">{role === 'admin' ? 'View production progress across all jobs.' : role === 'vendor' ? 'Produce only orders assigned to your vendor workspace.' : 'Choose a job and craft each formula as ordered.'}</OperationsPageHeader>
     {!hideStatusTabs ? <OperationsStatusTabs label="Production status" items={(Object.keys(labels) as ProductionStatus[]).map(status => ({ id: status, label: labels[status], count: summary[status] ?? '–', active: filter.status === status, onClick: () => setFilter({ status, page: 0 }) }))}/> : null}
-    <ProductionList key={`${userId}:${role}:${filter.status}:${filter.page}`} userId={userId} role={role} status={filter.status} page={filter.page} onPage={page => setFilter(current => ({ ...current, page }))} onSummaryChanged={() => setSummaryRevision(n => n + 1)} onStarted={onStarted}/>
+    <ProductionList key={`${userId}:${role}:${filter.status}:${filter.page}`} userId={userId} role={role} status={filter.status} page={filter.page} onPage={page => setFilter(current => ({ ...current, page }))} onSummaryChanged={() => setSummaryRevision(n => n + 1)} onStarted={onStarted} onCompleted={onCompleted}/>
   </section>
 }
 
-function ProductionList({ userId, role, status, page, onPage, onSummaryChanged, onStarted }: { userId: string; role: 'perfumer' | 'admin' | 'vendor'; status: ProductionStatus; page: number; onPage: (page: number) => void; onSummaryChanged: () => void; onStarted?: () => void }) {
+function ProductionList({ userId, role, status, page, onPage, onSummaryChanged, onStarted, onCompleted }: { userId: string; role: 'perfumer' | 'admin' | 'vendor'; status: ProductionStatus; page: number; onPage: (page: number) => void; onSummaryChanged: () => void; onStarted?: () => void; onCompleted?: (orderNumber: string) => void }) {
   const [jobs, setJobs] = useState<ProductionJob[]>([])
   const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -53,7 +53,7 @@ function ProductionList({ userId, role, status, page, onPage, onSummaryChanged, 
     <div className="production-toolbar"><p role="status">{notice || (loading ? 'Loading production jobs...' : `${count} ${labels[status].toLowerCase()} jobs`)}</p><button onClick={() => setRevision(n => n + 1)}>Refresh</button></div>
     {error ? <p role="alert">{error}</p> : null}
     {!loading && !error && !jobs.length ? <div className="screen-empty"><h2>No jobs on this page</h2><p>Paid order items appear here automatically.</p></div> : null}
-    <div className="production-list">{jobs.map(job => <ProductionCard key={job.id} job={job} userId={userId} canWork={role !== 'admin'} onChanged={(message, action) => { setNotice(message); setRevision(n => n + 1); onSummaryChanged(); if (action === 'start') onStarted?.() }}/>)}</div>
+    <div className="production-list">{jobs.map(job => <ProductionCard key={job.id} job={job} userId={userId} canWork={role !== 'admin'} onChanged={(message, action) => { setNotice(message); setRevision(n => n + 1); onSummaryChanged(); if (action === 'start') onStarted?.(); else onCompleted?.(job.order_number) }}/>)}</div>
     <div className="production-pagination"><button disabled={page === 0} onClick={() => onPage(page - 1)}>Previous</button><span>Page {page + 1}</span><button disabled={(page + 1) * 25 >= count} onClick={() => onPage(page + 1)}>Next</button></div>
   </>
 }

@@ -31,6 +31,13 @@ export async function listShipments(status: ShipmentStatus, page: number) {
   const result = data as { rows: Shipment[]; count: number }
   return { shipments: result.rows, count: result.count }
 }
+// Read the server-maintained readiness for one order. RLS still limits vendor visibility.
+export async function getShipmentReadiness(orderNumber: string) {
+  const { data, error } = await requireSupabase().from('shipments')
+    .select('status,fulfillment_allowed').eq('order_number', orderNumber).maybeSingle()
+  if (error) throw error
+  return data as { status: ShipmentStatus; fulfillment_allowed: boolean } | null
+}
 export async function listShipmentFormulaJobs(orderNumber: string) {
   const { data, error } = await requireSupabase().from('production_jobs')
     .select('id,order_number,quantity,product_snapshot,formulas_snapshot').eq('order_number', orderNumber).order('created_at')

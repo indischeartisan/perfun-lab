@@ -15,7 +15,7 @@ This branch starts from main, not the simulator branch. Its UI uses the existing
 ## Implemented UI scope
 
 - Admin navigation groups existing screens under Dashboard, Orders, Operations and More. Operations contains the existing production, fulfillment and assignment panels. Recent orders use the existing admin orders RPC.
-- Vendor work navigation exposes job queues, shipping, shipped/delivered history, completed-job history and payouts using existing role-scoped data and handlers. A job start changes the active UI tab only after the original server RPC succeeds.
+- Vendor work navigation exposes job queues, shipping, shipped/delivered history, completed-job history and payouts using existing role-scoped data and handlers. A job start changes the active UI tab only after the original server RPC succeeds. After completion, a separate RLS-scoped read checks the server-maintained shipment readiness before navigating to shipping; a failed or non-ready read leaves the user on the current stage. A successful ship RPC navigates to shipped history.
 - Compact shared presentational components show existing item sizes and each formula snapshot. Production jobs remain separate per item, not misleadingly grouped across paginated results.
 - Shipping confirmation was added before the existing dispatch RPC. Packing, payer, cost, shipping overrides and print/copy actions remain intact.
 

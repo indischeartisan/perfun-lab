@@ -43,16 +43,16 @@ async function copyText(value: string) {
   if (!copied) throw new Error('Copy failed')
 }
 
-export function FulfillmentPage({ role, initialStatus = 'ready_to_ship', availableStatuses = tabs }: { role: 'vendor' | 'admin'; initialStatus?: ShipmentStatus; availableStatuses?: ShipmentStatus[] }) {
+export function FulfillmentPage({ role, initialStatus = 'ready_to_ship', availableStatuses = tabs, onShipped }: { role: 'vendor' | 'admin'; initialStatus?: ShipmentStatus; availableStatuses?: ShipmentStatus[]; onShipped?: () => void }) {
   const [filter, setFilter] = useState<{ status: ShipmentStatus; page: number }>({ status: initialStatus, page: 0 })
   return <section className="app-screen fulfillment-screen">
     <header className="screen-title"><span>FULFILLMENT</span><h1>{role === 'vendor' ? 'Packing & Shipping' : 'Shipping Queue'}</h1><p>{role === 'vendor' ? 'Pack completed orders, finalize delivery cost, then dispatch.' : 'Monitor packing and delivery handled by assigned vendors.'}</p></header>
     <nav className="production-filters" aria-label="Shipment status">{availableStatuses.map(status => <button key={status} aria-pressed={status === filter.status} onClick={() => setFilter({ status, page: 0 })}>{shipmentLabels[status]}</button>)}</nav>
-    <FulfillmentList key={`${filter.status}:${filter.page}:${role}`} role={role} status={filter.status} page={filter.page} onPage={page => setFilter(current => ({ ...current, page }))}/>
+    <FulfillmentList key={`${filter.status}:${filter.page}:${role}`} role={role} status={filter.status} page={filter.page} onPage={page => setFilter(current => ({ ...current, page }))} onShipped={onShipped}/>
   </section>
 }
 
-function FulfillmentList({ role, status, page, onPage }: { role: 'vendor' | 'admin'; status: ShipmentStatus; page: number; onPage: (page: number) => void }) {
+function FulfillmentList({ role, status, page, onPage, onShipped }: { role: 'vendor' | 'admin'; status: ShipmentStatus; page: number; onPage: (page: number) => void; onShipped?: () => void }) {
   const [shipments, setShipments] = useState<Shipment[]>([])
   const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -78,12 +78,12 @@ function FulfillmentList({ role, status, page, onPage }: { role: 'vendor' | 'adm
     <div className="production-toolbar"><p role="status">{notice || (loading ? 'Loading shipments…' : `${count} shipments`)}</p><button onClick={() => setRevision(n => n + 1)}>Refresh</button></div>
     {error ? <p role="alert">{error}</p> : null}
     {!loading && !error && !shipments.length ? <div className="screen-empty"><h2>No shipments on this page</h2><p>Orders become ready when all their production jobs are completed.</p></div> : null}
-    <div className="production-list">{shipments.map(shipment => <ShipmentCard key={shipment.id} shipment={shipment} role={role} onChanged={message => { setNotice(message); setRevision(n => n + 1) }}/>)}</div>
+    <div className="production-list">{shipments.map(shipment => <ShipmentCard key={shipment.id} shipment={shipment} role={role} onChanged={message => { setNotice(message); setRevision(n => n + 1) }} onShipped={onShipped}/>)}</div>
     <div className="production-pagination"><button disabled={page === 0} onClick={() => onPage(page - 1)}>Previous</button><span>Page {page + 1}</span><button disabled={(page + 1) * 25 >= count} onClick={() => onPage(page + 1)}>Next</button></div>
   </>
 }
 
-function ShipmentCard({ shipment, role, onChanged }: { shipment: Shipment; role: 'vendor' | 'admin'; onChanged: (message: string) => void }) {
+function ShipmentCard({ shipment, role, onChanged, onShipped }: { shipment: Shipment; role: 'vendor' | 'admin'; onChanged: (message: string) => void; onShipped?: () => void }) {
   const [details, setDetails] = useState<ShippingDetails>({ courier: shipment.courier, service: shipment.service, tracking_number: shipment.tracking_number })
   const [checklist, setChecklist] = useState(() => checklistFor(shipment))
   const [actualCost, setActualCost] = useState(shipment.actual_shipping_cost === null ? '' : String(shipment.actual_shipping_cost))
@@ -114,7 +114,7 @@ function ShipmentCard({ shipment, role, onChanged }: { shipment: Shipment; role:
     finally { lock.current = false; setBusy(false) }
   }
   function fulfill(type: 'save' | 'ship' | 'deliver') {
-    void run(() => fulfillShipment(shipment.id, type, details), result => `${shipment.order_number}: ${type === 'save' ? 'shipping details saved' : shipmentLabels[result.status]}.`)
+    void run(() => fulfillShipment(shipment.id, type, details), result => { if (type === 'ship' && result.status === 'shipped') onShipped?.(); return `${shipment.order_number}: ${type === 'save' ? 'shipping details saved' : shipmentLabels[result.status]}.` })
   }
   function savePacking(complete: boolean) {
     void run(() => saveShipmentPacking(shipment.id, checklist, complete), result => `${shipment.order_number}: ${result.packing_status === 'packed' ? 'packing completed' : 'packing checklist saved'}.`)

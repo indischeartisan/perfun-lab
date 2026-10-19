@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { useAdminData } from '../hooks/useAdminData'
-import { getAdminCustomers, getAdminOrders, getAdminOverview, type AdminOrderFilters, type AdminOverview } from '../lib/admin'
+import { getAdminCustomers, getAdminOrders, getAdminOverview, getAdminVendorWorkspace, type AdminOrderFilters, type AdminOverview } from '../lib/admin'
 import { formatPrice } from '../lib/currency'
 import { AdminCatalogPanel } from '../components/AdminCatalogPanel'
 import { ProductionPage } from './ProductionPage'
@@ -24,13 +24,20 @@ export function AdminPage({ userId }: { userId: string }) {
       {tab === 'Vendor Payments' ? <AdminVendorPaymentsPanel/> : null}
       {tab === 'Customers' ? <AdminCustomers/> : null}
       {tab === 'Notes' || tab === 'Products & Pricing' ? <AdminCatalogPanel section={tab === 'Notes' ? 'notes' : 'products'}/> : null}
-      {tab === 'Operations' ? <><OperationsStatusTabs label="Operations" items={[
-        { id: 'production', label: 'Production', active: operation === 'production', onClick: () => setOperation('production') },
-        { id: 'fulfillment', label: 'Fulfillment', active: operation === 'fulfillment', onClick: () => setOperation('fulfillment') },
-        { id: 'assignment', label: 'Assignment exceptions', active: operation === 'assignment', onClick: () => setOperation('assignment') },
-      ]}/>{operation === 'production' ? <ProductionPage userId={userId} role="admin"/> : operation === 'fulfillment' ? <FulfillmentPage role="admin"/> : <AdminVendorWorkspacePanel/>}</> : null}
+      {tab === 'Operations' ? <AdminOperations userId={userId} operation={operation} onOperation={setOperation}/> : null}
     </div>
   </section>
+}
+
+function AdminOperations({ userId, operation, onOperation }: { userId: string; operation: 'production' | 'fulfillment' | 'assignment'; onOperation: (value: 'production' | 'fulfillment' | 'assignment') => void }) {
+  const { data: overview, error: overviewError } = useAdminData(getAdminOverview, true)
+  const loadAssignments = useCallback(() => getAdminVendorWorkspace(0), [])
+  const { data: assignments, error: assignmentError } = useAdminData(loadAssignments, true)
+  return <>{overviewError || assignmentError ? <p role="alert">Some operation counts could not be loaded. Open a tab to refresh its data.</p> : null}<OperationsStatusTabs label="Operations" items={[
+    { id: 'production', label: 'Production (active)', count: overview ? overview.production_queued + overview.production_in_progress : '–', active: operation === 'production', onClick: () => onOperation('production') },
+    { id: 'fulfillment', label: 'Fulfillment (ready)', count: overview?.ready_to_ship ?? '–', active: operation === 'fulfillment', onClick: () => onOperation('fulfillment') },
+    { id: 'assignment', label: 'Assignment exceptions', count: assignments?.unassigned_count ?? '–', active: operation === 'assignment', onClick: () => onOperation('assignment') },
+  ]}/>{operation === 'production' ? <ProductionPage userId={userId} role="admin"/> : operation === 'fulfillment' ? <FulfillmentPage role="admin"/> : <AdminVendorWorkspacePanel/>}</>
 }
 
 function Overview({ revenueOnly, onOrders }: { revenueOnly: boolean; onOrders: () => void }) {

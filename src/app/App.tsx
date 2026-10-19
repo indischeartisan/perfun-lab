@@ -30,6 +30,7 @@ import { ProductionPage } from '../pages/ProductionPage'
 import { FulfillmentPage } from '../pages/FulfillmentPage'
 import { AdminPage } from '../pages/AdminPage'
 import { VendorPaymentsPage } from '../pages/VendorPaymentsPage'
+import { VendorWorkPage } from '../pages/VendorWorkPage'
 import { navigationHash, viewFromHash, workspaceView } from './workspaceRouting'
 import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
 import '../admin.css'
@@ -257,8 +258,8 @@ function WorkspaceApp({ auth }: { auth: ReturnType<typeof useAuth> }) {
     <WorkspaceNavigation role={role} active={view} onNavigate={navigate}/>
     <main className="app-main">
       {role === 'admin' ? <AdminPage key={auth.user.id} userId={auth.user.id}/> : null}
-      {view === 'production' && (vendor || perfumer) ? <ProductionPage key={`${auth.user.id}:${role}`} userId={auth.user.id} role={role}/> : null}
-      {view === 'fulfillment' && vendor ? <FulfillmentPage key={auth.user.id} role="vendor"/> : null}
+      {vendor && (view === 'production' || view === 'fulfillment') ? <VendorWorkPage key={`${auth.user.id}:${view}`} userId={auth.user.id} initialStage={view === 'fulfillment' ? 'shipping' : 'order'}/> : null}
+      {view === 'production' && perfumer ? <ProductionPage key={`${auth.user.id}:${role}`} userId={auth.user.id} role="perfumer"/> : null}
       {view === 'payouts' && vendor ? <VendorPaymentsPage key={auth.user.id}/> : null}
     </main>
   </div>

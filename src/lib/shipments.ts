@@ -1,4 +1,5 @@
 import { requireSupabase } from './supabase'
+import { collectPagedSnapshots } from './pagedSnapshots'
 
 export type ShipmentStatus = 'pending' | 'ready_to_ship' | 'shipped' | 'delivered'
 export type PackingStatus = 'not_started' | 'in_progress' | 'packed' | 'legacy_unknown'
@@ -31,11 +32,21 @@ export async function listShipments(status: ShipmentStatus, page: number) {
   const result = data as { rows: Shipment[]; count: number }
   return { shipments: result.rows, count: result.count }
 }
-export async function listShipmentFormulaJobs(orderNumber: string) {
-  const { data, error } = await requireSupabase().from('production_jobs')
-    .select('id,order_number,quantity,product_snapshot,formulas_snapshot').eq('order_number', orderNumber).order('created_at')
+// Read the server-maintained readiness for one order. RLS still limits vendor visibility.
+export async function getShipmentReadiness(orderNumber: string) {
+  const { data, error } = await requireSupabase().from('shipments')
+    .select('status,fulfillment_allowed').eq('order_number', orderNumber).maybeSingle()
   if (error) throw error
-  return (data ?? []) as ShipmentFormulaJob[]
+  return data as { status: ShipmentStatus; fulfillment_allowed: boolean } | null
+}
+export async function listShipmentFormulaJobs(orderNumber: string) {
+  return collectPagedSnapshots<ShipmentFormulaJob>(async (from, to) => {
+    const { data, error, count } = await requireSupabase().from('production_jobs')
+      .select('id,order_number,quantity,product_snapshot,formulas_snapshot', { count: 'exact' })
+      .eq('order_number', orderNumber).order('created_at').order('id').range(from, to)
+    if (error) throw error
+    return { rows: (data ?? []) as ShipmentFormulaJob[], count }
+  })
 }
 export async function fulfillShipment(id: string, action: 'save' | 'ship' | 'deliver', details?: ShippingDetails) {
   const { data, error } = await requireSupabase().rpc('fulfill_shipment', {

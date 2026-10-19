@@ -13,8 +13,25 @@ test('copy formats use immutable shipping and formula snapshots', () => {
   assert.match(formatShippingAddress(shipment), /Ayu Test\n081234567890\nJl\. Melati 1/)
   const order = formatOrderCopy(shipment, jobs)
   assert.match(order, /Bottle 1: Top Bergamot · Middle Jasmine · Base Musk/)
+  assert.match(order, /Bottle 2: Top Tea · Middle Rose · Base Amber/)
+  assert.match(order, /Bottle 3: Top Pear · Middle Iris · Base Cedar/)
   assert.match(order, /Delivery instruction: Call before delivery/)
   assert.doesNotMatch(order, /Rp|payment|grand total/i)
+})
+
+test('mixed item sizes retain their individual quantities and snapshots', () => {
+  const small = { product: { label: '10 ml', bottle_count: 1, volume_ml: 10 }, quantity: 2 }
+  const large = { product: { label: '30 ml', bottle_count: 1, volume_ml: 30 }, quantity: 1 }
+  const mixed = { ...shipment, items_snapshot: [small, large] }
+  const mixedJobs = [
+    { ...jobs[0], id: 'small', product_snapshot: small.product, quantity: 2, formulas_snapshot: [jobs[0].formulas_snapshot[0]] },
+    { ...jobs[0], id: 'large', product_snapshot: large.product, quantity: 1, formulas_snapshot: [jobs[0].formulas_snapshot[1]] },
+  ]
+  const slip = packingSlipPrintHtml(mixed, mixedJobs)
+  assert.match(slip, /1 × 10 ml · Quantity: 2/)
+  assert.match(slip, /1 × 30 ml · Quantity: 1/)
+  assert.match(slip, /Top Bergamot/)
+  assert.match(slip, /Top Tea/)
 })
 
 test('print documents contain operational fields but exclude commercial fields', () => {

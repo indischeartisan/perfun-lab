@@ -43,11 +43,11 @@ async function copyText(value: string) {
   if (!copied) throw new Error('Copy failed')
 }
 
-export function FulfillmentPage({ role }: { role: 'vendor' | 'admin' }) {
-  const [filter, setFilter] = useState<{ status: ShipmentStatus; page: number }>({ status: 'ready_to_ship', page: 0 })
+export function FulfillmentPage({ role, initialStatus = 'ready_to_ship', availableStatuses = tabs }: { role: 'vendor' | 'admin'; initialStatus?: ShipmentStatus; availableStatuses?: ShipmentStatus[] }) {
+  const [filter, setFilter] = useState<{ status: ShipmentStatus; page: number }>({ status: initialStatus, page: 0 })
   return <section className="app-screen fulfillment-screen">
     <header className="screen-title"><span>FULFILLMENT</span><h1>{role === 'vendor' ? 'Packing & Shipping' : 'Shipping Queue'}</h1><p>{role === 'vendor' ? 'Pack completed orders, finalize delivery cost, then dispatch.' : 'Monitor packing and delivery handled by assigned vendors.'}</p></header>
-    <nav className="production-filters" aria-label="Shipment status">{tabs.map(status => <button key={status} aria-pressed={status === filter.status} onClick={() => setFilter({ status, page: 0 })}>{shipmentLabels[status]}</button>)}</nav>
+    <nav className="production-filters" aria-label="Shipment status">{availableStatuses.map(status => <button key={status} aria-pressed={status === filter.status} onClick={() => setFilter({ status, page: 0 })}>{shipmentLabels[status]}</button>)}</nav>
     <FulfillmentList key={`${filter.status}:${filter.page}:${role}`} role={role} status={filter.status} page={filter.page} onPage={page => setFilter(current => ({ ...current, page }))}/>
   </section>
 }
@@ -147,7 +147,9 @@ function ShipmentCard({ shipment, role, onChanged }: { shipment: Shipment; role:
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null
-    fulfill(submitter?.value === 'save' ? 'save' : 'ship')
+    const action = submitter?.value === 'save' ? 'save' : 'ship'
+    if (action === 'ship' && !window.confirm(`Mark ${shipment.order_number} as shipped?`)) return
+    fulfill(action)
   }
   return <article className="customer-order fulfillment-card">
     <WorkspaceCardHeader orderNumber={shipment.order_number} time={new Date(shipment.ordered_at).toLocaleString()} status={shipmentLabels[shipment.status]}/>

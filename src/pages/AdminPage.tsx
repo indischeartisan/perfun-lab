@@ -7,48 +7,51 @@ import { ProductionPage } from './ProductionPage'
 import { FulfillmentPage } from './FulfillmentPage'
 import { AdminVendorWorkspacePanel } from '../components/AdminVendorWorkspacePanel'
 import { AdminVendorPaymentsPanel } from '../components/AdminVendorPaymentsPanel'
-import { AdminWorkspaceNavigation } from '../components/WorkspaceNavigation'
-import { BottleSizeDisplay, WorkspaceCardHeader } from '../components/WorkspacePresentation'
+import { AdminMoreMenu, AdminWorkspaceNavigation, type AdminWorkspaceTab } from '../components/WorkspaceNavigation'
+import { OperationsBottleSize, OperationsOrderCard, OperationsOrderHeader, OperationsStatusTabs } from '../components/OperationsPresentation'
 
-const tabs = ['Overview', 'Orders', 'Vendor Workspace', 'Vendor Payments', 'Customers', 'Notes', 'Products & Pricing', 'Production', 'Fulfillment', 'Revenue'] as const
-type Tab = typeof tabs[number]
 const label = (value: string) => value.replaceAll('_', ' ')
 export function AdminPage({ userId }: { userId: string }) {
-  const [tab, setTab] = useState<Tab>('Overview')
-  const mobileTab = tab === 'Overview' || tab === 'Orders' || tab === 'Production' ? tab : 'More'
-  const selectMobileTab = (next: 'Overview' | 'Orders' | 'Production' | 'More') => {
-    if (next === 'More') { setTab(current => current === 'Overview' || current === 'Orders' || current === 'Production' ? 'Vendor Workspace' : current); return }
-    setTab(next)
-  }
+  const [tab, setTab] = useState<AdminWorkspaceTab>('Overview')
+  const [operation, setOperation] = useState<'production' | 'fulfillment' | 'assignment'>('production')
   return <section className="app-screen admin-dashboard">
     <header className="screen-title workspace-title"><span>PERFUN LAB OPERATIONS</span><h1>Good morning, Lab.</h1><p>A calm view of orders, production, and the work that needs you.</p></header>
-    <AdminWorkspaceNavigation active={mobileTab} onNavigate={selectMobileTab}/>
-    <details className="workspace-more" open={mobileTab === 'More'}><summary>More workspace tools</summary><div className="workspace-more-menu">{tabs.filter(value => !['Overview', 'Orders', 'Production'].includes(value)).map(value => <button key={value} aria-pressed={tab === value} onClick={() => setTab(value)}>{value}</button>)}</div></details>
+    <AdminWorkspaceNavigation active={tab} onNavigate={setTab}/>
     <div className="admin-content" key={tab}>
-      {tab === 'Overview' || tab === 'Revenue' ? <Overview revenueOnly={tab === 'Revenue'}/> : null}
+      {tab === 'Overview' || tab === 'Revenue' ? <Overview revenueOnly={tab === 'Revenue'} onOrders={() => setTab('Orders')}/> : null}
       {tab === 'Orders' ? <AdminOrders/> : null}
-      {tab === 'Vendor Workspace' ? <AdminVendorWorkspacePanel/> : null}
+      {tab === 'More' ? <AdminMoreMenu onNavigate={setTab}/> : null}
       {tab === 'Vendor Payments' ? <AdminVendorPaymentsPanel/> : null}
       {tab === 'Customers' ? <AdminCustomers/> : null}
       {tab === 'Notes' || tab === 'Products & Pricing' ? <AdminCatalogPanel section={tab === 'Notes' ? 'notes' : 'products'}/> : null}
-      {tab === 'Production' ? <ProductionPage userId={userId} role="admin"/> : null}
-      {tab === 'Fulfillment' ? <FulfillmentPage role="admin"/> : null}
+      {tab === 'Operations' ? <><OperationsStatusTabs label="Operations" items={[
+        { id: 'production', label: 'Production', active: operation === 'production', onClick: () => setOperation('production') },
+        { id: 'fulfillment', label: 'Fulfillment', active: operation === 'fulfillment', onClick: () => setOperation('fulfillment') },
+        { id: 'assignment', label: 'Assignment exceptions', active: operation === 'assignment', onClick: () => setOperation('assignment') },
+      ]}/>{operation === 'production' ? <ProductionPage userId={userId} role="admin"/> : operation === 'fulfillment' ? <FulfillmentPage role="admin"/> : <AdminVendorWorkspacePanel/>}</> : null}
     </div>
   </section>
 }
 
-function Overview({ revenueOnly }: { revenueOnly: boolean }) {
+function Overview({ revenueOnly, onOrders }: { revenueOnly: boolean; onOrders: () => void }) {
   const { data, error, reload } = useAdminData(getAdminOverview, true)
   const operations: Array<[keyof AdminOverview, string]> = [['orders_today', 'Orders today · WIB'], ['pending_payment', 'Pending payment'], ['paid_orders', 'Paid orders'], ['production_queued', 'Production jobs queued'], ['production_in_progress', 'Production jobs in progress'], ['ready_to_ship', 'Ready to ship'], ['shipped', 'Shipped'], ['delivered', 'Delivered']]
   const revenue: Array<[keyof AdminOverview, string]> = [['paid_gross_sales', 'Paid gross sales'], ['discounts', 'Discounts'], ['shipping_collected', 'Shipping collected'], ['net_transaction_total', 'Net transaction total']]
   return <><AdminLoad error={error} loading={!data && !error} reload={reload}/>
     {data ? <>
-      {!revenueOnly ? <><section className="overview-section"><span className="admin-kicker">Needs attention</span><h2>Keep the queue moving</h2><div className="admin-metrics attention-metrics">{operations.slice(1, 4).map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</div></section><section className="overview-section"><span className="admin-kicker">Today at the Lab</span><h2>What is happening now</h2><div className="admin-metrics">{operations.slice(0, 1).concat(operations.slice(4)).map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</div></section></> : null}
+      {!revenueOnly ? <><section className="overview-section"><span className="admin-kicker">Needs attention</span><h2>Keep the queue moving</h2><div className="admin-metrics attention-metrics">{([operations[1], operations[3], operations[4], operations[5]]).map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</div></section><section className="overview-section"><span className="admin-kicker">Today at the Lab</span><h2>What is happening now</h2><div className="admin-metrics">{[operations[0], operations[2], ...operations.slice(6)].map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</div></section><RecentOrders onOrders={onOrders}/></> : null}
       <h2>Revenue</h2><p className="admin-help">All-time orders currently Paid. Gross − discounts + shipping = net transaction total. Refunded orders are excluded; payment fees are not deducted.</p>
       <div className="admin-metrics">{revenue.map(([key, title]) => <article key={key}><span>{title}</span><strong>{formatPrice(Number(data[key]))}</strong></article>)}</div>
       <p className="admin-help">Today follows Asia/Jakarta. Other counts show current status. Updated {new Date(data.as_of).toLocaleString()}.</p>
     </> : null}
   </>
+}
+
+const recentFilter: AdminOrderFilters = { search: '', payment: '', production: '', shipment: '', page: 0 }
+function RecentOrders({ onOrders }: { onOrders: () => void }) {
+  const load = useCallback(() => getAdminOrders(recentFilter), [])
+  const { data, error, reload } = useAdminData(load, true)
+  return <section className="overview-section"><div className="operations-section-heading"><h2>Recent Orders</h2><button type="button" onClick={onOrders}>View all</button></div><AdminLoad error={error} loading={!data && !error} reload={reload}/>{data?.rows.length === 0 ? <p>No orders yet.</p> : null}<div className="production-list admin-order-list">{data?.rows.slice(0, 3).map(order => <OperationsOrderCard key={order.id}><OperationsOrderHeader orderNumber={order.order_number} status={label(order.payment_status)} time={new Date(order.created_at).toLocaleString()}/><p><strong>{order.customer.name || 'Customer'}</strong></p><div className="workspace-item-sizes">{order.products.map((product, index) => <div key={index}><OperationsBottleSize volumeMl={product.volume_ml} bottleCount={product.bottle_count}/><span>Quantity: {product.quantity}</span></div>)}</div><strong>{formatPrice(order.grand_total)}</strong></OperationsOrderCard>)}</div></section>
 }
 
 export function AdminLoad({ error, loading, reload }: { error: string; loading: boolean; reload: () => void }) {
@@ -63,7 +66,7 @@ function AdminOrders() {
   const [filter, setFilter] = useState(initial)
   return <><form className="admin-filters calm-order-toolbar" onSubmit={event => { event.preventDefault(); setFilter({ ...draft, page: 0 }) }}>
     <label>Search orders or customer<input maxLength={100} value={draft.search} onChange={event => setDraft({ ...draft, search: event.target.value })}/></label>
-    {([['payment', ['pending', 'paid', 'failed', 'expired', 'refunded']], ['production', ['not_started', 'queued', 'in_production', 'completed']], ['shipment', ['not_created', 'pending', 'ready_to_ship', 'shipped', 'delivered']]] as const).map(([key, options]) => <label key={key}>{label(key)} status<select value={draft[key]} onChange={event => setDraft({ ...draft, [key]: event.target.value })}><option value="">All</option>{options.map(value => <option key={value} value={value}>{label(value)}</option>)}</select></label>)}
+    <details className="operations-filter-details"><summary>Status filters</summary>{([['payment', ['pending', 'paid', 'failed', 'expired', 'refunded']], ['production', ['not_started', 'queued', 'in_production', 'completed']], ['shipment', ['not_created', 'pending', 'ready_to_ship', 'shipped', 'delivered']]] as const).map(([key, options]) => <label key={key}>{label(key)} status<select value={draft[key]} onChange={event => setDraft({ ...draft, [key]: event.target.value })}><option value="">All</option>{options.map(value => <option key={value} value={value}>{label(value)}</option>)}</select></label>)}</details>
     <button type="submit">Apply filters</button>
   </form><OrderResults key={JSON.stringify(filter)} filter={filter} onPage={page => setFilter(current => ({ ...current, page }))}/></>
 }
@@ -72,13 +75,12 @@ function OrderResults({ filter, onPage }: { filter: AdminOrderFilters; onPage: (
   const { data, error, reload } = useAdminData(load, true)
   return <><AdminLoad error={error} loading={!data && !error} reload={reload}/>
     {data?.rows.length === 0 ? <p>No matching orders.</p> : null}
-    <div className="production-list admin-order-list">{data?.rows.map(order => <article className="customer-order admin-order-card" key={order.id}>
-      <WorkspaceCardHeader orderNumber={order.order_number} time={new Date(order.created_at).toLocaleString()} status={label(order.payment_status)}/>
+    <div className="production-list admin-order-list">{data?.rows.map(order => <OperationsOrderCard className="admin-order-card" key={order.id}>
+      <OperationsOrderHeader orderNumber={order.order_number} time={new Date(order.created_at).toLocaleString()} status={label(order.payment_status)}/>
       <p><strong>{order.customer.name || 'Customer'}</strong> · {order.customer.email}</p>
-      <ul className="fulfillment-products">{order.products.map((product, index) => <li key={index}>{product.label} · {product.bottle_count} × {product.volume_ml} ml · Qty {product.quantity}</li>)}</ul>
-      <div className="workspace-item-sizes" aria-label="Bottle sizes">{order.products.map((product, index) => <div key={index}><strong>{product.label}</strong><BottleSizeDisplay volumeMl={product.volume_ml} bottleCount={product.bottle_count}/><span>Order quantity: {product.quantity}</span></div>)}</div>
+      <div className="workspace-item-sizes" aria-label="Bottle sizes">{order.products.map((product, index) => <div key={index}><strong>{product.label}</strong><OperationsBottleSize volumeMl={product.volume_ml} bottleCount={product.bottle_count}/><span>Order quantity: {product.quantity}</span></div>)}</div>
       <dl className="admin-order-details"><div><dt>Grand total</dt><dd>{formatPrice(order.grand_total)}</dd></div><div><dt>Payment</dt><dd>{label(order.payment_status)}</dd></div><div><dt>Production</dt><dd>{label(order.production_status)} · {order.completed}/{order.item_count} jobs completed</dd></div><div><dt>Shipment</dt><dd>{label(order.shipment_status)}</dd></div></dl>
-    </article>)}</div>
+    </OperationsOrderCard>)}</div>
     {data ? <AdminPagination count={data.count} page={filter.page} onPage={onPage}/> : null}
   </>
 }

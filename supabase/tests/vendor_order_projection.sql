@@ -15,7 +15,9 @@ update public.profiles set role='admin' where id='c1000000-0000-4000-8000-000000
 update public.profiles set role='vendor' where id in ('c1000000-0000-4000-8000-000000000003','c1000000-0000-4000-8000-000000000004');
 update public.profiles set role='perfumer' where id='c1000000-0000-4000-8000-000000000005';
 insert into public.orders(id,order_number,user_id,request_id,request_payload,address_snapshot,subtotal,discount,shipping,grand_total)
-select md5('projection-order-'||n)::uuid,'PROJECTION-'||lpad(n::text,3,'0'), 'c1000000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"recipient_name":"PRIVATE CUSTOMER"}',500000,0,0,500000
+select md5('projection-order-'||n)::uuid,
+ case when n=25 then 'PROJECTION-025-'||repeat('x',201) else 'PROJECTION-'||lpad(n::text,3,'0') end,
+ 'c1000000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"recipient_name":"PRIVATE CUSTOMER"}',500000,0,0,500000
 from generate_series(1,28) n;
 insert into public.order_items(id,order_id,position,product_snapshot,creations_snapshot,quantity,normal_unit_price,unit_price,line_total)
 select md5('projection-item-'||n)::uuid,md5('projection-order-'||n)::uuid,1,
@@ -40,12 +42,13 @@ do $$ declare first_page jsonb; second_page jsonb; multi jsonb; running jsonb; j
  first_page:=public.list_vendor_production_orders('queued');
  if jsonb_array_length(first_page->'rows')<>25 or first_page->>'has_more'<>'true' then raise exception 'Order pagination first page invalid'; end if;
  multi:=first_page->'rows'->24;
- if multi->>'order_number'<>'PROJECTION-025' or jsonb_array_length(multi->'jobs')<>3 then raise exception 'Boundary order lost jobs'; end if;
+ if multi->>'order_number'<>'PROJECTION-025-'||repeat('x',201) or jsonb_array_length(multi->'jobs')<>3 then raise exception 'Boundary order lost jobs'; end if;
  if not exists(select 1 from jsonb_array_elements(multi->'jobs') j where j->'product_snapshot'->>'volume_ml'='30') then raise exception '30 ml item missing'; end if;
  if not exists(select 1 from jsonb_array_elements(multi->'jobs') j where j->'formulas_snapshot'->0->>'top'='One' and j->'formulas_snapshot'->1->>'top'='Two' and j->'formulas_snapshot'->2->>'top'='Three') then raise exception 'Play Set formulas not independent'; end if;
  if first_page::text like '%PRIVATE CUSTOMER%' or first_page::text like '%500000%' or first_page::text like '%PROJECTION-028%' then raise exception 'Projection exposed private or other vendor data'; end if;
  second_page:=public.list_vendor_production_orders('queued',(first_page->'next_cursor'->>'ordered_at')::timestamptz,first_page->'next_cursor'->>'order_number');
  if jsonb_array_length(second_page->'rows')<>2 or second_page->>'has_more'<>'false' then raise exception 'Order pagination second page invalid'; end if;
+ if jsonb_array_length(public.list_vendor_production_orders('queued', '1900-01-01T00:00:00Z'::timestamptz, '')->'rows')<>25 then raise exception 'Empty order-number cursor rejected'; end if;
  begin perform public.list_vendor_production_orders('queued',now(),null); raise exception 'Invalid cursor accepted'; exception when invalid_parameter_value then null; end;
  select id into job_id from public.production_jobs where order_item_id=md5('projection-item-25')::uuid;
  perform public.advance_production_job(job_id,'start');

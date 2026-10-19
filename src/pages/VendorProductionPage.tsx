@@ -4,6 +4,7 @@ import { ProductionAction } from '../components/WorkspacePresentation'
 import { advanceProductionJob, listVendorProductionOrders, type ProductionJob, type ProductionStatus, type VendorOrderCursor, type VendorProductionOrder } from '../lib/production'
 import { errorMessage } from '../lib/supabase'
 import { matchesProductionAction } from '../lib/operationReadiness'
+import { vendorProjectionError } from '../lib/vendorProjection'
 
 const labels: Record<ProductionStatus, string> = { queued: 'Queued', in_production: 'In Production', completed: 'Completed' }
 
@@ -15,6 +16,7 @@ export function VendorProductionPage({ userId, status, onStarted, onCompleted }:
     <OperationsPageHeader title="Production Queue">Pesanan yang ditugaskan untuk workspace Anda.</OperationsPageHeader>
     <VendorOrderList key={`${status}:${page}:${cursor?.ordered_at ?? ''}:${cursor?.order_number ?? ''}`} userId={userId} status={status} cursor={cursor} page={page}
       onPrevious={() => setPage(current => current - 1)}
+      onReset={() => { setCursors([null]); setPage(0) }}
       onNext={next => { setCursors(current => [...current.slice(0, page + 1), next]); setPage(current => current + 1) }}
       onChanged={(action, orderNumber) => {
         setCursors([null]); setPage(0)
@@ -23,7 +25,7 @@ export function VendorProductionPage({ userId, status, onStarted, onCompleted }:
   </section>
 }
 
-function VendorOrderList({ userId, status, cursor, page, onPrevious, onNext, onChanged }: { userId: string; status: ProductionStatus; cursor: VendorOrderCursor | null; page: number; onPrevious: () => void; onNext: (cursor: VendorOrderCursor) => void; onChanged: (action: 'start' | 'complete', orderNumber: string) => void }) {
+function VendorOrderList({ userId, status, cursor, page, onPrevious, onNext, onReset, onChanged }: { userId: string; status: ProductionStatus; cursor: VendorOrderCursor | null; page: number; onPrevious: () => void; onNext: (cursor: VendorOrderCursor) => void; onReset: () => void; onChanged: (action: 'start' | 'complete', orderNumber: string) => void }) {
   const [orders, setOrders] = useState<VendorProductionOrder[]>([])
   const [next, setNext] = useState<VendorOrderCursor | null>(null)
   const [loading, setLoading] = useState(true)
@@ -37,7 +39,7 @@ function VendorOrderList({ userId, status, cursor, page, onPrevious, onNext, onC
       try {
         const result = await listVendorProductionOrders(status, cursor)
         if (active) { setOrders(result.rows); setNext(result.has_more ? result.next_cursor : null); setError('') }
-      } catch (cause) { if (active) { setOrders([]); setNext(null); setError(errorMessage(cause)) } }
+      } catch (cause) { if (active) { setOrders([]); setNext(null); setError(vendorProjectionError(cause)) } }
       finally { fetching = false; if (active) setLoading(false) }
     }
     void refresh()
@@ -47,7 +49,7 @@ function VendorOrderList({ userId, status, cursor, page, onPrevious, onNext, onC
     return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', onFocus) }
   }, [status, cursor, revision])
   return <>
-    <div className="production-toolbar"><p role="status">{loading ? 'Loading orders…' : `${orders.length} orders on this page`}</p><button type="button" onClick={() => setRevision(n => n + 1)}>Refresh</button></div>
+    <div className="production-toolbar"><p role="status">{loading ? 'Loading orders…' : error ? 'Antrean tidak tersedia.' : `${orders.length} orders on this page`}</p><button type="button" disabled={loading} onClick={() => { setLoading(true); setError(''); if (page === 0) setRevision(n => n + 1); else onReset() }}>{error ? 'Coba lagi' : 'Refresh from first page'}</button></div>
     {error ? <p role="alert">{error}</p> : null}
     {!loading && !error && !orders.length ? <div className="screen-empty"><h2>No orders on this page</h2><p>Assigned jobs appear when they reach this stage.</p></div> : null}
     <div className="production-list">{orders.map(order => <OperationsOrderCard key={order.order_number} className="production-card">

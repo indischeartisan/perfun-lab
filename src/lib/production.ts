@@ -1,4 +1,5 @@
 import { requireSupabase } from './supabase'
+import { parseVendorOrderPage } from './vendorProjection'
 
 export type ProductionStatus = 'queued' | 'in_production' | 'completed'
 export interface ProductionJob {
@@ -29,5 +30,5 @@ export async function listVendorProductionOrders(status: ProductionStatus, curso
     p_status: status, p_after_ordered_at: cursor?.ordered_at ?? null, p_after_order_number: cursor?.order_number ?? null,
   })
   if (error) throw error
-  return data as { rows: VendorProductionOrder[]; has_more: boolean; next_cursor: VendorOrderCursor | null }
+  return parseVendorOrderPage(data)
 }

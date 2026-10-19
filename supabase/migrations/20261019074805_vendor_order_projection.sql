@@ -21,8 +21,9 @@ begin
  if p_status is null or p_status not in ('queued','in_production','completed') then
   raise exception 'Invalid production stage' using errcode='22023';
  end if;
- if (p_after_ordered_at is null) <> (p_after_order_number is null)
-    or (p_after_order_number is not null and (length(p_after_order_number)=0 or length(p_after_order_number)>200)) then
+ -- Match the unconstrained text domain of orders.order_number; a cursor returned
+ -- by this function must always be accepted on the next request.
+ if (p_after_ordered_at is null) <> (p_after_order_number is null) then
   raise exception 'Invalid order cursor' using errcode='22023';
  end if;
  with eligible as materialized (

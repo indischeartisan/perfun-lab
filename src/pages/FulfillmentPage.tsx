@@ -6,6 +6,7 @@ import { ShipmentStatus as ShipmentDetails } from '../components/ShipmentStatus'
 import { formatOrderCopy, formatShippingAddress, labelPrintHtml, packingSlipPrintHtml } from '../lib/fulfillmentDocuments'
 import { WorkspaceCardHeader } from '../components/WorkspacePresentation'
 import { parseActualShippingCost, validateDispatchDetails } from '../lib/shippingValidation'
+import { confirmedPackingChecklist } from '../lib/packingConfirmation'
 
 const tabs: ShipmentStatus[] = ['ready_to_ship', 'shipped', 'delivered', 'pending']
 const packingItems: Array<[keyof PackingChecklist, string]> = [
@@ -86,7 +87,7 @@ function FulfillmentList({ role, status, page, onPage, onShipped }: { role: 'ven
 
 function ShipmentCard({ shipment, role, onChanged, onShipped }: { shipment: Shipment; role: 'vendor' | 'admin'; onChanged: (message: string) => void; onShipped?: () => void }) {
   const [details, setDetails] = useState<ShippingDetails>({ courier: shipment.courier, service: shipment.service, tracking_number: shipment.tracking_number })
-  const [checklist, setChecklist] = useState(() => checklistFor(shipment))
+  const checklist = checklistFor(shipment)
   const [actualCost, setActualCost] = useState(shipment.actual_shipping_cost === null ? '' : String(shipment.actual_shipping_cost))
   const [payer, setPayer] = useState<ShippingPayer | ''>(shipment.shipping_payer ?? '')
   const [overrideReason, setOverrideReason] = useState('')
@@ -101,7 +102,6 @@ function ShipmentCard({ shipment, role, onChanged, onShipped }: { shipment: Ship
   const canEdit = role === 'vendor'
   const packed = shipment.packing_status === 'packed'
   const ready = shipment.status === 'ready_to_ship' && shipment.fulfillment_allowed
-  const allChecked = packingItems.every(([key]) => checklist[key])
   useEffect(() => {
     let active = true
     void listShipmentFormulaJobs(shipment.order_number)
@@ -119,8 +119,11 @@ function ShipmentCard({ shipment, role, onChanged, onShipped }: { shipment: Ship
   function fulfill(type: 'save' | 'ship' | 'deliver') {
     void run(() => fulfillShipment(shipment.id, type, details), result => { if (type === 'ship' && result.status === 'shipped') onShipped?.(); return `${shipment.order_number}: ${type === 'save' ? 'shipping details saved' : shipmentLabels[result.status]}.` })
   }
-  function savePacking(complete: boolean) {
-    void run(() => saveShipmentPacking(shipment.id, checklist, complete), result => `${shipment.order_number}: ${result.packing_status === 'packed' ? 'packing completed' : 'packing checklist saved'}.`)
+  function confirmPacking() {
+    const confirmed = window.confirm(`Confirm that you personally checked all packing requirements for ${shipment.order_number}:\n\n${packingItems.map(([, label]) => `• ${label}`).join('\n')}\n\nOnly confirm after every check is complete.`)
+    const completedChecklist = confirmedPackingChecklist(confirmed)
+    if (!completedChecklist) return
+    void run(() => saveShipmentPacking(shipment.id, completedChecklist, true), () => `${shipment.order_number}: packing completed.`)
   }
   function saveCost() {
     const cost = parseActualShippingCost(actualCost)
@@ -165,7 +168,7 @@ function ShipmentCard({ shipment, role, onChanged, onShipped }: { shipment: Ship
     <section className="packing-card"><h2>Customer shipping selection</h2>{shipment.customer_shipping ? <><p><strong>{shipment.customer_shipping.courier} / {shipment.customer_shipping.service}</strong></p><p>Customer shipping paid: {formatPrice(shipment.customer_shipping.amount)}. This is separate from the vendor actual shipping cost.</p></> : <p>Legacy order: no customer shipping quote snapshot.</p>}{shipment.shipping_override_history?.length ? <div className="admin-help"><strong>Admin override history</strong>{shipment.shipping_override_history.map(entry => <p key={`${entry.overridden_at}:${entry.new_courier}`}>{entry.original_courier} {entry.original_service} to {entry.new_courier} {entry.new_service}: {entry.reason} ({new Date(entry.overridden_at).toLocaleString()})</p>)}</div> : null}</section>
     <ShipmentDetails shipment={shipment}/>
     {shipment.packing_status === 'legacy_unknown' ? <p className="admin-help">Packing record predates this workflow; historical dispatch remains unchanged.</p> : null}
-    {ready && shipment.packing_status !== 'legacy_unknown' ? <section className="packing-card"><h2>Packing</h2><p>{packed ? `Packed${shipment.packed_at ? ` on ${new Date(shipment.packed_at).toLocaleString()}` : ''}.` : 'Complete every item before marking packing complete.'}</p><fieldset className="packing-checklist" disabled={!canEdit || packed || busy}>{packingItems.map(([key, label]) => <label key={key}><input type="checkbox" checked={checklist[key]} onChange={event => setChecklist(current => ({ ...current, [key]: event.target.checked }))}/>{label}</label>)}</fieldset>{canEdit && !packed ? <div className="shipping-actions"><button type="button" disabled={busy} onClick={() => savePacking(false)}>Save checklist</button><button type="button" className="orders-build" disabled={busy || !allChecked} onClick={() => savePacking(true)}>Packing complete</button></div> : null}</section> : null}
+    {ready && shipment.packing_status !== 'legacy_unknown' ? <section className="packing-card"><h2>Packing</h2><p>{packed ? `Packed${shipment.packed_at ? ` on ${new Date(shipment.packed_at).toLocaleString()}` : ''}.` : 'Inspect all requirements before confirming packing.'}</p><ul>{packingItems.map(([key, label]) => <li key={key}>{label}{checklist[key] ? ' ✓' : ''}</li>)}</ul>{canEdit && !packed ? <div className="shipping-actions"><button type="button" className="orders-build" disabled={busy} onClick={confirmPacking}>Confirm packing complete</button></div> : null}</section> : null}
     {ready && packed ? <section className="packing-card"><h2>Actual shipping cost</h2><p>Internal operational record. It is separate from shipping collected at checkout.</p><div className="shipping-cost-grid"><label>Actual cost (Rp)<input inputMode="numeric" value={actualCost} disabled={!canEdit || busy} onChange={event => setActualCost(event.target.value.replace(/[^0-9]/g, ''))}/></label><label>Paid by<select value={payer} disabled={!canEdit || busy} onChange={event => setPayer(event.target.value as ShippingPayer | '')}><option value="">Select payer</option>{(Object.keys(payerLabels) as ShippingPayer[]).map(value => <option key={value} value={value}>{payerLabels[value]}</option>)}</select></label></div>{canEdit ? <button type="button" disabled={busy} onClick={saveCost}>Finalize actual shipping</button> : null}{shipment.actual_shipping_cost !== null && shipment.shipping_payer ? <p className="admin-help">Finalized: Rp{shipment.actual_shipping_cost.toLocaleString('id-ID')} · {payerLabels[shipment.shipping_payer]}</p> : null}</section> : null}
     {error ? <p role="alert">{error}</p> : null}
     {ready && packed && canEdit ? <form className="shipping-form" onSubmit={submit}>{shipment.customer_shipping ? <p className="admin-help">Courier and service are locked to the customer selection or Admin override.</p> : null}{(['courier', 'service', 'tracking_number'] as const).map(field => <label key={field} htmlFor={`${shipment.id}-${field}`}>{field === 'tracking_number' ? 'Tracking number' : field === 'courier' ? 'Courier' : 'Service'}<input id={`${shipment.id}-${field}`} name={field} value={details[field]} maxLength={field === 'tracking_number' ? 150 : 100} required disabled={busy} readOnly={Boolean(shipment.customer_shipping) && field !== 'tracking_number'} autoComplete="off" onChange={event => setDetails(current => ({ ...current, [field]: event.target.value }))}/></label>)}<div className="shipping-actions"><button type="submit" value="save" formNoValidate disabled={busy}>Save details</button><button type="submit" value="ship" className="orders-build" disabled={busy || shipment.actual_shipping_cost === null || !shipment.shipping_payer}>{busy ? 'Saving…' : 'Mark as Shipped'}</button></div></form> : null}

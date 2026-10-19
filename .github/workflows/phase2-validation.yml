@@ -96,6 +96,7 @@ jobs:
             supabase/tests/shipping_checkout.sql
             supabase/tests/admin.sql
             supabase/tests/vendor_assignment.sql
+            supabase/tests/vendor_order_projection.sql
           )
           failed_tests=()
 
@@ -130,3 +131,22 @@ jobs:
             printf ' - %s\n' "${failed_tests[@]}"
             exit 1
           fi
+
+          echo '::group::Vendor two-session concurrency regression'
+          docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < supabase/tests/vendor_concurrency_setup.sql
+          run_job() {
+            docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -v job_item="$1" -v action="$2" -U postgres -d postgres < supabase/tests/vendor_concurrency_action.sql
+          }
+          item_one=d3000000-0000-4000-8000-000000000001
+          item_two=d3000000-0000-4000-8000-000000000002
+          run_job "$item_one" start & first=$!
+          run_job "$item_one" start & second=$!
+          wait "$first"
+          wait "$second"
+          run_job "$item_two" start
+          run_job "$item_one" complete & first=$!
+          run_job "$item_two" complete & second=$!
+          wait "$first"
+          wait "$second"
+          docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < supabase/tests/vendor_concurrency_check.sql
+          echo '::endgroup::'

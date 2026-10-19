@@ -242,6 +242,9 @@
 .workspace-app .operations-order-card { min-height:0; padding:16px; border:1px solid #e7e2d8; border-radius:14px; background:#fffdf9; }
 .workspace-app .operations-order-card .workspace-card-header { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 12px; align-items:start; }
 .workspace-app .operations-order-card .workspace-card-header strong { min-width:0; overflow-wrap:anywhere; }
+.workspace-app .vendor-order-job { min-width:0; margin-top:16px; padding-top:12px; border-top:1px solid #e7e2d8; }
+.workspace-app .vendor-order-job h2 { margin:0 0 8px; font-size:1rem; }
+.workspace-app .vendor-order-job > p { margin:8px 0; }
 .workspace-app .operations-order-card .workspace-card-header time { grid-column:1; color:#686d64; font-size:12px; }
 .workspace-app .operations-order-card .workspace-card-header .order-status { grid-column:2; grid-row:1 / span 2; max-width:145px; padding:5px 9px; border-radius:99px; background:#edf5d4; color:#344914; text-align:center; }
 .workspace-app .admin-order-list,.workspace-app .production-screen .production-list { grid-template-columns:minmax(0,1fr); }

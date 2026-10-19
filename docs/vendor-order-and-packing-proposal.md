@@ -1,6 +1,8 @@
-# Vendor order projection and packing: proposal only
+# Vendor order projection and packing: implementation and review
 
-This is a design and test plan, not a migration, an approval to change production, or an implementation of the endpoints below. Review against the deployed schema and security policies before writing a migration. Existing production jobs, assignment, shipment, packing and payout RPCs remain authoritative.
+The projection and single packing affirmation described here are now implemented on the draft branch. This document is not approval to deploy. Migration `20261019074805_vendor_order_projection.sql` has not been applied to production. Existing production jobs, assignment, shipment, packing and payout RPCs remain authoritative. The projection uses `SECURITY INVOKER` and existing RLS and returns vendor-owned jobs only, without customer or financial data. Its cursor is `(ordered_at, order_number)`; each response is one database statement snapshot, while separate pages can observe concurrent changes. The stage is matched by any job and the returned order includes every assigned job with its own status.
+
+The packing UI shows the five existing obligations, then asks for an explicit confirmation. Only an affirmative answer sends all five checks via the existing `save_shipment_packing` RPC. This preserves its checks and actor/time audit but does not add evidence of each separate physical inspection. Legacy behavior, shipping guards and payout logic remain unchanged. Review this attestation before deployment.
 
 ## Findings
 
@@ -10,19 +12,19 @@ This is a design and test plan, not a migration, an approval to change productio
 * Shipment packing requires five explicit checks, records `packed_by` and `packed_at`, and dispatch additionally requires finalized actual cost and payer. Payout eligibility also requires a shipped/delivered, packed shipment and audited actual cost/payer. Legacy `legacy_unknown` history must not be rewritten.
 * `address_snapshot.province` is a string rather than a validated province code. Existing customer-selected courier/service are locked except through the audited admin override; a legacy shipment may have no customer quote. There is no verified service catalogue in this repository. A Java/non-Java policy must not silently replace a purchased service, infer a region from free-text address, or reject unknown legacy orders.
 
-## Proposed order-level read contract, for review
+## Order-level read contract
 
 Create a narrowly authorized vendor order read endpoint with a bounded page size and a stable `(ordered_at, order_id)` cursor. In one database statement/snapshot, select distinct eligible orders based on whether **any assigned job** has the requested queued or in-production stage, page orders rather than jobs, then return **all** assigned jobs for each selected order across every status. Return each job's ID, status, ownership, production eligibility, item quantity, size and full formula array; do not expose prices, customer history or unassigned jobs. An order with jobs in two stages can appear in both filters, but its card must display the actual status and action for each job. Return `has_more` and a cursor, not a job count mislabeled as an order count. A new database snapshot between pages can reflect concurrent transitions; refresh from the first page after actions and define UI behavior for orders moving between stages.
 
 Prefer `SECURITY INVOKER` and existing RLS/column grants if they can express this without widening access. If a privileged helper is necessary, explicitly verify `auth.uid()`, current vendor role, immutable assignment **and each returned job**, restrict execute grants and `search_path`, and independently test direct calls by other vendors, customers and anon. Audit customer-name/address disclosure separately; do not join unrestricted order/customer data. No client service role or user-controlled role claim. The existing `advance_production_job` remains the only action, once per selected eligible job, retaining its order/job locks and idempotent retries. Partial failures must leave the remaining jobs visible, with no optimistic overall completion. Only the existing server readiness result moves an order to Kirim.
 
-## Proposed packing confirmation, for review
+## Packing confirmation, for review
 
 Retain the actual five-check backend contract, `packed_by`/`packed_at`, shipment guard, payout rules and legacy handling. A possible UX is a single explicit, informed confirmation that displays all five obligations and submits the existing complete checklist only after the vendor affirms personally inspecting every obligation. Before implementation obtain product/security approval on whether that attestation provides sufficient evidence compared with individually recorded checks. Do not automatically mark them true from navigation, production completion or shipping. If the audit requirements require additional attestation/version metadata, propose a separate migration/RPC with compatible historical records and atomic, authorized writes; do not alter live schema as part of this proposal.
 
 ## Regression contract before approval and implementation
 
-Run on an isolated disposable local database with two vendor identities, admin, customer and anon, never on production. Existing executable tests `supabase/tests/production.sql`, `vendor_assignment.sql`, `packing.sql`, `shipping.sql` and `payouts.sql` cover the current RPCs; they do **not** test the proposed endpoint. A future endpoint must add executable integration tests for:
+Run on an isolated disposable local database with two vendor identities, admin, customer and anon, never on production. Existing executable tests `supabase/tests/production.sql`, `vendor_assignment.sql`, `packing.sql`, `shipping.sql` and `payouts.sql` cover the current RPCs. `vendor_order_projection.sql` tests projection boundaries, mixed statuses, formulas and isolation. The CI workflow also runs two actual database sessions against the existing action RPC. Additional desired tests include:
 
 1. More than one page of orders, including an order whose jobs straddle the old 25-job boundary; each returned order contains every assigned job exactly once. Verify cursor ordering, bounds and no out-of-scope rows.
 2. One Play Set with three different Top/Middle/Base snapshots and a mixed 10 ml + 30 ml order, quantities, individual job states, and the same order appearing in both matching stage filters without dropping other jobs.
@@ -32,4 +34,4 @@ Run on an isolated disposable local database with two vendor identities, admin, 
 6. Packing: positive and negative attestation, wrong vendor, missing checklist evidence, partial input, duplicate submission, concurrent shipping/packing, refund/hold, legacy records, audited actor/time, actual cost/payer, dispatch and unchanged payout eligibility. Test rollbacks preserve prior evidence.
 7. Customer-selected and admin-overridden services, legacy shipments and unknown/malformed province snapshots: no silent courier/service mutation, no invented service availability, and no checkout or shipping-provider changes.
 
-This branch adds executable tests for existing multi-item job transitions, independent Play Set snapshots, safe formula-page collection and shipping input validation. They are not a substitute for the future endpoint's database and concurrency tests.
+The tests do not replace authenticated UI review, real A6 printer checks, or a production migration review.

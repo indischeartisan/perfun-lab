@@ -21,3 +21,13 @@ export async function advanceProductionJob(id: string, action: 'start' | 'comple
   if (error) throw error
   return data as ProductionJob
 }
+
+export interface VendorOrderCursor { ordered_at: string; order_number: string }
+export interface VendorProductionOrder { order_number: string; ordered_at: string; jobs: ProductionJob[] }
+export async function listVendorProductionOrders(status: ProductionStatus, cursor: VendorOrderCursor | null) {
+  const { data, error } = await requireSupabase().rpc('list_vendor_production_orders', {
+    p_status: status, p_after_ordered_at: cursor?.ordered_at ?? null, p_after_order_number: cursor?.order_number ?? null,
+  })
+  if (error) throw error
+  return data as { rows: VendorProductionOrder[]; has_more: boolean; next_cursor: VendorOrderCursor | null }
+}

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { OperationsPageHeader, OperationsStatusTabs } from '../components/OperationsPresentation'
 import { FulfillmentPage } from './FulfillmentPage'
-import { ProductionPage } from './ProductionPage'
+import { VendorProductionPage } from './VendorProductionPage'
 import { getShipmentReadiness, type ShipmentStatus } from '../lib/shipments'
 import { isReadyForShipping } from '../lib/operationReadiness'
 
@@ -30,6 +30,6 @@ export function VendorWorkPage({ userId, initialStage = 'order' }: { userId: str
     <OperationsStatusTabs label="Tahap pekerjaan" items={stages.map(item => ({ ...item, active: item.id === stage, onClick: () => setStage(item.id) }))}/>
     {notice ? <p role="status">{notice}</p> : null}
     {stage === 'done' ? <OperationsStatusTabs label="Completed history" items={[{ id: 'shipments', label: 'Shipments', active: doneView === 'shipments', onClick: () => setDoneView('shipments') }, { id: 'jobs', label: 'Production jobs', active: doneView === 'jobs', onClick: () => setDoneView('jobs') }]}/> : null}
-    {stage === 'order' || stage === 'production' ? <ProductionPage key={stage} userId={userId} role="vendor" initialStatus={stage === 'order' ? 'queued' : 'in_production'} hideStatusTabs onStarted={() => setStage('production')} onCompleted={orderNumber => { void completed(orderNumber) }}/> : stage === 'done' && doneView === 'jobs' ? <ProductionPage key="completed" userId={userId} role="vendor" initialStatus="completed" hideStatusTabs/> : <FulfillmentPage key={stage} role="vendor" initialStatus={stage === 'shipping' ? 'ready_to_ship' : 'shipped'} availableStatuses={stage === 'shipping' ? shippingStatuses : doneStatuses} onShipped={() => { setNotice('Pengiriman tercatat oleh server.'); setStage('done') }}/>}
+    {stage === 'order' || stage === 'production' ? <VendorProductionPage key={stage} userId={userId} status={stage === 'order' ? 'queued' : 'in_production'} onStarted={() => setStage('production')} onCompleted={orderNumber => { void completed(orderNumber) }}/> : stage === 'done' && doneView === 'jobs' ? <VendorProductionPage key="completed" userId={userId} status="completed"/> : <FulfillmentPage key={stage} role="vendor" initialStatus={stage === 'shipping' ? 'ready_to_ship' : 'shipped'} availableStatuses={stage === 'shipping' ? shippingStatuses : doneStatuses} onShipped={() => { setNotice('Pengiriman tercatat oleh server.'); setStage('done') }}/>}
   </section>
 }

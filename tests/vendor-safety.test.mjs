@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { collectPagedSnapshots } from '../src/lib/pagedSnapshots.ts'
 import { parseActualShippingCost, validateDispatchDetails } from '../src/lib/shippingValidation.ts'
+import { confirmedPackingChecklist } from '../src/lib/packingConfirmation.ts'
 
 test('formula snapshots span pages, even if the server caps each page', async () => {
   const rows = Array.from({ length: 27 }, (_, id) => ({ id: String(id) }))
@@ -29,4 +30,9 @@ test('shipping validation rejects whitespace, control characters and missing cos
   assert.equal(parseActualShippingCost('-1'), null)
   assert.equal(parseActualShippingCost('1.5'), null)
   assert.equal(parseActualShippingCost('9007199254740992'), null)
+})
+
+test('packing checklist is created only after an explicit affirmative confirmation', () => {
+  assert.equal(confirmedPackingChecklist(false), null)
+  assert.deepEqual(confirmedPackingChecklist(true), { bottles_checked: true, formula_stickers_checked: true, bottles_sealed: true, packaging_ready: true, recipient_label_checked: true })
 })

@@ -14,7 +14,7 @@ type AdminView = 'dashboard' | 'orders' | 'operations' | 'more' | 'customers' | 
 type OperationTab = 'production' | 'fulfillment' | 'assignment'
 type VendorTab = 'order' | 'production' | 'ship' | 'done' | 'payments'
 
-function assertSimulatorEnvironment() { const host = window.location.hostname; const preview = host.endsWith('.perfun-lab.pages.dev') && host !== 'perfun-lab.pages.dev'; if (import.meta.env.VITE_ENABLE_OPERATIONS_SIMULATOR !== 'true' || !(host === 'localhost' || host === '127.0.0.1' || preview)) throw new Error('The Operations Simulator is available only on an allowed preview host.') }
+function assertSimulatorEnvironment() { const host = window.location.hostname; const preview = host.endsWith('.perfun-lab.pages.dev') && host !== 'perfun-lab.pages.dev'; const privateHost = import.meta.env.VITE_ADMIN_SIMULATOR_HOST; if (import.meta.env.VITE_ENABLE_OPERATIONS_SIMULATOR !== 'true' || !(host === 'localhost' || host === '127.0.0.1' || preview || (privateHost && host === privateHost))) throw new Error('The Operations Simulator is available only on an allowed preview host.') }
 
 function App() {
   const role: Role = document.documentElement.dataset.simulatorRole === 'vendor' ? 'vendor' : 'admin'

@@ -6,12 +6,9 @@ import { reportPublicBuildEnvironment } from './scripts/public-build-env.mjs'
 
 export default defineConfig(({ mode }) => {
   const environment = loadEnv(mode, '.', '')
-  const runtimeEnvironment = globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } }
-  const simulatorEnabled = (runtimeEnvironment.process?.env?.VITE_ENABLE_OPERATIONS_SIMULATOR ?? environment.VITE_ENABLE_OPERATIONS_SIMULATOR) === 'true'
   reportPublicBuildEnvironment(environment)
   if (mode === 'staging') assertStagingBuildEnvironment()
   return {
-    build: simulatorEnabled ? { rollupOptions: { input: { main: 'index.html', simulator: 'simulator.html', simulatorAdmin: 'simulator-admin.html', simulatorVendor: 'simulator-vendor.html' } } } : undefined,
     plugins: [
       react(),
       VitePWA({

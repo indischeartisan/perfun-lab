@@ -5,7 +5,8 @@ import { assertStagingBuildEnvironment } from './scripts/staging-env.mjs'
 import { reportPublicBuildEnvironment } from './scripts/public-build-env.mjs'
 
 export default defineConfig(({ mode }) => {
-  reportPublicBuildEnvironment(loadEnv(mode, '.', ''))
+  const environment = loadEnv(mode, '.', '')
+  reportPublicBuildEnvironment(environment)
   if (mode === 'staging') assertStagingBuildEnvironment()
   return {
     plugins: [

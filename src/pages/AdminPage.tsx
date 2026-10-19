@@ -7,24 +7,18 @@ import { ProductionPage } from './ProductionPage'
 import { FulfillmentPage } from './FulfillmentPage'
 import { AdminVendorWorkspacePanel } from '../components/AdminVendorWorkspacePanel'
 import { AdminVendorPaymentsPanel } from '../components/AdminVendorPaymentsPanel'
-import { AdminWorkspaceNavigation } from '../components/WorkspaceNavigation'
-import { BottleSizeDisplay, WorkspaceCardHeader } from '../components/WorkspacePresentation'
+import { AdminMoreMenu, AdminWorkspaceNavigation, type AdminWorkspaceTab } from '../components/WorkspaceNavigation'
+import { BottleSizeDisplay, WorkspaceCardHeader, WorkspaceMetricGrid, WorkspacePageHeader, WorkspaceSection } from '../components/WorkspacePresentation'
 
-const tabs = ['Overview', 'Orders', 'Vendor Workspace', 'Vendor Payments', 'Customers', 'Notes', 'Products & Pricing', 'Production', 'Fulfillment', 'Revenue'] as const
-type Tab = typeof tabs[number]
 const label = (value: string) => value.replaceAll('_', ' ')
 export function AdminPage({ userId }: { userId: string }) {
-  const [tab, setTab] = useState<Tab>('Overview')
-  const mobileTab = tab === 'Overview' || tab === 'Orders' || tab === 'Production' ? tab : 'More'
-  const selectMobileTab = (next: 'Overview' | 'Orders' | 'Production' | 'More') => {
-    if (next === 'More') { setTab(current => current === 'Overview' || current === 'Orders' || current === 'Production' ? 'Vendor Workspace' : current); return }
-    setTab(next)
-  }
+  const [tab, setTab] = useState<AdminWorkspaceTab>('Overview')
   return <section className="app-screen admin-dashboard">
-    <header className="screen-title workspace-title"><span>PERFUN LAB OPERATIONS</span><h1>Good morning, Lab.</h1><p>A calm view of orders, production, and the work that needs you.</p></header>
-    <AdminWorkspaceNavigation active={mobileTab} onNavigate={selectMobileTab}/>
-    <details className="workspace-more" open={mobileTab === 'More'}><summary>More workspace tools</summary><div className="workspace-more-menu">{tabs.filter(value => !['Overview', 'Orders', 'Production'].includes(value)).map(value => <button key={value} aria-pressed={tab === value} onClick={() => setTab(value)}>{value}</button>)}</div></details>
+    {tab === 'Overview' ? <WorkspacePageHeader eyebrow="PERFUN LAB OPERATIONS" title="Good morning, Lab.">A calm view of orders, production, and the work that needs you.</WorkspacePageHeader> : null}
+    <AdminWorkspaceNavigation active={tab} onNavigate={setTab}/>
     <div className="admin-content" key={tab}>
+      {tab === 'More' ? <AdminMoreMenu active={tab} onNavigate={setTab}/> : null}
+      {['Vendor Workspace', 'Vendor Payments', 'Customers', 'Notes', 'Products & Pricing', 'Revenue'].includes(tab) ? <WorkspacePageHeader eyebrow="ADMIN WORKSPACE" title={tab}>{tab === 'Vendor Workspace' ? 'Assign the right production partner to paid orders.' : tab === 'Vendor Payments' ? 'Review vendor billing and payout records.' : 'Manage your lab workspace.'}</WorkspacePageHeader> : null}
       {tab === 'Overview' || tab === 'Revenue' ? <Overview revenueOnly={tab === 'Revenue'}/> : null}
       {tab === 'Orders' ? <AdminOrders/> : null}
       {tab === 'Vendor Workspace' ? <AdminVendorWorkspacePanel/> : null}
@@ -43,12 +37,25 @@ function Overview({ revenueOnly }: { revenueOnly: boolean }) {
   const revenue: Array<[keyof AdminOverview, string]> = [['paid_gross_sales', 'Paid gross sales'], ['discounts', 'Discounts'], ['shipping_collected', 'Shipping collected'], ['net_transaction_total', 'Net transaction total']]
   return <><AdminLoad error={error} loading={!data && !error} reload={reload}/>
     {data ? <>
-      {!revenueOnly ? <><section className="overview-section"><span className="admin-kicker">Needs attention</span><h2>Keep the queue moving</h2><div className="admin-metrics attention-metrics">{operations.slice(1, 4).map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</div></section><section className="overview-section"><span className="admin-kicker">Today at the Lab</span><h2>What is happening now</h2><div className="admin-metrics">{operations.slice(0, 1).concat(operations.slice(4)).map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</div></section></> : null}
+      {!revenueOnly ? <><WorkspaceSection eyebrow="Needs attention" title="Keep the queue moving" className="overview-section"><WorkspaceMetricGrid className="attention-metrics">{operations.slice(1, 4).map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</WorkspaceMetricGrid></WorkspaceSection><section className="admin-overview-columns"><WorkspaceSection eyebrow="Today at the Lab" title="What is happening now" className="overview-section"><WorkspaceMetricGrid>{operations.slice(0, 1).concat(operations.slice(4)).map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</WorkspaceMetricGrid></WorkspaceSection><ProductionProgress overview={data}/></section><RecentOrders/></> : null}
       <h2>Revenue</h2><p className="admin-help">All-time orders currently Paid. Gross − discounts + shipping = net transaction total. Refunded orders are excluded; payment fees are not deducted.</p>
-      <div className="admin-metrics">{revenue.map(([key, title]) => <article key={key}><span>{title}</span><strong>{formatPrice(Number(data[key]))}</strong></article>)}</div>
+      <WorkspaceMetricGrid>{revenue.map(([key, title]) => <article key={key}><span>{title}</span><strong>{formatPrice(Number(data[key]))}</strong></article>)}</WorkspaceMetricGrid>
       <p className="admin-help">Today follows Asia/Jakarta. Other counts show current status. Updated {new Date(data.as_of).toLocaleString()}.</p>
     </> : null}
   </>
+}
+
+function ProductionProgress({ overview }: { overview: AdminOverview }) {
+  const total = overview.production_queued + overview.production_in_progress + overview.ready_to_ship
+  const rows: Array<[string, number, string]> = [['Queued', overview.production_queued, 'queued'], ['In production', overview.production_in_progress, 'in-production'], ['Ready to ship', overview.ready_to_ship, 'ready']]
+  return <WorkspaceSection eyebrow="Production progress" title="At the lab" className="production-progress"><div className="production-progress-list">{rows.map(([title, count, tone]) => <div key={tone}><span>{title}</span><b>{count}</b><i className={`production-progress-bar ${tone}`} style={{ width: `${total ? Math.round(count / total * 100) : 0}%` }}/></div>)}</div></WorkspaceSection>
+}
+
+function RecentOrders() {
+  const filter: AdminOrderFilters = { search: '', payment: '', production: '', shipment: '', page: 0 }
+  const load = useCallback(() => getAdminOrders(filter), [])
+  const { data, error, reload } = useAdminData(load, true)
+  return <WorkspaceSection eyebrow="Recent orders" title="Orders to scan" className="recent-orders"><AdminLoad error={error} loading={!data && !error} reload={reload}/>{data?.rows.length ? <div className="recent-order-list">{data.rows.slice(0, 4).map(order => <article key={order.id}><WorkspaceCardHeader orderNumber={order.order_number} time={new Date(order.created_at).toLocaleString()} status={label(order.payment_status)}/><div><strong>{order.customer.name || 'Customer'}</strong><span>{order.products.map(product => `${product.bottle_count} × ${product.volume_ml} ml`).join(', ')}</span></div><b>{formatPrice(order.grand_total)}</b></article>)}</div> : data ? <div className="screen-empty"><h2>No orders yet</h2><p>New customer orders will appear here.</p></div> : null}</WorkspaceSection>
 }
 
 export function AdminLoad({ error, loading, reload }: { error: string; loading: boolean; reload: () => void }) {
@@ -61,23 +68,22 @@ function AdminOrders() {
   const initial: AdminOrderFilters = { search: '', payment: '', production: '', shipment: '', page: 0 }
   const [draft, setDraft] = useState(initial)
   const [filter, setFilter] = useState(initial)
-  return <><form className="admin-filters calm-order-toolbar" onSubmit={event => { event.preventDefault(); setFilter({ ...draft, page: 0 }) }}>
+  return <section className="workspace-list-page admin-orders-page"><WorkspacePageHeader eyebrow="ADMIN WORKSPACE" title="Orders">Search, filter, and scan customer orders.</WorkspacePageHeader><form className="admin-filters calm-order-toolbar" onSubmit={event => { event.preventDefault(); setFilter({ ...draft, page: 0 }) }}>
     <label>Search orders or customer<input maxLength={100} value={draft.search} onChange={event => setDraft({ ...draft, search: event.target.value })}/></label>
-    {([['payment', ['pending', 'paid', 'failed', 'expired', 'refunded']], ['production', ['not_started', 'queued', 'in_production', 'completed']], ['shipment', ['not_created', 'pending', 'ready_to_ship', 'shipped', 'delivered']]] as const).map(([key, options]) => <label key={key}>{label(key)} status<select value={draft[key]} onChange={event => setDraft({ ...draft, [key]: event.target.value })}><option value="">All</option>{options.map(value => <option key={value} value={value}>{label(value)}</option>)}</select></label>)}
+    <details className="calm-order-filters"><summary>Filter status</summary><div>{([['payment', ['pending', 'paid', 'failed', 'expired', 'refunded']], ['production', ['not_started', 'queued', 'in_production', 'completed']], ['shipment', ['not_created', 'pending', 'ready_to_ship', 'shipped', 'delivered']]] as const).map(([key, options]) => <label key={key}>{label(key)} status<select value={draft[key]} onChange={event => setDraft({ ...draft, [key]: event.target.value })}><option value="">All</option>{options.map(value => <option key={value} value={value}>{label(value)}</option>)}</select></label>)}</div></details>
     <button type="submit">Apply filters</button>
-  </form><OrderResults key={JSON.stringify(filter)} filter={filter} onPage={page => setFilter(current => ({ ...current, page }))}/></>
+  </form><OrderResults key={JSON.stringify(filter)} filter={filter} onPage={page => setFilter(current => ({ ...current, page }))}/></section>
 }
 function OrderResults({ filter, onPage }: { filter: AdminOrderFilters; onPage: (page: number) => void }) {
   const load = useCallback(() => getAdminOrders(filter), [filter])
   const { data, error, reload } = useAdminData(load, true)
   return <><AdminLoad error={error} loading={!data && !error} reload={reload}/>
     {data?.rows.length === 0 ? <p>No matching orders.</p> : null}
-    <div className="production-list admin-order-list">{data?.rows.map(order => <article className="customer-order admin-order-card" key={order.id}>
+    <div className="production-list admin-order-list">{data?.rows.map(order => <article className="customer-order admin-order-card calm-order-card" key={order.id}>
       <WorkspaceCardHeader orderNumber={order.order_number} time={new Date(order.created_at).toLocaleString()} status={label(order.payment_status)}/>
-      <p><strong>{order.customer.name || 'Customer'}</strong> · {order.customer.email}</p>
-      <ul className="fulfillment-products">{order.products.map((product, index) => <li key={index}>{product.label} · {product.bottle_count} × {product.volume_ml} ml · Qty {product.quantity}</li>)}</ul>
-      <div className="workspace-item-sizes" aria-label="Bottle sizes">{order.products.map((product, index) => <div key={index}><strong>{product.label}</strong><BottleSizeDisplay volumeMl={product.volume_ml} bottleCount={product.bottle_count}/><span>Order quantity: {product.quantity}</span></div>)}</div>
-      <dl className="admin-order-details"><div><dt>Grand total</dt><dd>{formatPrice(order.grand_total)}</dd></div><div><dt>Payment</dt><dd>{label(order.payment_status)}</dd></div><div><dt>Production</dt><dd>{label(order.production_status)} · {order.completed}/{order.item_count} jobs completed</dd></div><div><dt>Shipment</dt><dd>{label(order.shipment_status)}</dd></div></dl>
+      <section className="calm-order-card-main"><div className="workspace-card-identity"><strong>{order.customer.name || 'Customer'}</strong><span>{order.customer.email}</span></div><b className="calm-order-total">{formatPrice(order.grand_total)}</b></section>
+      <section className="calm-order-items" aria-label="Order items">{order.products.map((product, index) => <div key={index}><strong>{product.label}</strong><BottleSizeDisplay volumeMl={product.volume_ml} bottleCount={product.bottle_count}/><span>Quantity {product.quantity}</span></div>)}</section>
+      <div className="calm-order-meta"><span>Production <b>{label(order.production_status)}</b></span><span>{order.completed}/{order.item_count} jobs complete</span><span>Shipment <b>{label(order.shipment_status)}</b></span></div>
     </article>)}</div>
     {data ? <AdminPagination count={data.count} page={filter.page} onPage={onPage}/> : null}
   </>

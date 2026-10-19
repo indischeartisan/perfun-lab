@@ -58,6 +58,20 @@ jobs:
       - name: Client state regression tests
         run: npm run test:client-state
 
+      - name: Vendor simulator regression and isolated build
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm run test:vendor-simulator
+          npm run build:vendor-simulator
+          test -f dist-vendor-simulator/index.html
+          test -f dist-vendor-simulator/404.html
+          test ! -e dist-vendor-simulator/simulator-admin.html
+          if grep -R -i -E --include='*.js' --include='*.html' --include='*.css' 'simulator-admin|verify payment|create payout draft|supabase|rajaongkir|doku|operations-simulator:v1\.1' dist-vendor-simulator; then
+            echo '::error::Vendor simulator contains forbidden admin or production integration markers.'
+            exit 1
+          fi
+
       - name: Production build
         run: npm run build
 

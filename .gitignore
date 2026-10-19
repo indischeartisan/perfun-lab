@@ -1,5 +1,7 @@
 node_modules
 dist
+dist-vendor-simulator
+dist-admin-simulator
 dev-dist
 .runtime
 .DS_Store

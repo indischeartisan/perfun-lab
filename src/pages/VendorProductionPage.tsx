@@ -3,6 +3,7 @@ import { OperationsBottleSize, OperationsFormulaRow, OperationsOrderCard, Operat
 import { ProductionAction } from '../components/WorkspacePresentation'
 import { advanceProductionJob, listVendorProductionOrders, type ProductionJob, type ProductionStatus, type VendorOrderCursor, type VendorProductionOrder } from '../lib/production'
 import { errorMessage } from '../lib/supabase'
+import { matchesProductionAction } from '../lib/operationReadiness'
 
 const labels: Record<ProductionStatus, string> = { queued: 'Queued', in_production: 'In Production', completed: 'Completed' }
 
@@ -65,7 +66,13 @@ function VendorOrderJob({ job, userId, canWork, onChanged }: { job: ProductionJo
   async function advance(action: 'start' | 'complete') {
     if (lock.current) return
     lock.current = true; setBusy(true); setError('')
-    try { await advanceProductionJob(job.id, action); onChanged(action) }
+    try {
+      const result = await advanceProductionJob(job.id, action)
+      if (!matchesProductionAction(action, result.status)) {
+        throw new Error('The job has already changed on the server. Refresh the order before continuing.')
+      }
+      onChanged(action)
+    }
     catch (cause) { setError(errorMessage(cause)) }
     finally { lock.current = false; setBusy(false) }
   }

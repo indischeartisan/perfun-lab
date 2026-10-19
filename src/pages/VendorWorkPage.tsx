@@ -6,7 +6,7 @@ import { getShipmentReadiness, type ShipmentStatus } from '../lib/shipments'
 import { isReadyForShipping } from '../lib/operationReadiness'
 
 type Stage = 'order' | 'production' | 'shipping' | 'done'
-const shippingStatuses: ShipmentStatus[] = ['ready_to_ship', 'pending']
+const shippingStatuses: ShipmentStatus[] = ['ready_to_ship']
 const doneStatuses: ShipmentStatus[] = ['shipped', 'delivered']
 
 export function VendorWorkPage({ userId, initialStage = 'order' }: { userId: string; initialStage?: Stage }) {

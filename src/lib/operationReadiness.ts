@@ -2,3 +2,7 @@
 export function isReadyForShipping(shipment: { status: string; fulfillment_allowed: boolean } | null): boolean {
   return shipment?.status === 'ready_to_ship' && shipment.fulfillment_allowed === true
 }
+
+export function matchesProductionAction(action: 'start' | 'complete', status: string): boolean {
+  return status === (action === 'start' ? 'in_production' : 'completed')
+}

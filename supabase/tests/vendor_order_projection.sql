@@ -65,6 +65,11 @@ do $$ begin begin perform public.list_vendor_production_orders('queued'); raise 
 select set_config('request.jwt.claim.sub','c1000000-0000-4000-8000-000000000005',true);
 do $$ begin begin perform public.list_vendor_production_orders('queued'); raise exception 'Perfumer access allowed'; exception when insufficient_privilege then null; end; end $$;
 reset role;
+update public.profiles set role='customer' where id='c1000000-0000-4000-8000-000000000003';
+set local role authenticated;
+select set_config('request.jwt.claim.sub','c1000000-0000-4000-8000-000000000003',true);
+do $$ begin begin perform public.list_vendor_production_orders('queued'); raise exception 'Revoked vendor access allowed'; exception when insufficient_privilege then null; end; end $$;
+reset role;
 set local role anon;
 do $$ begin begin perform public.list_vendor_production_orders('queued'); raise exception 'Anon access allowed'; exception when insufficient_privilege then null; end; end $$;
 reset role;

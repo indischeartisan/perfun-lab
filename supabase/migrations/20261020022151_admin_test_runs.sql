@@ -13,7 +13,7 @@ create table private.test_runs (
  bottle_count integer not null check (bottle_count in (1,3)),
  quantity integer not null check (quantity between 1 and 99),
  formulas jsonb not null check (jsonb_typeof(formulas)='array'),
- status text not null default 'order' check (status in ('order','production','packing','shipping','done')),
+ status text not null default 'order' check (status in ('order','production','packing','shipping','done','cancelled')),
  shipping jsonb,
  events jsonb not null default '[]'::jsonb check (jsonb_typeof(events)='array'),
  created_at timestamptz not null default clock_timestamp(),
@@ -112,11 +112,13 @@ language plpgsql security definer set search_path='' as $$
 declare actor uuid:=auth.uid(); actor_role public.app_role; run private.test_runs; target text; event jsonb; field text;
 begin
  select role into actor_role from public.profiles where id=actor;
- if actor is null or actor_role is distinct from 'vendor' then raise exception 'Vendor access required' using errcode='42501'; end if;
+ if actor is null or actor_role not in ('admin','vendor') then raise exception 'Workspace access required' using errcode='42501'; end if;
  perform private.require_test_mode();
- if p_request_id is null or p_run_id is null or p_action is null or p_action not in ('start','complete','pack','ship') or jsonb_typeof(p_payload) is distinct from 'object'
+ if p_request_id is null or p_run_id is null or p_action is null or p_action not in ('start','complete','pack','ship','cancel') or jsonb_typeof(p_payload) is distinct from 'object'
   then raise exception 'Invalid TEST action' using errcode='22023'; end if;
- select * into run from private.test_runs where id=p_run_id and vendor_id=actor for update;
+ if (p_action='cancel' and actor_role is distinct from 'admin') or (p_action<>'cancel' and actor_role is distinct from 'vendor')
+  then raise exception 'Action not permitted for this role' using errcode='42501'; end if;
+ select * into run from private.test_runs where id=p_run_id and (actor_role='admin' or vendor_id=actor) for update;
  if not found then raise exception 'Assigned TEST run not found' using errcode='42501'; end if;
  select value into event from jsonb_array_elements(run.events) where value->>'request_id'=p_request_id::text limit 1;
  if found then
@@ -125,8 +127,9 @@ begin
   end if;
   return to_jsonb(run)-'request_id';
  end if;
- target:=case p_action when 'start' then 'production' when 'complete' then 'packing' when 'pack' then 'shipping' else 'done' end;
- if run.status is distinct from case p_action when 'start' then 'order' when 'complete' then 'production' when 'pack' then 'packing' else 'shipping' end
+ target:=case p_action when 'start' then 'production' when 'complete' then 'packing' when 'pack' then 'shipping' when 'ship' then 'done' else 'cancelled' end;
+ if (p_action='cancel' and run.status not in ('order','production','packing','shipping'))
+  or (p_action<>'cancel' and run.status is distinct from (case p_action when 'start' then 'order' when 'complete' then 'production' when 'pack' then 'packing' else 'shipping' end))
   then raise exception 'Invalid TEST status transition' using errcode='23514'; end if;
  if p_action='pack' and p_payload is distinct from '{"confirmed":true}'::jsonb then raise exception 'Explicit TEST packing confirmation required' using errcode='23514'; end if;
  if p_action='ship' then
@@ -137,7 +140,7 @@ begin
     then raise exception 'Invalid TEST shipping details' using errcode='23514'; end if;
   end loop;
   if jsonb_typeof(p_payload->'cost') is distinct from 'number' or (p_payload->>'cost') !~ '^[0-9]{1,12}$' then raise exception 'Invalid TEST shipping cost' using errcode='23514'; end if;
- elsif p_action in ('start','complete') and p_payload is distinct from '{}'::jsonb then
+ elsif p_action in ('start','complete','cancel') and p_payload is distinct from '{}'::jsonb then
   raise exception 'Unexpected TEST action details' using errcode='22023';
  end if;
  update private.test_runs set status=target,shipping=case when p_action='ship' then p_payload else shipping end,

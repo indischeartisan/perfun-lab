@@ -28,6 +28,9 @@ do $$ declare run jsonb; same jsonb; begin
  same:=public.create_test_run('f4000000-0000-4000-8000-000000000001','f3000000-0000-4000-8000-000000000002','Fictional',10,3,1,'[{"top":"A","middle":"B","base":"C"},{"top":"D","middle":"E","base":"F"},{"top":"G","middle":"H","base":"I"}]');
  if run->>'id'<>same->>'id' or jsonb_array_length(run->'formulas')<>3 then raise exception 'TEST creation idempotency or formulas failed'; end if;
  begin perform public.create_test_run('f4000000-0000-4000-8000-000000000001','f3000000-0000-4000-8000-000000000002','Changed',10,3,1,'[{"top":"A","middle":"B","base":"C"},{"top":"D","middle":"E","base":"F"},{"top":"G","middle":"H","base":"I"}]'); raise exception 'Different duplicate accepted'; exception when check_violation then null; end;
+ same:=public.create_test_run('f4000000-0000-4000-8000-000000000002','f3000000-0000-4000-8000-000000000002','Cancelled',10,1,1,'[{"top":"A","middle":"B","base":"C"}]');
+ same:=public.advance_test_run((same->>'id')::uuid,gen_random_uuid(),'cancel');
+ if same->>'status'<>'cancelled' or same->'events'->1->>'actor'<>'f3000000-0000-4000-8000-000000000001' then raise exception 'Admin cancellation or audit failed'; end if;
 end $$;
 select set_config('request.jwt.claim.sub','f3000000-0000-4000-8000-000000000003',true);
 do $$ begin
@@ -38,7 +41,8 @@ do $$ begin
 end $$;
 select set_config('request.jwt.claim.sub','f3000000-0000-4000-8000-000000000002',true);
 do $$ declare id uuid; result jsonb; begin
- id:=(public.list_test_runs()->0->>'id')::uuid;
+ id:=current_setting('test.run_id')::uuid;
+ if not exists(select 1 from jsonb_array_elements(public.list_test_runs()) item where item->>'id'=id::text) then raise exception 'Assigned vendor cannot see run'; end if;
  begin perform public.advance_test_run(id,gen_random_uuid(),'ship','{}'); raise exception 'Out of order ship accepted'; exception when check_violation then null; end;
  result:=public.advance_test_run(id,'f5000000-0000-4000-8000-000000000001','start');
  if result->>'status'<>'production' then raise exception 'Start failed'; end if;

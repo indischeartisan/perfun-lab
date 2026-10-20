@@ -8,7 +8,7 @@ import { OperationsBottleSize, OperationsFormulaRow, OperationsOrderCard, Operat
 
 const phases = ['top', 'middle', 'base'] as const
 const emptyFormula = (): FormulaSnapshot => ({ top: '', middle: '', base: '' })
-const stageLabels: Record<TestRunStatus, string> = { order: 'Order', production: 'Produksi', packing: 'Packing', shipping: 'Kirim', done: 'Selesai' }
+const stageLabels: Record<TestRunStatus, string> = { order: 'Order', production: 'Produksi', packing: 'Packing', shipping: 'Kirim', done: 'Selesai', cancelled: 'Dibatalkan' }
 type Stage = 'order' | 'production' | 'shipping' | 'done'
 
 function printTestDocument(run: TestRun) {
@@ -110,6 +110,7 @@ function TestCard({ run, role, refresh }: { run: TestRun; role: 'admin' | 'vendo
   const requests = useRef<Partial<Record<TestAction, string>>>({})
   async function act(action: TestAction) {
     if (lock.current) return
+    if (action === 'cancel' && !window.confirm('Batalkan pesanan TEST ini?')) return
     if (action === 'pack' && !window.confirm('TEST: Saya telah memeriksa seluruh packing. Tidak ada barang nyata yang dikirim.')) return
     if (action === 'ship' && (!courier.trim() || !service.trim() || !tracking.trim() || !/^[0-9]{1,12}$/.test(cost))) { setError('Isi kurir, layanan, resi TEST, dan biaya TEST yang valid.'); return }
     if (action === 'ship' && !window.confirm('TEST: Tandai selesai tanpa membuat pengiriman nyata?')) return
@@ -128,6 +129,7 @@ function TestCard({ run, role, refresh }: { run: TestRun; role: 'admin' | 'vendo
     {role === 'vendor' && run.status === 'shipping' ? <div><label>Kurir TEST<input value={courier} onChange={event => setCourier(event.target.value)} maxLength={100}/></label><label>Layanan TEST<input value={service} onChange={event => setService(event.target.value)} maxLength={100}/></label><label>Resi TEST<input value={tracking} onChange={event => setTracking(event.target.value)} maxLength={100}/></label><label>Biaya TEST<input type="number" min={0} max={999999999999} value={cost} onChange={event => setCost(event.target.value)}/></label></div> : null}
     {error ? <p role="alert">{error}</p> : null}
     <button type="button" onClick={() => { try { printTestDocument(run) } catch (caught) { setError(errorMessage(caught)) } }}>Print A6 TEST</button>
-    {role === 'vendor' && run.status !== 'done' ? <button type="button" className="orders-build" disabled={busy} onClick={() => { void act(run.status === 'order' ? 'start' : run.status === 'production' ? 'complete' : run.status === 'packing' ? 'pack' : 'ship') }}>{busy ? 'Menyimpan TEST…' : run.status === 'order' ? 'TEST · Mulai Produksi' : run.status === 'production' ? 'TEST · Selesai Produksi' : run.status === 'packing' ? 'TEST · Konfirmasi Packing' : 'TEST · Tandai Dikirim'}</button> : null}
+    {role === 'admin' && run.status !== 'done' && run.status !== 'cancelled' ? <button type="button" disabled={busy} onClick={() => { void act('cancel') }}>Batalkan TEST</button> : null}
+    {role === 'vendor' && run.status !== 'done' && run.status !== 'cancelled' ? <button type="button" className="orders-build" disabled={busy} onClick={() => { void act(run.status === 'order' ? 'start' : run.status === 'production' ? 'complete' : run.status === 'packing' ? 'pack' : 'ship') }}>{busy ? 'Menyimpan TEST…' : run.status === 'order' ? 'TEST · Mulai Produksi' : run.status === 'production' ? 'TEST · Selesai Produksi' : run.status === 'packing' ? 'TEST · Konfirmasi Packing' : 'TEST · Tandai Dikirim'}</button> : null}
   </OperationsOrderCard>
 }

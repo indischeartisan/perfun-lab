@@ -1,8 +1,8 @@
 import { requireSupabase } from './supabase'
 import type { FormulaSnapshot } from '../components/WorkspacePresentation'
 
-export type TestRunStatus = 'order' | 'production' | 'packing' | 'shipping' | 'done'
-export type TestAction = 'start' | 'complete' | 'pack' | 'ship'
+export type TestRunStatus = 'order' | 'production' | 'packing' | 'shipping' | 'done' | 'cancelled'
+export type TestAction = 'start' | 'complete' | 'pack' | 'ship' | 'cancel'
 export interface TestRun {
   id: string; vendor_id: string; customer_name: string; volume_ml: number; bottle_count: number
   quantity: number; formulas: FormulaSnapshot[]; status: TestRunStatus; created_at: string

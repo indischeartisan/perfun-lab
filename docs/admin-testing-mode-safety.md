@@ -11,7 +11,8 @@ The A6 TEST document says **TEST — NOT FOR SHIPPING** and contains no real
 shipping address. TEST does not exercise the real payment or shipping handlers.
 
 Admin can create TEST runs from the main Orders workspace and must choose an
-existing vendor and catalog notes. Assigned vendors see TEST runs in their
+existing vendor and catalog notes. Admin can cancel a TEST run before it is
+finished. Assigned vendors see TEST runs in their
 Pekerjaan workspace. Server functions check role and assignment for each call,
 and lock the TEST run for mutations. An idempotency request ID and audit event
 are recorded with each successful transition. A single explicit packing

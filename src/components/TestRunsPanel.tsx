@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { getAdminCatalog, getAdminVendorWorkspace, type AdminCatalog, type AdminVendor } from '../lib/admin'
 import { advanceTestRun, createTestRun, listTestRuns, testModeStatus, type TestAction, type TestRun, type TestRunStatus } from '../lib/testRuns'
 import { errorMessage } from '../lib/supabase'
+import { useAdminData } from '../hooks/useAdminData'
 import type { FormulaSnapshot } from './WorkspacePresentation'
 import { OperationsBottleSize, OperationsFormulaRow, OperationsOrderCard, OperationsOrderHeader } from './OperationsPresentation'
 
@@ -30,33 +31,28 @@ function printTestDocument(run: TestRun) {
 }
 
 export function TestRunsPanel({ role, stage }: { role: 'admin' | 'vendor'; stage?: Stage }) {
-  const [enabled, setEnabled] = useState(false)
-  const [runs, setRuns] = useState<TestRun[]>([])
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(true)
-  const refresh = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
       const isEnabled = await testModeStatus()
-      setEnabled(isEnabled)
-      if (isEnabled) setRuns(await listTestRuns())
-      else setRuns([])
-      setError('')
+      return { enabled: isEnabled, runs: isEnabled ? await listTestRuns() : [] }
     } catch (caught) {
       // The existing workspace remains usable before this migration is installed.
-      setEnabled(false)
       const code = caught && typeof caught === 'object' && 'code' in caught ? String(caught.code) : ''
-      if (code !== 'PGRST202') setError(errorMessage(caught))
-    } finally { setLoading(false) }
+      if (code === 'PGRST202') return { enabled: false, runs: [] }
+      throw caught
+    }
   }, [])
-  useEffect(() => { void refresh() }, [refresh])
-  if (!enabled) return error ? <p role="alert">TEST mode: {error}</p> : null
+  const { data, error, reload } = useAdminData(load, true)
+  const refresh = useCallback(async () => { reload() }, [reload])
+  if (!data?.enabled) return error ? <p role="alert">TEST mode: {error}</p> : null
+  const runs = data.runs
   const visible = role === 'vendor' && stage ? runs.filter(run => stage === 'shipping' ? run.status === 'packing' || run.status === 'shipping' : run.status === stage) : runs
   return <section className="test-runs-panel" aria-label="TEST orders">
     <h2>TEST — internal only</h2><p>Simulasi backend terpisah. Tidak ada pembayaran, payout, atau pengiriman nyata.</p>
-    <button type="button" onClick={() => { setLoading(true); void refresh() }} disabled={loading}>Refresh TEST</button>
+    <button type="button" onClick={reload}>Refresh TEST</button>
     {error ? <p role="alert">{error}</p> : null}
     {role === 'admin' ? <TestCreate onCreated={refresh}/> : null}
-    {!visible.length && !loading ? <p>Belum ada pesanan TEST pada tahap ini.</p> : null}
+    {!visible.length ? <p>Belum ada pesanan TEST pada tahap ini.</p> : null}
     <div className="production-list">{visible.map(run => <TestCard key={run.id} run={run} role={role} refresh={refresh}/>)}</div>
   </section>
 }

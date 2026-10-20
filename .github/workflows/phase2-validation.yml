@@ -3,6 +3,9 @@ name: Phase 2 local validation
 on:
   pull_request:
   workflow_dispatch:
+  push:
+    branches:
+      - codex/admin-testing-mode
 
 permissions:
   contents: read
@@ -97,6 +100,8 @@ jobs:
             supabase/tests/admin.sql
             supabase/tests/vendor_assignment.sql
             supabase/tests/vendor_order_projection.sql
+            supabase/tests/admin_testing_preflight.sql
+            supabase/tests/admin_test_runs.sql
           )
           failed_tests=()
 
@@ -149,4 +154,13 @@ jobs:
           wait "$first"
           wait "$second"
           docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < supabase/tests/vendor_concurrency_check.sql
+          echo '::endgroup::'
+
+          echo '::group::TEST run two-session concurrency regression'
+          docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < supabase/tests/test_run_concurrency_setup.sql
+          docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < supabase/tests/test_run_concurrency_action.sql & first=$!
+          docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < supabase/tests/test_run_concurrency_action.sql & second=$!
+          wait "$first"
+          wait "$second"
+          docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < supabase/tests/test_run_concurrency_check.sql
           echo '::endgroup::'

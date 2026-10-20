@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - codex/admin-testing-mode
+      - codex/test-order-shipping-ui
 
 permissions:
   contents: read
@@ -102,6 +103,7 @@ jobs:
             supabase/tests/vendor_order_projection.sql
             supabase/tests/admin_testing_preflight.sql
             supabase/tests/admin_test_runs.sql
+            supabase/tests/test_run_shipping_address.sql
           )
           failed_tests=()
 

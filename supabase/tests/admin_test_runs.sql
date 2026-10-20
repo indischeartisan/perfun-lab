@@ -7,11 +7,13 @@ insert into auth.users(id,email) values
 update public.profiles set role='admin' where id='f3000000-0000-4000-8000-000000000001';
 update public.profiles set role='vendor' where id in ('f3000000-0000-4000-8000-000000000002','f3000000-0000-4000-8000-000000000003');
 create temp table test_before as select
- (select count(*) from public.orders) orders,
- (select count(*) from public.payments) payments,
- (select count(*) from public.production_jobs) jobs,
- (select count(*) from public.shipments) shipments,
- (select count(*) from public.vendor_payout_items) payouts;
+ (select coalesce(jsonb_agg(to_jsonb(o) order by id),'[]'::jsonb) from public.orders o) orders,
+ (select coalesce(jsonb_agg(to_jsonb(p) order by id),'[]'::jsonb) from public.payments p) payments,
+ (select coalesce(jsonb_agg(to_jsonb(j) order by id),'[]'::jsonb) from public.production_jobs j) jobs,
+ (select coalesce(jsonb_agg(to_jsonb(s) order by id),'[]'::jsonb) from public.shipments s) shipments,
+ (select coalesce(jsonb_agg(to_jsonb(a) order by order_id),'[]'::jsonb) from public.order_vendor_assignments a) assignments,
+ (select coalesce(jsonb_agg(to_jsonb(p) order by id),'[]'::jsonb) from public.vendor_payout_items p) payouts,
+ (select coalesce(jsonb_agg(to_jsonb(p) order by id),'[]'::jsonb) from public.vendor_payouts p) payout_batches;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','f3000000-0000-4000-8000-000000000001',true);
 do $$ begin
@@ -27,6 +29,7 @@ do $$ declare run jsonb; same jsonb; begin
  perform set_config('test.run_id',run->>'id',true);
  same:=public.create_test_run('f4000000-0000-4000-8000-000000000001','f3000000-0000-4000-8000-000000000002','Fictional',10,3,1,'[{"top":"A","middle":"B","base":"C"},{"top":"D","middle":"E","base":"F"},{"top":"G","middle":"H","base":"I"}]');
  if run->>'id'<>same->>'id' or jsonb_array_length(run->'formulas')<>3 then raise exception 'TEST creation idempotency or formulas failed'; end if;
+ begin perform public.advance_test_run((run->>'id')::uuid,gen_random_uuid(),'start'); raise exception 'Admin started vendor TEST'; exception when insufficient_privilege then null; end;
  begin perform public.create_test_run('f4000000-0000-4000-8000-000000000001','f3000000-0000-4000-8000-000000000002','Changed',10,3,1,'[{"top":"A","middle":"B","base":"C"},{"top":"D","middle":"E","base":"F"},{"top":"G","middle":"H","base":"I"}]'); raise exception 'Different duplicate accepted'; exception when check_violation then null; end;
  same:=public.create_test_run('f4000000-0000-4000-8000-000000000002','f3000000-0000-4000-8000-000000000002','Cancelled',10,1,1,'[{"top":"A","middle":"B","base":"C"}]');
  same:=public.advance_test_run((same->>'id')::uuid,gen_random_uuid(),'cancel');
@@ -37,6 +40,7 @@ do $$ begin
  if jsonb_array_length(public.list_test_runs())<>0 then raise exception 'Other vendor sees run'; end if;
  begin perform public.advance_test_run((select id from private.test_runs limit 1),gen_random_uuid(),'start'); raise exception 'Direct private table access allowed'; exception when insufficient_privilege then null; end;
  begin perform public.advance_test_run(current_setting('test.run_id')::uuid,gen_random_uuid(),'start'); raise exception 'Other vendor started run'; exception when insufficient_privilege then null; end;
+ begin perform public.advance_test_run(current_setting('test.run_id')::uuid,gen_random_uuid(),'cancel'); raise exception 'Vendor cancelled run'; exception when insufficient_privilege then null; end;
  begin perform public.create_test_run(gen_random_uuid(),'f3000000-0000-4000-8000-000000000002','Fictional',10,1,1,'[{"top":"A","middle":"B","base":"C"}]'); raise exception 'Vendor created TEST'; exception when insufficient_privilege then null; end;
 end $$;
 select set_config('request.jwt.claim.sub','f3000000-0000-4000-8000-000000000002',true);
@@ -70,9 +74,14 @@ end $$;
 reset role;
 do $$ declare b record; begin
  select * into b from test_before;
- if b.orders<>(select count(*) from public.orders) or b.payments<>(select count(*) from public.payments)
-  or b.jobs<>(select count(*) from public.production_jobs) or b.shipments<>(select count(*) from public.shipments)
-  or b.payouts<>(select count(*) from public.vendor_payout_items) then raise exception 'TEST changed real data'; end if;
+ if b.orders is distinct from (select coalesce(jsonb_agg(to_jsonb(o) order by id),'[]'::jsonb) from public.orders o)
+  or b.payments is distinct from (select coalesce(jsonb_agg(to_jsonb(p) order by id),'[]'::jsonb) from public.payments p)
+  or b.jobs is distinct from (select coalesce(jsonb_agg(to_jsonb(j) order by id),'[]'::jsonb) from public.production_jobs j)
+  or b.shipments is distinct from (select coalesce(jsonb_agg(to_jsonb(s) order by id),'[]'::jsonb) from public.shipments s)
+  or b.assignments is distinct from (select coalesce(jsonb_agg(to_jsonb(a) order by order_id),'[]'::jsonb) from public.order_vendor_assignments a)
+  or b.payouts is distinct from (select coalesce(jsonb_agg(to_jsonb(p) order by id),'[]'::jsonb) from public.vendor_payout_items p)
+  or b.payout_batches is distinct from (select coalesce(jsonb_agg(to_jsonb(p) order by id),'[]'::jsonb) from public.vendor_payouts p)
+  then raise exception 'TEST changed real data'; end if;
 end $$;
 rollback;
 select 'PASS: TEST mode authorization, switch, isolated workflow, audit and idempotency' result;

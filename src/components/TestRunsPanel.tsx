@@ -33,9 +33,8 @@ export function TestRunsPanel({ role, stage }: { role: 'admin' | 'vendor'; stage
   const [enabled, setEnabled] = useState(false)
   const [runs, setRuns] = useState<TestRun[]>([])
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const refresh = useCallback(async () => {
-    setLoading(true)
     try {
       const isEnabled = await testModeStatus()
       setEnabled(isEnabled)
@@ -54,7 +53,7 @@ export function TestRunsPanel({ role, stage }: { role: 'admin' | 'vendor'; stage
   const visible = role === 'vendor' && stage ? runs.filter(run => stage === 'shipping' ? run.status === 'packing' || run.status === 'shipping' : run.status === stage) : runs
   return <section className="test-runs-panel" aria-label="TEST orders">
     <h2>TEST — internal only</h2><p>Simulasi backend terpisah. Tidak ada pembayaran, payout, atau pengiriman nyata.</p>
-    <button type="button" onClick={() => { void refresh() }} disabled={loading}>Refresh TEST</button>
+    <button type="button" onClick={() => { setLoading(true); void refresh() }} disabled={loading}>Refresh TEST</button>
     {error ? <p role="alert">{error}</p> : null}
     {role === 'admin' ? <TestCreate onCreated={refresh}/> : null}
     {!visible.length && !loading ? <p>Belum ada pesanan TEST pada tahap ini.</p> : null}

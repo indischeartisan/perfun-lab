@@ -262,6 +262,12 @@
 .workspace-app .admin-more-page button b { margin-left:auto; }
 .workspace-app .admin-desktop-nav button.active { background:#edf8ce; color:#293b10; }
 .workspace-app .attention-metrics { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.workspace-app .test-runs-panel { margin:16px 0; padding:16px; border:2px solid #85732e; border-radius:14px; background:#fff9dc; color:#302a17; }
+.workspace-app .test-runs-panel h2 { margin:0 0 8px; font-size:1.1rem; }
+.workspace-app .test-runs-panel details,.workspace-app .test-runs-panel .production-list { margin-top:16px; }
+.workspace-app .test-runs-panel label { display:grid; gap:4px; margin:8px 0; }
+.workspace-app .test-runs-panel input,.workspace-app .test-runs-panel select,.workspace-app .test-runs-panel button { min-height:44px; max-width:100%; }
+.workspace-app .test-runs-panel button { margin:4px 8px 4px 0; }
 @media(max-width:767px) {
   .workspace-app .attention-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .workspace-app .admin-content { padding-bottom:calc(96px + env(safe-area-inset-bottom)); }

@@ -1,53 +1,48 @@
-# Admin Testing Mode: implementation boundary and release blockers
+# Admin Testing Mode
 
-Status: **not implemented, not deployable and not enabled**. The only proposed
-backend addition is an admin-only, disabled-by-default **read-only preflight**.
-It does not approve, pay, process, pack or ship an order. Its result is not an
-authorization to do so, and `workflow_available` is always false. Do not enable
-the preflight setting as if it enabled Admin Testing Mode.
+The branch contains a separate TEST lifecycle for the main Admin and Vendor
+workspaces. It is disabled by default. The migrations have not been approved
+for or applied to the linked production database.
 
-## Existing flows audited
+TEST runs live only in `private.test_runs`. No TEST action creates or updates
+an order, payment, production job, shipment, assignment or payout. TEST shipping
+records only fictional details in the TEST run: it does not call a carrier.
+The A6 TEST document says **TEST — NOT FOR SHIPPING** and contains no real
+shipping address. TEST does not exercise the real payment or shipping handlers.
 
-- `reserve_payment` locks the order before reserving a payment; provider events
-  may arrive later, including for historical failed or expired attempts.
-- `payment_status = 'paid'` creates production jobs and can create an assignment
-  and shipment. Production and fulfillment guards currently require that status.
-- Admin revenue aggregates paid orders. Payout eligibility derives from shipped,
-  packed shipments and assignments, not from a separately audited payment.
-- A test order marked paid/shipped through the existing path would therefore be
-  liable to appear as real revenue and become payable to a vendor.
+Admin can create TEST runs from the main Orders workspace and must choose an
+existing vendor and catalog notes. Assigned vendors see TEST runs in their
+Pekerjaan workspace. Server functions check role and assignment for each call,
+and lock the TEST run for mutations. An idempotency request ID and audit event
+are recorded with each successful transition. A single explicit packing
+confirmation is required before the TEST shipping action.
 
-## Review-only preflight
+## Server switch — after review and explicit migration approval only
 
-The new migration is **not applied**. It exposes no payment or workflow action;
-the flag only controls preflight and defaults off. The RPC calls the existing
-server-side admin check and rejects even historical payment attempts. This
-conservative check is informational: concurrent payment creation can invalidate
-it immediately, and a future mutation must re-check under the same order lock as
-payment reservation. It is not a substitute for that transactional guard.
+The `mode_enabled` column in `private.admin_testing_preflight_settings` is
+false on installation. An authorized database operator can enable or disable it
+by updating the singleton row in a controlled server-side session:
 
-## Required before implementation can be released
+```sql
+-- Enable only for a time-limited internal test.
+update private.admin_testing_preflight_settings set mode_enabled = true where singleton;
+-- Disable before launch.
+update private.admin_testing_preflight_settings set mode_enabled = false where singleton;
+```
 
-1. Design and review a separately identifiable test lifecycle that does not
-   mark actual payment attempts or `orders.payment_status` as real paid, and
-   uses only authorized Admin/Vendor identities. Audit each action with actor,
-   timestamp, action, target, and idempotency key.
-2. Coordinate with payment reservation and late provider events in a single
-   transaction and consistent lock order. Reject all order/payment states that
-   could collide with a real transaction. Verify with two database sessions.
-3. Ensure test work cannot enter real revenue, real vendor payout, customer
-   shipping/fulfillment or external carriers, including direct RPC access and
-   retries. Provide an unmistakable TEST label on every relevant screen and A6
-   document; simulated completion must not mean an actual dispatch.
-4. Preserve real Admin/Vendor role checks, assignments, production snapshots,
-   Play Set and multi-item handling, packing guards, RLS and legacy orders.
-5. Implement the application UI and backend operations, default the complete
-   feature off on the server, add idempotency and disablement guarantees, then
-   run SQL, concurrency, client and authenticated browser tests.
-6. Obtain explicit review and approval before applying any migration to the
-   linked database. Validate the existing backup/restore plan first. Deploy
-   only after all security checks and CI pass.
+These commands are documentation, not an instruction to run them now. Never
+place service-role credentials in a browser or repository. Disabling is
+serialized against in-flight TEST transactions; every data/action RPC fails
+closed while disabled. The separate preflight flag does not enable TEST mode.
 
-The preflight regression suite checks authorization, repeated read checks and
-the absence of side effects. It does **not** test duplicate submission, payout
-exclusion or end-to-end testing actions because those actions do not yet exist.
+## Release requirements
+
+- Review both migrations, grants, RLS, server switch and TEST documents before
+  applying anything to production. Confirm a recovery plan and authorize the
+  migration separately.
+- Require green CI, including SQL isolation/authorization and two-session
+  concurrency tests, before deployment.
+- Perform authenticated Admin/Vendor browser review and physical A6 print
+  testing. TEST success is not evidence that real payment, payout or carrier
+  integrations work.
+- Disable the feature before public launch and independently verify the switch.

@@ -1,0 +1,138 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { getAdminCatalog, getAdminVendorWorkspace, type AdminCatalog, type AdminVendor } from '../lib/admin'
+import { advanceTestRun, createTestRun, listTestRuns, testModeStatus, type TestAction, type TestRun, type TestRunStatus } from '../lib/testRuns'
+import { errorMessage } from '../lib/supabase'
+import type { FormulaSnapshot } from './WorkspacePresentation'
+import { OperationsBottleSize, OperationsFormulaRow, OperationsOrderCard, OperationsOrderHeader } from './OperationsPresentation'
+
+const phases = ['top', 'middle', 'base'] as const
+const emptyFormula = (): FormulaSnapshot => ({ top: '', middle: '', base: '' })
+const stageLabels: Record<TestRunStatus, string> = { order: 'Order', production: 'Produksi', packing: 'Packing', shipping: 'Kirim', done: 'Selesai' }
+type Stage = 'order' | 'production' | 'shipping' | 'done'
+
+function printTestDocument(run: TestRun) {
+  const popup = window.open('', '_blank')
+  if (!popup) throw new Error('Izinkan pop-up untuk mencetak dokumen TEST.')
+  const doc = popup.document
+  doc.title = 'TEST — NOT FOR SHIPPING'
+  const style = doc.createElement('style')
+  style.textContent = '@page{size:A6 portrait;margin:8mm}body{font:11pt sans-serif;color:#111}h1{border:3px solid #111;padding:5mm;font-size:18pt}p{overflow-wrap:anywhere}'
+  doc.head.append(style)
+  const heading = doc.createElement('h1')
+  heading.textContent = 'TEST — NOT FOR SHIPPING'
+  doc.body.append(heading)
+  const lines = [`TEST ${run.id}`, `TEST ${run.customer_name}`, `TEST ${run.bottle_count} × ${run.volume_ml} ml · Qty ${run.quantity}`,
+    ...run.formulas.map((formula, index) => `TEST Botol ${index + 1}: Top ${formula.top}, Middle ${formula.middle}, Base ${formula.base}`),
+    run.shipping ? `TEST ${run.shipping.courier} / ${run.shipping.service} · ${run.shipping.tracking}` : 'TEST — tidak ada pengiriman nyata']
+  for (const line of lines) { const paragraph = doc.createElement('p'); paragraph.textContent = line; doc.body.append(paragraph) }
+  popup.focus()
+  popup.print()
+}
+
+export function TestRunsPanel({ role, stage }: { role: 'admin' | 'vendor'; stage?: Stage }) {
+  const [enabled, setEnabled] = useState(false)
+  const [runs, setRuns] = useState<TestRun[]>([])
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    try {
+      const isEnabled = await testModeStatus()
+      setEnabled(isEnabled)
+      if (isEnabled) setRuns(await listTestRuns())
+      else setRuns([])
+      setError('')
+    } catch (caught) {
+      // The existing workspace remains usable before this migration is installed.
+      setEnabled(false)
+      const code = caught && typeof caught === 'object' && 'code' in caught ? String(caught.code) : ''
+      if (code !== 'PGRST202') setError(errorMessage(caught))
+    } finally { setLoading(false) }
+  }, [])
+  useEffect(() => { void refresh() }, [refresh])
+  if (!enabled) return error ? <p role="alert">TEST mode: {error}</p> : null
+  const visible = role === 'vendor' && stage ? runs.filter(run => stage === 'shipping' ? run.status === 'packing' || run.status === 'shipping' : run.status === stage) : runs
+  return <section className="test-runs-panel" aria-label="TEST orders">
+    <h2>TEST — internal only</h2><p>Simulasi backend terpisah. Tidak ada pembayaran, payout, atau pengiriman nyata.</p>
+    <button type="button" onClick={() => { void refresh() }} disabled={loading}>Refresh TEST</button>
+    {error ? <p role="alert">{error}</p> : null}
+    {role === 'admin' ? <TestCreate onCreated={refresh}/> : null}
+    {!visible.length && !loading ? <p>Belum ada pesanan TEST pada tahap ini.</p> : null}
+    <div className="production-list">{visible.map(run => <TestCard key={run.id} run={run} role={role} refresh={refresh}/>)}</div>
+  </section>
+}
+
+function TestCreate({ onCreated }: { onCreated: () => Promise<void> }) {
+  const [vendors, setVendors] = useState<AdminVendor[]>([])
+  const [catalog, setCatalog] = useState<AdminCatalog | null>(null)
+  const [vendor, setVendor] = useState('')
+  const [customer, setCustomer] = useState('')
+  const [size, setSize] = useState('10')
+  const [quantity, setQuantity] = useState(1)
+  const [formulas, setFormulas] = useState<FormulaSnapshot[]>([emptyFormula()])
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const lock = useRef(false)
+  const request = useRef<string | null>(null)
+  useEffect(() => {
+    let active = true
+    void Promise.all([getAdminVendorWorkspace(0), getAdminCatalog()]).then(([workspace, result]) => {
+      if (active) { setVendors(workspace.vendors); setCatalog(result) }
+    }).catch(caught => { if (active) setError(errorMessage(caught)) })
+    return () => { active = false }
+  }, [])
+  const changeSize = (value: string) => { setSize(value); setFormulas(Array.from({ length: value === 'play' ? 3 : 1 }, () => emptyFormula())) }
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+    if (lock.current) return
+    lock.current = true; setBusy(true); setError('')
+    request.current ??= crypto.randomUUID()
+    try {
+      await createTestRun(request.current, vendor, customer, size === '30' ? 30 : 10, size === 'play' ? 3 : 1, quantity, formulas)
+      request.current = null; setCustomer(''); await onCreated()
+    } catch (caught) { setError(errorMessage(caught)) }
+    finally { lock.current = false; setBusy(false) }
+  }
+  return <details><summary>Buat pesanan TEST</summary><form className="admin-filters" onSubmit={event => { void submit(event) }}>
+    <p>Gunakan nama fiktif. TEST tidak membuat order atau pembayaran nyata.</p>
+    <label>Nama fiktif<input required maxLength={80} value={customer} onChange={event => setCustomer(event.target.value)}/></label>
+    <label>Vendor<select required value={vendor} onChange={event => setVendor(event.target.value)}><option value="">Pilih vendor</option>{vendors.map(item => <option key={item.id} value={item.id}>{item.name || item.email || item.id}</option>)}</select></label>
+    <label>Ukuran<select value={size} onChange={event => changeSize(event.target.value)}><option value="10">10 ml</option><option value="30">30 ml</option><option value="play">Play Set 3 × 10 ml</option></select></label>
+    <label>Kuantitas<input type="number" required min={1} max={99} value={quantity} onChange={event => setQuantity(Number(event.target.value))}/></label>
+    {formulas.map((formula, index) => <fieldset key={index}><legend>TEST Botol {index + 1}</legend>{phases.map(phase => <label key={phase}>{phase}<select required value={formula[phase] ?? ''} onChange={event => setFormulas(current => current.map((item, i) => i === index ? { ...item, [phase]: event.target.value } : item))}><option value="">Pilih note</option>{catalog?.notes.filter(note => note.active && note.phases.some(item => item.phase === phase && item.enabled)).map(note => <option key={note.id} value={note.name}>{note.name}</option>)}</select></label>)}</fieldset>)}
+    {error ? <p role="alert">{error}</p> : null}<button type="submit" disabled={busy || !catalog || !vendor}>{busy ? 'Menyimpan…' : 'Buat TEST'}</button>
+  </form></details>
+}
+
+function TestCard({ run, role, refresh }: { run: TestRun; role: 'admin' | 'vendor'; refresh: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [courier, setCourier] = useState('')
+  const [service, setService] = useState('')
+  const [tracking, setTracking] = useState('')
+  const [cost, setCost] = useState('')
+  const lock = useRef(false)
+  const requests = useRef<Partial<Record<TestAction, string>>>({})
+  async function act(action: TestAction) {
+    if (lock.current) return
+    if (action === 'pack' && !window.confirm('TEST: Saya telah memeriksa seluruh packing. Tidak ada barang nyata yang dikirim.')) return
+    if (action === 'ship' && (!courier.trim() || !service.trim() || !tracking.trim() || !/^[0-9]{1,12}$/.test(cost))) { setError('Isi kurir, layanan, resi TEST, dan biaya TEST yang valid.'); return }
+    if (action === 'ship' && !window.confirm('TEST: Tandai selesai tanpa membuat pengiriman nyata?')) return
+    const payload = action === 'pack' ? { confirmed: true } : action === 'ship' ? { courier: courier.trim(), service: service.trim(), tracking: tracking.trim(), cost: Number(cost) } : {}
+    lock.current = true; setBusy(true); setError('')
+    requests.current[action] ??= crypto.randomUUID()
+    try { await advanceTestRun(run.id, requests.current[action]!, action, payload); delete requests.current[action]; await refresh() }
+    catch (caught) { setError(errorMessage(caught)) }
+    finally { lock.current = false; setBusy(false) }
+  }
+  return <OperationsOrderCard>
+    <OperationsOrderHeader orderNumber={`TEST · ${run.id.slice(0, 8)}`} status={`TEST · ${stageLabels[run.status]}`} time={new Date(run.created_at).toLocaleString()}/>
+    <p><strong>TEST · {run.customer_name}</strong></p><OperationsBottleSize volumeMl={run.volume_ml} bottleCount={run.bottle_count}/><p>Kuantitas TEST: {run.quantity}</p>
+    {run.formulas.map((formula, index) => <OperationsFormulaRow key={index} formula={formula} label={`TEST Botol ${index + 1}`}/>)}
+    {run.shipping ? <p>TEST · {run.shipping.courier} / {run.shipping.service} · {run.shipping.tracking} · Rp {run.shipping.cost}</p> : null}
+    {role === 'vendor' && run.status === 'shipping' ? <div><label>Kurir TEST<input value={courier} onChange={event => setCourier(event.target.value)} maxLength={100}/></label><label>Layanan TEST<input value={service} onChange={event => setService(event.target.value)} maxLength={100}/></label><label>Resi TEST<input value={tracking} onChange={event => setTracking(event.target.value)} maxLength={100}/></label><label>Biaya TEST<input type="number" min={0} max={999999999999} value={cost} onChange={event => setCost(event.target.value)}/></label></div> : null}
+    {error ? <p role="alert">{error}</p> : null}
+    <button type="button" onClick={() => { try { printTestDocument(run) } catch (caught) { setError(errorMessage(caught)) } }}>Print A6 TEST</button>
+    {role === 'vendor' && run.status !== 'done' ? <button type="button" className="orders-build" disabled={busy} onClick={() => { void act(run.status === 'order' ? 'start' : run.status === 'production' ? 'complete' : run.status === 'packing' ? 'pack' : 'ship') }}>{busy ? 'Menyimpan TEST…' : run.status === 'order' ? 'TEST · Mulai Produksi' : run.status === 'production' ? 'TEST · Selesai Produksi' : run.status === 'packing' ? 'TEST · Konfirmasi Packing' : 'TEST · Tandai Dikirim'}</button> : null}
+  </OperationsOrderCard>
+}

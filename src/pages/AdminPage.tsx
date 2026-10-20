@@ -9,6 +9,7 @@ import { AdminVendorWorkspacePanel } from '../components/AdminVendorWorkspacePan
 import { AdminVendorPaymentsPanel } from '../components/AdminVendorPaymentsPanel'
 import { AdminMoreMenu, AdminWorkspaceNavigation, type AdminWorkspaceTab } from '../components/WorkspaceNavigation'
 import { OperationsBottleSize, OperationsOrderCard, OperationsOrderHeader, OperationsStatusTabs } from '../components/OperationsPresentation'
+import { TestRunsPanel } from '../components/TestRunsPanel'
 
 const label = (value: string) => value.replaceAll('_', ' ')
 export function AdminPage({ userId }: { userId: string }) {
@@ -19,7 +20,7 @@ export function AdminPage({ userId }: { userId: string }) {
     <AdminWorkspaceNavigation active={tab} onNavigate={setTab}/>
     <div className="admin-content" key={tab}>
       {tab === 'Overview' || tab === 'Revenue' ? <Overview revenueOnly={tab === 'Revenue'} onOrders={() => setTab('Orders')}/> : null}
-      {tab === 'Orders' ? <AdminOrders/> : null}
+      {tab === 'Orders' ? <><TestRunsPanel role="admin"/><AdminOrders/></> : null}
       {tab === 'More' ? <AdminMoreMenu onNavigate={setTab}/> : null}
       {tab === 'Vendor Payments' ? <AdminVendorPaymentsPanel/> : null}
       {tab === 'Customers' ? <AdminCustomers/> : null}

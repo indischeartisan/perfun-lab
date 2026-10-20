@@ -278,3 +278,9 @@
   .workspace-app .admin-dashboard>.admin-workspace-nav { display:none; }
   .workspace-app .admin-dashboard>.admin-content { grid-column:2; grid-row:2; }
 }
+.test-runs-panel .test-address { margin: 12px 0; padding: 12px; border: 1px solid #e7e3d7; border-radius: 12px; background: #faf9f3; }
+.test-runs-panel .test-address h3 { margin: 0 0 8px; font-size: 0.95rem; }
+.test-runs-panel .test-address-text { white-space: pre-line; overflow-wrap: anywhere; }
+.test-runs-panel .test-copy-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.test-runs-panel .test-shipping-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 8px; margin: 12px 0; }
+.test-runs-panel .test-shipping-form label { display: grid; gap: 4px; }

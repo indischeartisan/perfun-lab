@@ -97,6 +97,7 @@ jobs:
             supabase/tests/admin.sql
             supabase/tests/vendor_assignment.sql
             supabase/tests/vendor_order_projection.sql
+            supabase/tests/admin_testing_preflight.sql
           )
           failed_tests=()
 

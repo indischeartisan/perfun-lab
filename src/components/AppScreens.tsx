@@ -1,4 +1,4 @@
-import { ChevronRight, CircleHelp, FileText, Mail, Minus, Plus, ShieldCheck, ShoppingBag, Trash2 } from 'lucide-react'
+import { BookOpen, ChevronRight, CircleHelp, FileText, Mail, Minus, Newspaper, Plus, ShieldCheck, ShoppingBag, Trash2 } from 'lucide-react'
 import { isPlaySet } from '../lib/cart'
 import { formatPrice } from '../lib/currency'
 import type { BottleSize, CartItem, CompleteSelection, TestOrder } from '../types'
@@ -31,8 +31,8 @@ const moreItems = [
   { label: 'Privacy', copy: 'How your local data is handled.', icon: ShieldCheck }
 ]
 
-export function MoreScreen() {
-  return <section className="app-screen"><ScreenTitle eyebrow="PERFUN LAB" title="More" copy="Useful things, kept simple."/><div className="more-list">{moreItems.map(({label, copy, icon: Icon}) => <button key={label} onClick={() => alert(`${label} content will be added before launch.`)}><i><Icon/></i><span><strong>{label}</strong><small>{copy}</small></span><ChevronRight/></button>)}</div><div className="app-signoff"><strong>PERFUN LAB</strong><span>Prototype v0.1 · Made for noses with opinions.</span></div></section>
+export function MoreScreen({ onOrders, onFresh, onStudy }: { onOrders: () => void; onFresh: () => void; onStudy: () => void }) {
+  return <section className="app-screen"><ScreenTitle eyebrow="PERFUN LAB" title="More" copy="Useful things, kept simple."/><div className="more-list"><button onClick={onOrders}><i><ShoppingBag/></i><span><strong>Orders</strong><small>View your orders.</small></span><ChevronRight/></button><button onClick={onFresh}><i><Newspaper/></i><span><strong>Fresh From the Lab</strong><small>Stories and little experiments.</small></span><ChevronRight/></button><button onClick={onStudy}><i><BookOpen/></i><span><strong>Lab Study</strong><small>Short lessons from the Lab.</small></span><ChevronRight/></button>{moreItems.map(({label, copy, icon: Icon}) => <button key={label} onClick={() => alert(`${label} content will be added before launch.`)}><i><Icon/></i><span><strong>{label}</strong><small>{copy}</small></span><ChevronRight/></button>)}</div><div className="app-signoff"><strong>PERFUN LAB</strong><span>Prototype v0.1 · Made for noses with opinions.</span></div></section>
 }
 
 function Quantity({ item, onQuantity }: { item: CartItem; onQuantity: BagProps['onQuantity'] }) { return <div className="quantity"><small>QTY</small><button onClick={() => onQuantity(item.id, item.quantity - 1)} aria-label="Decrease quantity"><Minus size={13}/></button><span>{item.quantity}</span><button onClick={() => onQuantity(item.id, item.quantity + 1)} aria-label="Increase quantity"><Plus size={13}/></button></div> }

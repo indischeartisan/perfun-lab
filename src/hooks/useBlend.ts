@@ -28,6 +28,13 @@ export function useBlend(noteGroups: Record<NoteLayer, FragranceNote[]>, ownerId
     setSelection(current => ({ ...current, [layer]: note }))
   }
 
+  /** Applies a resolver-validated Wheel selection in one state transition. */
+  function applyWheelSelection(next: Selection) {
+    setAdded(false)
+    if (product !== 'play-set') setProductState(null)
+    setSelection(rehydrateSelection(next, noteGroups))
+  }
+
   function clearCurrentFormula() {
     setSelection(emptySelection)
     if (product !== 'play-set') setProductState(null)
@@ -84,7 +91,7 @@ export function useBlend(noteGroups: Record<NoteLayer, FragranceNote[]>, ownerId
     setAdded(false)
   }
 
-  return { selection, product, playSetBlends, added, editingPlaySetIndex, choose, clearCurrentFormula, discardPlaySet, setProduct, savePlaySetBlend, editPlaySetBlend, cancelPlaySetEdit, exitPlaySet, markAdded: () => setAdded(true) }
+  return { selection, product, playSetBlends, added, editingPlaySetIndex, choose, applyWheelSelection, clearCurrentFormula, discardPlaySet, setProduct, savePlaySetBlend, editPlaySetBlend, cancelPlaySetEdit, exitPlaySet, markAdded: () => setAdded(true) }
 }
 
 const layers: NoteLayer[] = ['top', 'middle', 'base']

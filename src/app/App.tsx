@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { BottomNav } from '../components/BottomNav'
 import { Header } from '../components/Header'
 import { useBlend } from '../hooks/useBlend'
@@ -7,8 +7,10 @@ import { useLocalStorage } from '../hooks/useLocalStorage'
 import type { CustomerOrder, OrderIntent } from '../lib/orders'
 import { BagPage } from '../pages/BagPage'
 import { BuildPage } from '../pages/BuildPage'
+import { ExplorePage } from '../pages/ExploreHomePage'
 import { CheckoutPage, OrderConfirmationPage } from '../pages/CheckoutPage'
 import { MorePage } from '../pages/MorePage'
+import { NoteLibraryPage } from '../pages/NoteLibraryPage'
 import { OrdersPage } from '../pages/OrdersPage'
 import type { AppView, CompleteSelection, ProductChoice, Selection } from '../types'
 import '../styles.css'
@@ -26,20 +28,42 @@ import { prepareBagCheckout, prepareDirectFormulaCheckout } from '../lib/bagChec
 import { isCheckoutDraft, orderIntentsMatchCatalog } from '../lib/storageValidation'
 import { bagCheckoutResumeKey, directCheckoutResumeKey, readPendingDirectCheckout, readSessionValue, removeSessionValue, writeSessionValue } from '../lib/checkoutResume'
 
-import { ProductionPage } from '../pages/ProductionPage'
-import { FulfillmentPage } from '../pages/FulfillmentPage'
-import { AdminPage } from '../pages/AdminPage'
-import { VendorPaymentsPage } from '../pages/VendorPaymentsPage'
-import { VendorWorkPage } from '../pages/VendorWorkPage'
-import { navigationHash, viewFromHash, workspaceView } from './workspaceRouting'
+import { articleHash, articleIdFromHash, articleOriginFromHash, navigationHash, noteHash, noteIdFromHash, type ArticleOrigin, viewFromHash, workspaceView } from './workspaceRouting'
+import { getPublishedExploreContentById } from '../data/exploreContent'
 import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
+import { WorkspaceLoadBoundary } from '../components/WorkspaceLoadBoundary'
+import { WheelTransferDialog } from '../components/WheelTransferDialog'
+import { emptyWheelExplorationState, emptyWheelLayerSelection, type WheelExplorationState, type WheelLayerSelection } from '../data/scentWheel'
+import { resolveWheelTransfer, type WheelTransfer, type WheelTransferResolution } from '../lib/wheelTransfer'
 import '../admin.css'
+import '../explore.css'
 
+const ProductionPage = lazy(() => import('../pages/ProductionPage').then(module => ({ default: module.ProductionPage })))
+const FulfillmentPage = lazy(() => import('../pages/FulfillmentPage').then(module => ({ default: module.FulfillmentPage })))
+const AdminPage = lazy(() => import('../pages/AdminPage').then(module => ({ default: module.AdminPage })))
+const VendorPaymentsPage = lazy(() => import('../pages/VendorPaymentsPage').then(module => ({ default: module.VendorPaymentsPage })))
+const VendorWorkPage = lazy(() => import('../pages/VendorWorkPage').then(module => ({ default: module.VendorWorkPage })))
+const ExploreArticlePage = lazy(() => import('../pages/ExploreArticlePage').then(module => ({ default: module.ExploreArticlePage })))
+const ExploreQuickCard = lazy(() => import('../components/ExploreQuickCard').then(module => ({ default: module.ExploreQuickCard })))
+const ExploreCollectionPage = lazy(() => import('../pages/ExploreCollectionPage').then(module => ({ default: module.ExploreCollectionPage })))
+const NoteLibraryDetailPage = lazy(() => import('../pages/NoteLibraryDetailView').then(module => ({ default: module.NoteLibraryDetailPage })))
+const ScentWheelPage = lazy(() => import('../pages/ScentWheelPageRefined').then(module => ({ default: module.ScentWheelPageRefined })))
 
+function directArticleOrigin(articleId: string | null): ArticleOrigin {
+  const article = articleId ? getPublishedExploreContentById(articleId) : null
+  if (!article) return 'explore'
+  return article.category === 'study' ? 'study' : 'fresh'
+}
+
+function articleBackLabel(origin: ArticleOrigin) {
+  return origin === 'fresh' ? 'Back to Fresh From the Lab' : origin === 'study' ? 'Back to Lab Study' : 'Back to Explore'
+}
 
 function isComplete(selection: Selection): selection is CompleteSelection {
   return Boolean(selection.top && selection.middle && selection.base)
 }
+
+type WheelTransferReview = { kind: 'availability' | 'replace'; payload: WheelTransfer; resolution: WheelTransferResolution; allowPartial?: boolean }
 
 export default function App() {
   const auth = useAuth()
@@ -57,18 +81,26 @@ export default function App() {
   if (auth.loading || (auth.user && auth.roleLoading)) return <RoleLoading/>
   if (auth.user && auth.role && auth.role !== 'customer') return <WorkspaceApp auth={auth}/>
   if (auth.user && !auth.role) return <RoleUnavailable auth={auth}/>
-  if (!catalog) return <div className="app-shell product-app"><Header itemCount={0} activeView="build" onNavigate={() => {}} account={<AccountMenu auth={auth} onLogin={() => {}}/>}/><main className="cloud-message">{error ? <><p role="alert">{error}</p><button onClick={() => { setError(''); setAttempt(value => value + 1) }}>Try again</button></> : <p role="status">Loading the lab…</p>}</main></div>
+  if (!catalog) return <div className="app-shell product-app customer-app"><Header itemCount={0} activeView="build" onNavigate={() => {}} account={<AccountMenu auth={auth} onLogin={() => {}}/>}/><main className="cloud-message">{error ? <><p role="alert">{error}</p><button onClick={() => { setError(''); setAttempt(value => value + 1) }}>Try again</button></> : <p role="status">Loading the lab…</p>}</main></div>
   return <ConnectedApp catalog={catalog} auth={auth}/>
 }
 
 function ConnectedApp({ catalog, auth }: { catalog: Catalog; auth: ReturnType<typeof useAuth> }) {
   const [requestedView, setView] = useState<AppView>(() => viewFromHash(window.location.hash, Boolean(readSessionValue(bagCheckoutResumeKey))))
+  const [locationHash, setLocationHash] = useState(() => window.location.hash)
+  const [quickContentId, setQuickContentId] = useState<string | null>(null)
+  const [wheelExploration, setWheelExploration] = useState<WheelExplorationState>(emptyWheelExplorationState)
+  const [wheelSelection, setWheelSelection] = useState<WheelLayerSelection>(emptyWheelLayerSelection)
+  const [wheelTransferReview, setWheelTransferReview] = useState<WheelTransferReview | null>(null)
   const [authDialogOpen, setAuthDialogOpen] = useState(false)
   const [resumeCheckout, setResumeCheckout] = useState(() => readSessionValue(bagCheckoutResumeKey) === '1')
   const [pendingDirectCheckout, setPendingDirectCheckout] = useState<OrderIntent[] | null>(() => readPendingDirectCheckout(catalog.noteGroups))
   const [resumeDirectCheckout, setResumeDirectCheckout] = useState(() => readSessionValue(directCheckoutResumeKey) !== null)
   useEffect(() => {
-    const onHashChange = () => setView(viewFromHash(window.location.hash, Boolean(readSessionValue(bagCheckoutResumeKey))))
+    const onHashChange = () => {
+      setLocationHash(window.location.hash)
+      setView(viewFromHash(window.location.hash, Boolean(readSessionValue(bagCheckoutResumeKey))))
+    }
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
@@ -83,6 +115,54 @@ function ConnectedApp({ catalog, auth }: { catalog: Catalog; auth: ReturnType<ty
   const [directCheckoutBusy, setDirectCheckoutBusy] = useState(false)
   const [directCheckoutError, setDirectCheckoutError] = useState('')
   const view = workspaceView(auth.role ?? null, requestedView)
+  const articleId = articleIdFromHash(locationHash)
+  const noteId = noteIdFromHash(locationHash)
+  const articleOrigin = articleOriginFromHash(locationHash) ?? directArticleOrigin(articleId)
+
+  const hasMixSelection = Boolean(blend.selection.top || blend.selection.middle || blend.selection.base)
+
+  function applyWheelTransfer(resolution: WheelTransferResolution) {
+    blend.applyWheelSelection(resolution.selection)
+    setWheelTransferReview(null)
+    navigate('build')
+  }
+
+  function requestWheelTransfer(payload: WheelTransfer) {
+    const resolution = resolveWheelTransfer(payload, catalog)
+    if (!resolution.hasAvailableNotes || resolution.issues.length) {
+      setWheelTransferReview({ kind: 'availability', payload, resolution })
+      return
+    }
+    if (hasMixSelection) {
+      setWheelTransferReview({ kind: 'replace', payload, resolution })
+      return
+    }
+    applyWheelTransfer(resolution)
+  }
+
+  function continueWheelTransfer() {
+    if (!wheelTransferReview) return
+    const resolution = resolveWheelTransfer(wheelTransferReview.payload, catalog)
+    if (!resolution.hasAvailableNotes) {
+      setWheelTransferReview({ kind: 'availability', payload: wheelTransferReview.payload, resolution })
+      return
+    }
+    if (hasMixSelection) {
+      setWheelTransferReview({ kind: 'replace', payload: wheelTransferReview.payload, resolution, allowPartial: true })
+      return
+    }
+    applyWheelTransfer(resolution)
+  }
+
+  function replaceWheelTransfer() {
+    if (!wheelTransferReview) return
+    const resolution = resolveWheelTransfer(wheelTransferReview.payload, catalog)
+    if (!resolution.hasAvailableNotes || (resolution.issues.length && !wheelTransferReview.allowPartial)) {
+      setWheelTransferReview({ kind: 'availability', payload: wheelTransferReview.payload, resolution })
+      return
+    }
+    applyWheelTransfer(resolution)
+  }
 
   useEffect(() => {
     if (view === requestedView) return
@@ -94,8 +174,30 @@ function ConnectedApp({ catalog, auth }: { catalog: Catalog; auth: ReturnType<ty
   }
 
   const navigate = useCallback((next: AppView) => {
+    const hash = navigationHash(next, window.location.pathname, window.location.search)
     setView(next)
-    window.history.replaceState(null, '', navigationHash(next, window.location.pathname, window.location.search))
+    setLocationHash(hash)
+    window.history.replaceState(null, '', hash)
+    scrollToTop()
+  }, [])
+
+  const openArticle = useCallback((id: string, origin: ArticleOrigin = 'explore') => {
+    const hash = articleHash(id, origin)
+    setView('article')
+    setLocationHash(hash)
+    window.history.pushState(null, '', hash)
+    scrollToTop()
+  }, [])
+
+  const openQuickCard = useCallback((id: string) => {
+    setQuickContentId(id)
+  }, [])
+
+  const openNote = useCallback((id: string) => {
+    const hash = noteHash(id)
+    setView('note')
+    setLocationHash(hash)
+    window.history.pushState(null, '', hash)
     scrollToTop()
   }, [])
 
@@ -202,28 +304,46 @@ function ConnectedApp({ catalog, auth }: { catalog: Catalog; auth: ReturnType<ty
     navigate('confirmation')
   }
 
-  return <div className="app-shell product-app">
-    <Header itemCount={cart.count} activeView={view} onNavigate={navigate} fulfillmentOnly={auth.role === 'vendor'} account={<AccountMenu auth={auth} onLogin={() => setAuthDialogOpen(true)}/>}/>
+  return <div className="app-shell product-app customer-app">
+    <Header itemCount={cart.count} activeView={view === 'article' || view === 'wheel' || view === 'fresh' || view === 'study' || view === 'library' ? 'explore' : view} onNavigate={navigate} fulfillmentOnly={auth.role === 'vendor'} account={<AccountMenu auth={auth} onLogin={() => setAuthDialogOpen(true)}/>}/>
     {auth.error ? <p className="cloud-message" role="alert">{auth.error}</p> : null}
     <main className="app-main">{view === 'bag' && checkoutBusy ? <p className="cloud-message" role="status">Preparing checkout…</p> : null}{view === 'bag' && checkoutError ? <p className="cloud-message" role="alert">{checkoutError}</p> : null}
+      <WorkspaceLoadBoundary key={view}><Suspense fallback={<WorkspaceLoading/>}>
       {view === 'admin' ? auth.user && auth.role === 'admin' ? <AdminPage key={auth.user.id} userId={auth.user.id}/> : <div className="screen-empty"><h2>{auth.loading || auth.roleLoading ? 'Loading account…' : 'Admin access required'}</h2><p>This page is available to administrators.</p></div> : null}
       {view === 'fulfillment' ? auth.user && (auth.role === 'vendor' || auth.role === 'admin') ? <FulfillmentPage key={`${auth.user.id}:${auth.role}`} role={auth.role}/> : <div className="screen-empty"><h2>{auth.loading || auth.roleLoading ? 'Loading account…' : 'Fulfillment access required'}</h2><p>This page is available to vendors and administrators.</p>{!auth.user && !auth.loading ? <button onClick={auth.login}>Continue with Google</button> : null}</div> : null}
       {view === 'payouts' ? auth.user && auth.role === 'vendor' ? <VendorPaymentsPage key={auth.user.id}/> : <div className="screen-empty"><h2>{auth.loading || auth.roleLoading ? 'Loading account…' : 'Vendor access required'}</h2><p>Payments are available to vendors.</p></div> : null}
       {view === 'production' ? auth.user && (auth.role === 'perfumer' || auth.role === 'admin' || auth.role === 'vendor') ? <ProductionPage key={`${auth.user.id}:${auth.role}`} userId={auth.user.id} role={auth.role}/> : <div className="screen-empty"><h2>{auth.loading || auth.roleLoading ? 'Loading account…' : 'Production access required'}</h2><p>This page is available to vendors, perfumers and administrators.</p>{!auth.user && !auth.loading ? <button onClick={auth.login}>Continue with Google</button> : null}</div> : null}
+      </Suspense></WorkspaceLoadBoundary>
+      {view === 'explore' ? <ExplorePage catalog={catalog} onMix={() => navigate('build')} onOpenArticle={openArticle} onOpenQuick={openQuickCard} onViewFresh={() => navigate('fresh')} onViewStudy={() => navigate('study')} onViewLibrary={() => navigate('library')}/> : null}
+      {view === 'wheel' ? <Suspense fallback={<ExploreArticleLoading/>}><ScentWheelPage catalog={catalog} onBack={() => navigate('explore')} exploration={wheelExploration} onExplorationChange={setWheelExploration} selectedByLayer={wheelSelection} onSelectedByLayerChange={setWheelSelection} onMixSelection={requestWheelTransfer}/></Suspense> : null}
+      {view === 'fresh' || view === 'study' ? <Suspense fallback={<ExploreArticleLoading/>}><ExploreCollectionPage kind={view} onBack={() => navigate('explore')} onOpenArticle={openArticle} onOpenQuick={openQuickCard}/></Suspense> : null}
+      {view === 'library' ? <NoteLibraryPage catalog={catalog} onBack={() => navigate('explore')} onOpenNote={openNote}/> : null}
+      {view === 'note' ? <Suspense fallback={<ExploreArticleLoading/>}><NoteLibraryDetailPage catalog={catalog} noteId={noteId} onBack={() => navigate('library')} onOpenNote={openNote}/></Suspense> : null}
+      {view === 'article' ? <Suspense fallback={<ExploreArticleLoading/>}><ExploreArticlePage key={articleId ?? 'missing'} articleId={articleId} backLabel={articleBackLabel(articleOrigin)} onBack={() => navigate(articleOrigin)} onMix={() => navigate('build')}/></Suspense> : null}
       {view === 'build' ? <BuildPage catalog={catalog} selection={blend.selection} product={catalog.productOptions.some(option => option.id === blend.product) ? blend.product : null} playSetBlends={blend.playSetBlends} editingPlaySetIndex={blend.editingPlaySetIndex} added={blend.added} onSelect={blend.choose} onProduct={blend.setProduct} onAdd={addToBag} onSavePlaySetBlend={savePlaySetBlend} onAddPlaySet={addPlaySetToBag} onEditPlaySetBlend={blend.editPlaySetBlend} onCancelPlaySetEdit={blend.cancelPlaySetEdit} onExitPlaySet={blend.exitPlaySet} onGetItNow={checkoutDirect} getItNowBusy={directCheckoutBusy} getItNowError={directCheckoutError} onClearFormula={blend.clearCurrentFormula} onViewBag={() => navigate('bag')}/> : null}
       {view === 'bag' ? <BagPage items={cart.items} onQuantity={cart.setQuantity} onSize={cart.setSize} onRemove={cart.remove} onBuild={() => { blend.clearCurrentFormula(); navigate('build') }} onCheckout={checkoutBag}/> : null}
       {view === 'checkout' ? auth.user && checkoutDraft?.userId === auth.user.id ? <CheckoutPage key={auth.user.id} userId={auth.user.id} items={checkoutDraft.items} onBack={() => navigate('bag')} onPlaced={orderPlaced}/> : <div className="screen-empty"><p>{auth.loading ? 'Loading account…' : 'Add a perfume to your bag to checkout.'}</p><button onClick={() => navigate('bag')}>View Bag</button></div> : null}
       {view === 'confirmation' && confirmedOrder && confirmedOrder.user_id === auth.user?.id ? <OrderConfirmationPage order={confirmedOrder} onBuild={() => { blend.clearCurrentFormula(); navigate('build') }} onOrders={() => navigate('orders')}/> : null}
       {view === 'orders' ? <OrdersPage key={auth.user?.id ?? 'guest'} userId={auth.user?.id} onLogin={() => setAuthDialogOpen(true)} onBuild={() => navigate('bag')}/> : null}
-      {view === 'more' ? <MorePage/> : null}
+      {view === 'more' ? <MorePage onOrders={() => navigate('orders')} onFresh={() => navigate('fresh')} onStudy={() => navigate('study')} onLibrary={() => navigate('library')}/> : null}
     </main>
-    {auth.role !== 'vendor' ? <BottomNav active={view} count={cart.count} onNavigate={navigate}/> : null}
+    {quickContentId ? <Suspense fallback={null}><ExploreQuickCard contentId={quickContentId} onClose={() => setQuickContentId(null)} onMix={() => { setQuickContentId(null); navigate('build') }}/></Suspense> : null}
+    {wheelTransferReview ? <WheelTransferDialog kind={wheelTransferReview.kind} issues={wheelTransferReview.resolution.issues} canContinue={wheelTransferReview.resolution.hasAvailableNotes} onContinueAvailable={continueWheelTransfer} onReplace={replaceWheelTransfer} onClose={() => setWheelTransferReview(null)}/> : null}
+    {auth.role !== 'vendor' ? <BottomNav active={view === 'article' || view === 'wheel' || view === 'fresh' || view === 'study' || view === 'library' ? 'explore' : view} count={cart.count} onNavigate={navigate}/> : null}
     <EmailPasswordDialog auth={auth} open={authDialogOpen} onClose={() => { setAuthDialogOpen(false); if (!auth.user && resumeCheckout) { removeSessionValue(bagCheckoutResumeKey); setResumeCheckout(false) } if (!auth.user && resumeDirectCheckout) { removeSessionValue(directCheckoutResumeKey); setPendingDirectCheckout(null); setResumeDirectCheckout(false) } }} onAuthenticated={() => setAuthDialogOpen(false)}/>
   </div>
 }
 
 function RoleLoading() {
   return <div className="app-shell product-app workspace-app"><main className="cloud-message" aria-busy="true"><p role="status">Loading secure workspace…</p></main></div>
+}
+
+function WorkspaceLoading() {
+  return <div className="cloud-message" aria-busy="true"><p role="status">Loading workspace…</p></div>
+}
+
+function ExploreArticleLoading() {
+  return <div className="explore-article-loading" aria-busy="true"><p role="status">Opening the article…</p></div>
 }
 
 function RoleUnavailable({ auth }: { auth: ReturnType<typeof useAuth> }) {
@@ -257,10 +377,12 @@ function WorkspaceApp({ auth }: { auth: ReturnType<typeof useAuth> }) {
     <header className="workspace-header"><button className="wordmark" onClick={() => navigate(role === 'admin' ? 'admin' : 'production')} aria-label="Go to workspace"><img src="/brand/perfun-lab-logo.webp" alt="PERFUN LAB"/></button><strong>{role === 'admin' ? 'ADMIN WORKSPACE' : perfumer ? 'PERFUMER WORKSPACE' : 'VENDOR WORKSPACE'}</strong><AccountMenu auth={auth} onLogin={() => {}}/></header>
     <WorkspaceNavigation role={role} active={view} onNavigate={navigate}/>
     <main className="app-main">
+      <WorkspaceLoadBoundary key={view}><Suspense fallback={<WorkspaceLoading/>}>
       {role === 'admin' ? <AdminPage key={auth.user.id} userId={auth.user.id}/> : null}
       {vendor && (view === 'production' || view === 'fulfillment') ? <VendorWorkPage key={`${auth.user.id}:${view}`} userId={auth.user.id} initialStage={view === 'fulfillment' ? 'shipping' : 'order'}/> : null}
       {view === 'production' && perfumer ? <ProductionPage key={`${auth.user.id}:${role}`} userId={auth.user.id} role="perfumer"/> : null}
       {view === 'payouts' && vendor ? <VendorPaymentsPage key={auth.user.id}/> : null}
+      </Suspense></WorkspaceLoadBoundary>
     </main>
   </div>
 }

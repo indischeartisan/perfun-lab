@@ -9,3 +9,60 @@ html,body,#root{width:100%;max-width:100%;overflow-x:hidden}.builder-core{width:
 @media(min-width:1200px){.build-screen{max-width:1140px;padding-inline:40px}.builder-core{max-width:1060px}.app-screen{max-width:1060px}.composer-card{grid-template-columns:46% 54%}}
 
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
+html:has(> body > #root > .customer-app),body:has(> #root > .customer-app),#root:has(> .customer-app){overflow-x:clip}
+.customer-app.product-app{isolation:isolate}
+:where(.customer-app) .build-screen{position:relative}
+:where(.customer-app) .build-screen .builder-core-title{position:relative;isolation:isolate}
+:where(.customer-app) .build-screen .builder-core-title::before{content:'';position:absolute;z-index:-1;pointer-events:none;left:-35px;top:-30px;width:min(660px,calc(100% + 70px));height:calc(100% + 60px);background:radial-gradient(ellipse 48% 50% at 34% 44%,rgba(255,250,237,.82) 0%,rgba(255,250,237,.55) 35%,rgba(255,250,237,.14) 70%,transparent 100%),radial-gradient(ellipse 34% 42% at 60% 55%,rgba(255,247,229,.4),transparent 100%),radial-gradient(ellipse 31% 30% at 23% 67%,rgba(255,252,242,.3),transparent 100%)}
+:where(.customer-app) .build-screen .builder-core .builder-core-title p{color:#50534d}
+:where(.customer-app) .build-screen .builder-core .builder-core-title small{color:#62655e}
+:where(.customer-app) .build-screen::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;background:url('/backgrounds/mixing-studio-desktop.webp') center center / cover no-repeat}
+:where(.customer-app) .build-screen .builder-core .note-selector,:where(.customer-app) .build-screen .builder-core .note-selector:first-child,:where(.customer-app) .build-screen .builder-core .scent-story,:where(.customer-app) .build-screen .builder-core .prediction-panel,:where(.customer-app) .build-screen .builder-core>.play-set-progress,:where(.customer-app) .build-screen .play-set-summary,:where(.customer-app) .build-screen .added-confirmation{background:rgba(255,252,246,.94);border-color:rgba(193,180,158,.55);box-shadow:0 4px 16px rgba(72,53,30,.08)}
+:where(.customer-app) .build-screen .builder-core .note-selector:hover{background:#fffdf8}
+:where(.customer-app) .build-screen .composer-bottle .bottle::after{content:'';position:absolute;z-index:-1;left:10%;right:10%;bottom:-78px;height:25px;pointer-events:none;background:radial-gradient(ellipse,rgba(65,48,28,.20),transparent 70%)}
+:where(.customer-app) .build-screen .composer-bottle .orbit{display:none}
+.customer-app.product-app .site-header{position:sticky;top:12px;width:calc(100% - 48px);max-width:1360px;margin:12px auto 0;padding:0 28px;border:1px solid rgba(210,199,179,.65);border-radius:999px;background:rgba(255,251,243,.94);box-shadow:0 6px 24px rgba(74,55,34,.10);backdrop-filter:none}
+:where(.customer-app) .build-screen .note-picker{max-height:min(82dvh,720px);overflow-y:auto;overscroll-behavior:contain}
+:where(.customer-app) .build-screen .note-picker-grid{display:flex;flex-direction:column;width:min(620px,calc(100% - 32px));border-radius:20px;background:#fffcf6;overflow:hidden}
+:where(.customer-app) .build-screen .note-picker-grid>header{position:sticky;top:0;z-index:1;background:#fffcf6;align-items:center}
+:where(.customer-app) .build-screen .note-picker-grid>header h2{margin:0;font-size:24px}
+:where(.customer-app) .build-screen .note-picker-grid>header>button{display:grid;place-items:center;min-width:44px;min-height:44px}
+:where(.customer-app) .build-screen .note-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:18px;overflow-y:auto;overscroll-behavior:contain;min-height:0}
+:where(.customer-app) .build-screen .note-grid-item{position:relative;min-width:0;border:1px solid #e9e1d3;border-radius:14px;background:#f7f3ec;overflow:hidden}
+:where(.customer-app) .build-screen .note-grid-item.selected{border-color:#8da922;background:#eff5d8}
+:where(.customer-app) .build-screen .note-grid-select{position:relative;width:100%;min-height:110px;padding:10px 5px;border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;cursor:pointer}
+:where(.customer-app) .build-screen .note-grid-select:disabled{opacity:.5;cursor:not-allowed}
+:where(.customer-app) .build-screen .note-grid-select strong{font-size:13px;line-height:1.2;overflow-wrap:anywhere}
+:where(.customer-app) .build-screen .note-grid-select>svg{position:absolute;top:8px;right:8px;width:16px;color:#6e8700}
+:where(.customer-app) .build-screen .note-grid .picker-option-art,:where(.customer-app) .build-screen .note-detail .picker-option-art{display:grid;place-items:center;width:68px;height:68px}
+:where(.customer-app) .build-screen .note-grid .picker-option-art img,:where(.customer-app) .build-screen .note-detail .picker-option-art img{width:100%;height:100%;object-fit:contain}
+:where(.customer-app) .build-screen .note-grid .picker-option-art i,:where(.customer-app) .build-screen .note-detail .picker-option-art i{display:grid;place-items:center;width:80%;height:80%;border-radius:50%;font-style:normal}
+:where(.customer-app) .build-screen .note-preview{flex:none;padding:14px 18px max(14px,env(safe-area-inset-bottom));background:#fffcf6;box-shadow:0 -4px 18px rgba(72,53,30,.06)}
+:where(.customer-app) .build-screen .note-preview-content{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+:where(.customer-app) .build-screen .note-preview-content .picker-option-art{display:grid;place-items:center;flex:none;width:56px;height:56px}
+:where(.customer-app) .build-screen .note-preview-content .picker-option-art img{width:100%;height:100%;object-fit:contain}
+:where(.customer-app) .build-screen .note-preview-content p{margin:3px 0;font-size:12px;line-height:1.3}
+:where(.customer-app) .build-screen .note-preview-detail{min-height:32px;padding:0;border:0;background:transparent;color:#556c00;font-weight:700;cursor:pointer}
+:where(.customer-app) .build-screen .note-preview>.note-detail-select{width:100%}
+:where(.customer-app) .build-screen .note-detail{display:flex;flex-direction:column;align-items:center;text-align:center;gap:20px;padding:26px 24px 32px;overflow-y:auto;overscroll-behavior:contain}
+:where(.customer-app) .build-screen .note-detail .picker-option-art{width:150px;height:150px}
+:where(.customer-app) .build-screen .note-detail p{max-width:380px;margin:0;line-height:1.5}
+:where(.customer-app) .build-screen .note-detail-select{min-height:48px;width:min(100%,320px);border:0;border-radius:10px;background:#789600;color:#fff;font-weight:700;cursor:pointer}
+:where(.customer-app) .build-screen .note-detail-select:disabled{opacity:.5;cursor:not-allowed}
+:where(.customer-app) .build-screen .note-detail-back{display:flex;align-items:center;gap:5px;min-height:44px;padding:0;border:0;background:transparent;color:#536700;cursor:pointer}
+:where(.customer-app) .build-screen .note-detail-back svg{width:17px}
+@media(max-width:700px){:where(.customer-app) .build-screen .note-picker-grid{width:100%;border-radius:20px 20px 0 0}:where(.customer-app) .build-screen .note-grid{gap:8px;padding:12px}:where(.customer-app) .build-screen .note-grid .picker-option-art{width:58px;height:58px}:where(.customer-app) .build-screen .note-picker-grid>header h2{font-size:21px}}
+@media(max-width:767px){:where(.customer-app) .build-screen::before{background-image:url('/backgrounds/mixing-studio-mobile.webp');background-position:center center}.customer-app.product-app .site-header{top:8px;width:calc(100% - 24px);height:62px;margin-top:8px;padding:0 16px}:where(.customer-app) .build-screen{padding-bottom:calc(94px + env(safe-area-inset-bottom))}}
+@media(max-width:700px){:where(.customer-app) .build-screen .builder-core .composer-card{min-height:0;grid-template-columns:minmax(0,47fr) minmax(0,53fr)}:where(.customer-app) .build-screen .builder-core .composer-bottle{min-height:0}:where(.customer-app) .build-screen .builder-core .composer-bottle .bottle-scene{height:clamp(300px,85vw,340px);margin:0 -27px}:where(.customer-app) .build-screen .builder-core .selector-stack{min-width:0}}
+
+:where(.customer-app) .build-screen .builder-core>.composer-card + :is(.scent-story,.prediction-panel,.play-set-summary,.added-confirmation){margin-top:36px}
+@media(max-width:1024px){:where(.customer-app) .build-screen .builder-core>.composer-card + :is(.scent-story,.prediction-panel,.play-set-summary,.added-confirmation){margin-top:32px}}
+@media(max-width:700px){:where(.customer-app) .build-screen .builder-core>.composer-card{padding-bottom:16px}:where(.customer-app) .build-screen .builder-core>.composer-card + :is(.scent-story,.prediction-panel,.play-set-summary,.added-confirmation){margin-top:24px}}
+@media(max-width:700px) and (min-height:850px){:where(.customer-app) .build-screen .builder-core .composer-bottle .bottle-scene{height:clamp(340px,calc(100dvh - 480px),380px);transform:scale(.73)}:where(.customer-app) .build-screen .builder-core .note-selector,:where(.customer-app) .build-screen .builder-core .note-selector:first-child{min-height:clamp(104px,calc(104px + (100dvh - 800px)*.18),132px)}}
+@media(min-width:768px) and (max-width:1100px) and (orientation:portrait){:where(.customer-app) .build-screen .builder-core>.composer-card{min-height:clamp(490px,calc(100dvh - 450px),600px)}:where(.customer-app) .build-screen .builder-core>.composer-card + :is(.scent-story,.prediction-panel,.play-set-summary,.added-confirmation){margin-top:32px}}
+
+/* Customer header only: sticky geometry stays in flow while visibility follows scroll direction. */
+.customer-app.product-app .site-header{transition:transform .2s ease,opacity .2s ease,visibility 0s linear 0s}
+.customer-app.product-app .site-header.customer-header-hidden{transform:translateY(calc(-100% - 20px));opacity:0;visibility:hidden;pointer-events:none;transition:transform .2s ease,opacity .2s ease,visibility 0s linear .2s}
+@media(prefers-reduced-motion:reduce){.customer-app.product-app .site-header,.customer-app.product-app .site-header.customer-header-hidden{transition:none}}

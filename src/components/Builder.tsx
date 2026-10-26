@@ -1,6 +1,5 @@
-import { ArrowRight, Check, ChevronRight, RotateCcw, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { layerCopy } from '../data/notes'
+import { ArrowLeft, ArrowRight, Check, ChevronRight, RotateCcw, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CompleteSelection, FragranceNote, NoteLayer, ProductChoice, Selection } from '../types'
 import type { Catalog } from '../lib/catalog'
 import { getNoteStickerAsset } from '../lib/noteAssets'
@@ -41,13 +40,6 @@ export function Builder({ catalog, selection, product, playSetBlends, editingPla
   const complete = selectedCount === 3
   const result = useMemo(() => createResult(selection), [selection])
   const partial = getPartialFeedback(selection)
-
-  useEffect(() => {
-    if (!picker) return
-    function closeOnEscape(event: KeyboardEvent) { if (event.key === 'Escape') setPicker(null) }
-    document.addEventListener('keydown', closeOnEscape)
-    return () => document.removeEventListener('keydown', closeOnEscape)
-  }, [picker])
 
   function selectNote(note: FragranceNote) {
     if (!picker) return
@@ -125,12 +117,54 @@ export function Builder({ catalog, selection, product, playSetBlends, editingPla
 
     <FormatSelectorSheet open={formatSelectorOpen && complete} options={productOptions} selected={product} playSetBlendCount={playSetBlends.length} getItNowBusy={getItNowBusy} getItNowMessage={product === 'play-set' && playSetBlends.length !== 3 ? 'Save each mix to unlock checkout.' : 'Proceed to checkout'} onSelect={onProduct} onAddToBag={addSelectedFormatToBag} onGetItNow={getSelectedFormatNow} onClose={closeFormatSelector} />
 
-    {picker ? <div className="picker-layer" role="presentation"><button className="picker-backdrop" onClick={() => setPicker(null)} aria-label="Close note picker"/><section className="note-picker" role="dialog" aria-modal="true" aria-labelledby="picker-title"><header><div><span>{picker.toUpperCase()} NOTE</span><h2 id="picker-title">{layerCopy[picker].title}</h2><p>{selectorCopy[picker]}</p></div><button onClick={() => setPicker(null)} aria-label="Close"><X/></button></header><div className="picker-options">{!noteGroups[picker].length ? <p>Notes in this phase are temporarily unavailable.</p> : null}{noteGroups[picker].map(note => {
-      const selected = selection[picker]?.id === note.id
-      const unavailable = isSoapyUsedInAnotherLayer(selection, picker, note)
-      return <button key={note.id} className={`${selected ? 'selected' : ''} ${unavailable ? 'unavailable' : ''}`} disabled={unavailable} onClick={() => selectNote(note)}><PickerOptionArt note={note}/><span><strong>{note.name}</strong><small>{unavailable ? 'Already used in this blend' : note.shortDescription}</small></span>{selected ? <Check/> : <ChevronRight/>}</button>
-    })}</div></section></div> : null}
+    {picker ? <NotePicker layer={picker} notes={noteGroups[picker]} selection={selection} onSelect={selectNote} onClose={() => setPicker(null)} /> : null}
   </section>
+}
+
+function NotePicker({ layer, notes, selection, onSelect, onClose }: { layer: NoteLayer; notes: FragranceNote[]; selection: Selection; onSelect: (note: FragranceNote) => void; onClose: () => void }) {
+  const [detail, setDetail] = useState<FragranceNote | null>(null)
+  const [preview, setPreview] = useState<FragranceNote | null>(() => selection[layer])
+  const dialogRef = useRef<HTMLElement>(null)
+  const closeRef = useRef<HTMLButtonElement>(null)
+  const detailRef = useRef(detail)
+  const closeHandlerRef = useRef(onClose)
+
+  useEffect(() => { detailRef.current = detail; closeHandlerRef.current = onClose }, [detail, onClose])
+
+  useEffect(() => {
+    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    closeRef.current?.focus()
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') { if (detailRef.current) setDetail(null); else closeHandlerRef.current(); return }
+      if (event.key !== 'Tab' || !dialogRef.current) return
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), [href], [tabindex]:not([tabindex="-1"])'))
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (!first || !last) return
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener('keydown', onKeyDown); returnFocus?.focus() }
+  }, [])
+
+  useEffect(() => {
+    if (detail) dialogRef.current?.querySelector<HTMLButtonElement>('.note-detail-back')?.focus()
+    else closeRef.current?.focus()
+  }, [detail])
+
+  const unavailable = detail ? isSoapyUsedInAnotherLayer(selection, layer, detail) : false
+  const previewUnavailable = preview ? isSoapyUsedInAnotherLayer(selection, layer, preview) : false
+  return <div className="picker-layer" role="presentation"><button className="picker-backdrop" onClick={onClose} aria-label="Close note selector"/><section ref={dialogRef} className="note-picker note-picker-grid" role="dialog" aria-modal="true" aria-labelledby="picker-title">
+    <header><div>{detail ? <button className="note-detail-back" onClick={() => setDetail(null)} aria-label="Back to notes"><ArrowLeft/> Back to notes</button> : null}<h2 id="picker-title">{detail ? detail.name : `Select ${layer[0].toUpperCase()}${layer.slice(1)} Note`}</h2></div><button ref={closeRef} onClick={onClose} aria-label="Close note selector"><X/></button></header>
+    {detail ? <div className="note-detail"><PickerOptionArt note={detail}/><p>{detail.shortDescription?.trim() || 'Explore this note in your mix.'}</p>{unavailable ? <p role="status">Already used in this blend.</p> : null}<button className="note-detail-select" disabled={unavailable} onClick={() => onSelect(detail)}>{selection[layer]?.id === detail.id ? `Selected: ${detail.name}` : `Select ${detail.name}`}</button></div> : <><div className="note-grid">{!notes.length ? <p>Notes in this phase are temporarily unavailable.</p> : null}{notes.map(note => {
+      const selected = preview?.id === note.id
+      const disabled = isSoapyUsedInAnotherLayer(selection, layer, note)
+      return <div className={`note-grid-item${selected ? ' selected' : ''}`} key={note.id}><button className="note-grid-select" disabled={disabled} aria-pressed={selected} aria-label={`Preview ${note.name}${disabled ? ', already used in this blend' : ''}`} onClick={() => setPreview(note)}><PickerOptionArt note={note}/><strong>{note.name}</strong>{selected ? <Check aria-hidden="true"/> : null}</button></div>
+    })}</div>{preview ? <div className="note-preview"><div className="note-preview-content"><PickerOptionArt note={preview}/><div><strong>{preview.name}</strong><p>{preview.shortDescription?.trim() || 'Explore this note in your mix.'}</p><button className="note-preview-detail" onClick={() => setDetail(preview)}>View note details</button></div></div><button className="note-detail-select" disabled={previewUnavailable} onClick={() => onSelect(preview)}>{selection[layer]?.id === preview.id ? `Selected: ${preview.name}` : `Select ${preview.name}`}</button></div> : null}</>}
+  </section></div>
 }
 
 function PickerSticker({ note }: { note: FragranceNote | null }) {

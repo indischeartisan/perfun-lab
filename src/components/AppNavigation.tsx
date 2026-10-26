@@ -1,10 +1,10 @@
-import { FlaskConical, MoreHorizontal, Package, ShoppingBag } from 'lucide-react'
+import { Compass, FlaskConical, MoreHorizontal, ShoppingBag } from 'lucide-react'
 import type { AppView } from '../types'
 
 const items = [
-  { id: 'build' as const, label: 'Build', icon: FlaskConical },
+  { id: 'explore' as const, label: 'Explore', icon: Compass },
+  { id: 'build' as const, label: 'Mix', icon: FlaskConical },
   { id: 'bag' as const, label: 'Bag', icon: ShoppingBag },
-  { id: 'orders' as const, label: 'Orders', icon: Package },
   { id: 'more' as const, label: 'More', icon: MoreHorizontal }
 ]
 

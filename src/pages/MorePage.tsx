@@ -1,2 +1,2 @@
 import { MoreScreen } from '../components/AppScreens'
-export function MorePage(){return <MoreScreen/>}
+export function MorePage({ onOrders, onFresh, onStudy, onLibrary }: { onOrders: () => void; onFresh: () => void; onStudy: () => void; onLibrary: () => void }){return <><MoreScreen onOrders={onOrders} onFresh={onFresh} onStudy={onStudy}/><div className="more-library-shortcut"><button type="button" onClick={onLibrary}>Explore Note Library</button></div></>}

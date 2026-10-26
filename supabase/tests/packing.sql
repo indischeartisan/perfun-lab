@@ -40,6 +40,23 @@ do $$ declare shipment_id uuid; partial jsonb:='{"bottles_checked":true,"formula
  begin perform public.save_actual_shipping(shipment_id,18000,'vendor'); raise exception 'Actual cost changed after dispatch'; exception when check_violation then null; end;
  begin perform public.save_shipment_packing(shipment_id,complete,false); raise exception 'Packing changed after dispatch'; exception when check_violation then null; end;
 end $$;
+-- Recreate a pre-feature dispatched row only in this disposable transaction.
+-- The guard did not exist when historical rows were created; immediately restore it.
+reset role;
+alter table public.shipments disable trigger shipment_packing_shipping_guard;
+update public.shipments set packing_status='legacy_unknown',packed_at=null,packed_by=null
+ where order_id='f2000000-0000-4000-8000-000000000001';
+alter table public.shipments enable trigger shipment_packing_shipping_guard;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','f1000000-0000-4000-8000-000000000003',true);
+do $$ declare result jsonb; begin
+ result:=public.list_fulfillment_shipments('shipped',0);
+ if result->'rows'->0->>'packing_status'<>'legacy_unknown' then raise exception 'Legacy shipment history not visible'; end if;
+ begin
+  perform public.save_shipment_packing((result->'rows'->0->>'id')::uuid,'{"bottles_checked":true,"formula_stickers_checked":true,"bottles_sealed":true,"packaging_ready":true,"recipient_label_checked":true}',true);
+  raise exception 'Legacy packing was rewritten';
+ exception when check_violation then null; end;
+end $$;
 select set_config('request.jwt.claim.sub','f1000000-0000-4000-8000-000000000004',true);
 do $$ declare shipment_id uuid; result jsonb; begin
  select id into shipment_id from public.shipments where order_id='f2000000-0000-4000-8000-000000000001';

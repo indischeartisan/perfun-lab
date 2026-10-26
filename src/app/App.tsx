@@ -42,6 +42,7 @@ const ProductionPage = lazy(() => import('../pages/ProductionPage').then(module 
 const FulfillmentPage = lazy(() => import('../pages/FulfillmentPage').then(module => ({ default: module.FulfillmentPage })))
 const AdminPage = lazy(() => import('../pages/AdminPage').then(module => ({ default: module.AdminPage })))
 const VendorPaymentsPage = lazy(() => import('../pages/VendorPaymentsPage').then(module => ({ default: module.VendorPaymentsPage })))
+const VendorWorkPage = lazy(() => import('../pages/VendorWorkPage').then(module => ({ default: module.VendorWorkPage })))
 const ExploreArticlePage = lazy(() => import('../pages/ExploreArticlePage').then(module => ({ default: module.ExploreArticlePage })))
 const ExploreQuickCard = lazy(() => import('../components/ExploreQuickCard').then(module => ({ default: module.ExploreQuickCard })))
 const ExploreCollectionPage = lazy(() => import('../pages/ExploreCollectionPage').then(module => ({ default: module.ExploreCollectionPage })))
@@ -378,8 +379,8 @@ function WorkspaceApp({ auth }: { auth: ReturnType<typeof useAuth> }) {
     <main className="app-main">
       <WorkspaceLoadBoundary key={view}><Suspense fallback={<WorkspaceLoading/>}>
       {role === 'admin' ? <AdminPage key={auth.user.id} userId={auth.user.id}/> : null}
-      {view === 'production' && (vendor || perfumer) ? <ProductionPage key={`${auth.user.id}:${role}`} userId={auth.user.id} role={role}/> : null}
-      {view === 'fulfillment' && vendor ? <FulfillmentPage key={auth.user.id} role="vendor"/> : null}
+      {vendor && (view === 'production' || view === 'fulfillment') ? <VendorWorkPage key={`${auth.user.id}:${view}`} userId={auth.user.id} initialStage={view === 'fulfillment' ? 'shipping' : 'order'}/> : null}
+      {view === 'production' && perfumer ? <ProductionPage key={`${auth.user.id}:${role}`} userId={auth.user.id} role="perfumer"/> : null}
       {view === 'payouts' && vendor ? <VendorPaymentsPage key={auth.user.id}/> : null}
       </Suspense></WorkspaceLoadBoundary>
     </main>

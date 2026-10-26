@@ -12,13 +12,17 @@ update public.profiles set role='perfumer' where id='b1000000-0000-4000-8000-000
 
 insert into public.orders(id,order_number,user_id,request_id,request_payload,address_snapshot,subtotal,discount,shipping,grand_total)
 values
- ('b2000000-0000-4000-8000-000000000001','VENDOR-PAID','b1000000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"recipient_name":"Private Recipient","phone":"08123","address_line":"Private Street"}',598000,0,0,598000),
+ ('b2000000-0000-4000-8000-000000000001','VENDOR-PAID','b1000000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"recipient_name":"Private Recipient","phone":"08123","address_line":"Private Street"}',727000,0,0,727000),
  ('b2000000-0000-4000-8000-000000000002','VENDOR-PENDING','b1000000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"recipient_name":"Pending Recipient"}',129000,0,0,129000);
 insert into public.order_items(id,order_id,position,product_snapshot,creations_snapshot,quantity,normal_unit_price,unit_price,line_total) values
  ('b3000000-0000-4000-8000-000000000001','b2000000-0000-4000-8000-000000000001',1,
   '{"id":"bundle-3x10ml","label":"PLAY SET","volume_ml":10,"bottle_count":3}',
   '[{"name":"Blend 1","notes":[{"phase":"top","note":{"name":"Yuzu"}},{"phase":"middle","note":{"name":"Tea"}},{"phase":"base","note":{"name":"Musk"}}]},{"name":"Blend 2","notes":[{"phase":"top","note":{"name":"Mint"}},{"phase":"middle","note":{"name":"Jasmine"}},{"phase":"base","note":{"name":"Amber"}}]},{"name":"Blend 3","notes":[{"phase":"top","note":{"name":"Berries"}},{"phase":"middle","note":{"name":"Coffee"}},{"phase":"base","note":{"name":"Vanilla"}}]}]',
   2,299000,299000,598000),
+ ('b3000000-0000-4000-8000-000000000003','b2000000-0000-4000-8000-000000000001',2,
+  '{"id":"30ml","label":"30 ML","volume_ml":30,"bottle_count":1}',
+  '[{"name":"Blend 4","notes":[{"phase":"top","note":{"name":"Pear"}},{"phase":"middle","note":{"name":"Rose"}},{"phase":"base","note":{"name":"Cedar"}}]}]',
+  1,129000,129000,129000),
  ('b3000000-0000-4000-8000-000000000002','b2000000-0000-4000-8000-000000000002',1,
   '{"id":"10ml","label":"10 ML","volume_ml":10,"bottle_count":1}',
   '[{"name":"Blend 1","notes":[{"phase":"top","note":{"name":"Yuzu"}},{"phase":"middle","note":{"name":"Tea"}},{"phase":"base","note":{"name":"Musk"}}]}]',
@@ -49,7 +53,7 @@ do $$ declare result jsonb; repeated jsonb; workspace jsonb; begin
  if workspace->>'default_vendor_id' is not null or (workspace->>'unassigned_count')::integer<>1 or jsonb_array_length(workspace->'vendors')<>2 then raise exception 'Admin vendor workspace read model is incomplete'; end if;
  result:=public.admin_assign_vendor('b2000000-0000-4000-8000-000000000001','b1000000-0000-4000-8000-000000000003');
  repeated:=public.admin_assign_vendor('b2000000-0000-4000-8000-000000000001','b1000000-0000-4000-8000-000000000003');
- if result->>'vendor_fee_amount'<>'300000' or repeated->>'vendor_fee_amount'<>'300000' then raise exception 'Play Set fee is not 300000'; end if;
+ if result->>'vendor_fee_amount'<>'400000' or repeated->>'vendor_fee_amount'<>'400000' then raise exception 'Multi-item vendor fee snapshot is incorrect'; end if;
  if (public.admin_vendor_assignments(0)->>'count')::integer<>1 then raise exception 'Assignment retry duplicated row or admin cannot monitor assignment'; end if;
  begin perform public.admin_assign_vendor('b2000000-0000-4000-8000-000000000002','b1000000-0000-4000-8000-000000000003'); raise exception 'Pending order assigned'; exception when check_violation then null; end;
 end $$;
@@ -77,15 +81,21 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub','b1000000-0000-4000-8000-000000000003',true);
-do $$ declare job public.production_jobs; sid uuid; begin
+do $$ declare job public.production_jobs; second_job public.production_jobs; sid uuid; begin
  select * into job from public.production_jobs where order_item_id='b3000000-0000-4000-8000-000000000001';
- if job.formulas_snapshot->0->>'top'<>'Yuzu' then raise exception 'Assigned vendor cannot read formula snapshot'; end if;
+ select * into second_job from public.production_jobs where order_item_id='b3000000-0000-4000-8000-000000000003';
+ if job.formulas_snapshot->0->>'top'<>'Yuzu' or job.formulas_snapshot->1->>'top'<>'Mint' or job.formulas_snapshot->2->>'top'<>'Berries' then raise exception 'Play Set independent formula snapshots missing'; end if;
+ if second_job.product_snapshot->>'volume_ml'<>'30' or second_job.formulas_snapshot->0->>'top'<>'Pear' then raise exception 'Second item snapshot missing'; end if;
  if not exists(select 1 from public.shipments where order_id='b2000000-0000-4000-8000-000000000001') then raise exception 'Assigned vendor cannot read address projection'; end if;
  select id into sid from public.shipments where order_id='b2000000-0000-4000-8000-000000000001';
  begin perform public.fulfill_shipment(sid,'ship','JNE','REG','X'); raise exception 'Vendor shipped before all jobs completed'; exception when check_violation then null; end;
  job:=public.advance_production_job(job.id,'start');
  job:=public.advance_production_job(job.id,'complete');
  if job.status<>'completed' then raise exception 'Assigned vendor cannot complete job'; end if;
+ if (select status from public.shipments where id=sid)<>'pending' then raise exception 'Multi-item shipment became ready after only one job'; end if;
+ second_job:=public.advance_production_job(second_job.id,'start');
+ second_job:=public.advance_production_job(second_job.id,'complete');
+ if second_job.status<>'completed' or (select status from public.shipments where id=sid)<>'ready_to_ship' then raise exception 'Shipment not ready after all jobs completed'; end if;
 end $$;
 reset role;
 

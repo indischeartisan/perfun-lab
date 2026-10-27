@@ -5,13 +5,7 @@ import { useBlend } from '../hooks/useBlend'
 import { useCart } from '../hooks/useCart'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import type { CustomerOrder, OrderIntent } from '../lib/orders'
-import { BagPage } from '../pages/BagPage'
-import { BuildPage } from '../pages/BuildPage'
 import { ExplorePage } from '../pages/ExploreHomePage'
-import { CheckoutPage, OrderConfirmationPage } from '../pages/CheckoutPage'
-import { MorePage } from '../pages/MorePage'
-import { NoteLibraryPage } from '../pages/NoteLibraryPage'
-import { OrdersPage } from '../pages/OrdersPage'
 import type { AppView, CompleteSelection, ProductChoice, Selection } from '../types'
 import '../styles.css'
 import '../theme.css'
@@ -32,6 +26,7 @@ import { articleHash, articleIdFromHash, articleOriginFromHash, navigationHash, 
 import { getPublishedExploreContentById } from '../data/exploreContent'
 import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
 import { WorkspaceLoadBoundary } from '../components/WorkspaceLoadBoundary'
+import { CustomerRouteLoadBoundary } from '../components/CustomerRouteLoadBoundary'
 import { WheelTransferDialog } from '../components/WheelTransferDialog'
 import { emptyWheelExplorationState, emptyWheelLayerSelection, type WheelExplorationState, type WheelLayerSelection } from '../data/scentWheel'
 import { resolveWheelTransfer, type WheelTransfer, type WheelTransferResolution } from '../lib/wheelTransfer'
@@ -43,6 +38,13 @@ const FulfillmentPage = lazy(() => import('../pages/FulfillmentPage').then(modul
 const AdminPage = lazy(() => import('../pages/AdminPage').then(module => ({ default: module.AdminPage })))
 const VendorPaymentsPage = lazy(() => import('../pages/VendorPaymentsPage').then(module => ({ default: module.VendorPaymentsPage })))
 const VendorWorkPage = lazy(() => import('../pages/VendorWorkPage').then(module => ({ default: module.VendorWorkPage })))
+const BuildPage = lazy(() => import('../pages/BuildPage').then(module => ({ default: module.BuildPage })))
+const BagPage = lazy(() => import('../pages/BagPage').then(module => ({ default: module.BagPage })))
+const CheckoutPage = lazy(() => import('../pages/CheckoutPage').then(module => ({ default: module.CheckoutPage })))
+const OrderConfirmationPage = lazy(() => import('../pages/CheckoutPage').then(module => ({ default: module.OrderConfirmationPage })))
+const MorePage = lazy(() => import('../pages/MorePage').then(module => ({ default: module.MorePage })))
+const NoteLibraryPage = lazy(() => import('../pages/NoteLibraryPage').then(module => ({ default: module.NoteLibraryPage })))
+const OrdersPage = lazy(() => import('../pages/OrdersPage').then(module => ({ default: module.OrdersPage })))
 const ExploreArticlePage = lazy(() => import('../pages/ExploreArticlePage').then(module => ({ default: module.ExploreArticlePage })))
 const ExploreQuickCard = lazy(() => import('../components/ExploreQuickCard').then(module => ({ default: module.ExploreQuickCard })))
 const ExploreCollectionPage = lazy(() => import('../pages/ExploreCollectionPage').then(module => ({ default: module.ExploreCollectionPage })))
@@ -317,15 +319,15 @@ function ConnectedApp({ catalog, auth }: { catalog: Catalog; auth: ReturnType<ty
       {view === 'explore' ? <ExplorePage catalog={catalog} onMix={() => navigate('build')} onOpenArticle={openArticle} onOpenQuick={openQuickCard} onViewFresh={() => navigate('fresh')} onViewStudy={() => navigate('study')} onViewLibrary={() => navigate('library')}/> : null}
       {view === 'wheel' ? <Suspense fallback={<ExploreArticleLoading/>}><ScentWheelPage catalog={catalog} onBack={() => navigate('explore')} exploration={wheelExploration} onExplorationChange={setWheelExploration} selectedByLayer={wheelSelection} onSelectedByLayerChange={setWheelSelection} onMixSelection={requestWheelTransfer}/></Suspense> : null}
       {view === 'fresh' || view === 'study' ? <Suspense fallback={<ExploreArticleLoading/>}><ExploreCollectionPage kind={view} onBack={() => navigate('explore')} onOpenArticle={openArticle} onOpenQuick={openQuickCard}/></Suspense> : null}
-      {view === 'library' ? <NoteLibraryPage catalog={catalog} onBack={() => navigate('explore')} onOpenNote={openNote}/> : null}
+      {view === 'library' ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><NoteLibraryPage catalog={catalog} onBack={() => navigate('explore')} onOpenNote={openNote}/></Suspense></CustomerRouteLoadBoundary> : null}
       {view === 'note' ? <Suspense fallback={<ExploreArticleLoading/>}><NoteLibraryDetailPage catalog={catalog} noteId={noteId} onBack={() => navigate('library')} onOpenNote={openNote}/></Suspense> : null}
       {view === 'article' ? <Suspense fallback={<ExploreArticleLoading/>}><ExploreArticlePage key={articleId ?? 'missing'} articleId={articleId} backLabel={articleBackLabel(articleOrigin)} onBack={() => navigate(articleOrigin)} onMix={() => navigate('build')}/></Suspense> : null}
-      {view === 'build' ? <BuildPage catalog={catalog} selection={blend.selection} product={catalog.productOptions.some(option => option.id === blend.product) ? blend.product : null} playSetBlends={blend.playSetBlends} editingPlaySetIndex={blend.editingPlaySetIndex} added={blend.added} onSelect={blend.choose} onProduct={blend.setProduct} onAdd={addToBag} onSavePlaySetBlend={savePlaySetBlend} onAddPlaySet={addPlaySetToBag} onEditPlaySetBlend={blend.editPlaySetBlend} onCancelPlaySetEdit={blend.cancelPlaySetEdit} onExitPlaySet={blend.exitPlaySet} onGetItNow={checkoutDirect} getItNowBusy={directCheckoutBusy} getItNowError={directCheckoutError} onClearFormula={blend.clearCurrentFormula} onViewBag={() => navigate('bag')}/> : null}
-      {view === 'bag' ? <BagPage items={cart.items} onQuantity={cart.setQuantity} onSize={cart.setSize} onRemove={cart.remove} onBuild={() => { blend.clearCurrentFormula(); navigate('build') }} onCheckout={checkoutBag}/> : null}
-      {view === 'checkout' ? auth.user && checkoutDraft?.userId === auth.user.id ? <CheckoutPage key={auth.user.id} userId={auth.user.id} items={checkoutDraft.items} onBack={() => navigate('bag')} onPlaced={orderPlaced}/> : <div className="screen-empty"><p>{auth.loading ? 'Loading account…' : 'Add a perfume to your bag to checkout.'}</p><button onClick={() => navigate('bag')}>View Bag</button></div> : null}
-      {view === 'confirmation' && confirmedOrder && confirmedOrder.user_id === auth.user?.id ? <OrderConfirmationPage order={confirmedOrder} onBuild={() => { blend.clearCurrentFormula(); navigate('build') }} onOrders={() => navigate('orders')}/> : null}
-      {view === 'orders' ? <OrdersPage key={auth.user?.id ?? 'guest'} userId={auth.user?.id} onLogin={() => setAuthDialogOpen(true)} onBuild={() => navigate('bag')}/> : null}
-      {view === 'more' ? <MorePage onOrders={() => navigate('orders')} onFresh={() => navigate('fresh')} onStudy={() => navigate('study')} onLibrary={() => navigate('library')}/> : null}
+      {view === 'build' ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><BuildPage catalog={catalog} selection={blend.selection} product={catalog.productOptions.some(option => option.id === blend.product) ? blend.product : null} playSetBlends={blend.playSetBlends} editingPlaySetIndex={blend.editingPlaySetIndex} added={blend.added} onSelect={blend.choose} onProduct={blend.setProduct} onAdd={addToBag} onSavePlaySetBlend={savePlaySetBlend} onAddPlaySet={addPlaySetToBag} onEditPlaySetBlend={blend.editPlaySetBlend} onCancelPlaySetEdit={blend.cancelPlaySetEdit} onExitPlaySet={blend.exitPlaySet} onGetItNow={checkoutDirect} getItNowBusy={directCheckoutBusy} getItNowError={directCheckoutError} onClearFormula={blend.clearCurrentFormula} onViewBag={() => navigate('bag')}/></Suspense></CustomerRouteLoadBoundary> : null}
+      {view === 'bag' ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><BagPage items={cart.items} onQuantity={cart.setQuantity} onSize={cart.setSize} onRemove={cart.remove} onBuild={() => { blend.clearCurrentFormula(); navigate('build') }} onCheckout={checkoutBag}/></Suspense></CustomerRouteLoadBoundary> : null}
+      {view === 'checkout' ? auth.user && checkoutDraft?.userId === auth.user.id ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><CheckoutPage key={auth.user.id} userId={auth.user.id} items={checkoutDraft.items} onBack={() => navigate('bag')} onPlaced={orderPlaced}/></Suspense></CustomerRouteLoadBoundary> : <div className="screen-empty"><p>{auth.loading ? 'Loading account…' : 'Add a perfume to your bag to checkout.'}</p><button onClick={() => navigate('bag')}>View Bag</button></div> : null}
+      {view === 'confirmation' && confirmedOrder && confirmedOrder.user_id === auth.user?.id ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><OrderConfirmationPage order={confirmedOrder} onBuild={() => { blend.clearCurrentFormula(); navigate('build') }} onOrders={() => navigate('orders')}/></Suspense></CustomerRouteLoadBoundary> : null}
+      {view === 'orders' ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><OrdersPage key={auth.user?.id ?? 'guest'} userId={auth.user?.id} onLogin={() => setAuthDialogOpen(true)} onBuild={() => navigate('bag')}/></Suspense></CustomerRouteLoadBoundary> : null}
+      {view === 'more' ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><MorePage onOrders={() => navigate('orders')} onFresh={() => navigate('fresh')} onStudy={() => navigate('study')} onLibrary={() => navigate('library')}/></Suspense></CustomerRouteLoadBoundary> : null}
     </main>
     {quickContentId ? <Suspense fallback={null}><ExploreQuickCard contentId={quickContentId} onClose={() => setQuickContentId(null)} onMix={() => { setQuickContentId(null); navigate('build') }}/></Suspense> : null}
     {wheelTransferReview ? <WheelTransferDialog kind={wheelTransferReview.kind} issues={wheelTransferReview.resolution.issues} canContinue={wheelTransferReview.resolution.hasAvailableNotes} onContinueAvailable={continueWheelTransfer} onReplace={replaceWheelTransfer} onClose={() => setWheelTransferReview(null)}/> : null}
@@ -344,6 +346,10 @@ function WorkspaceLoading() {
 
 function ExploreArticleLoading() {
   return <div className="explore-article-loading" aria-busy="true"><p role="status">Opening the article…</p></div>
+}
+
+function CustomerRouteLoading() {
+  return <div className="explore-article-loading" aria-busy="true"><p role="status">Loading the lab…</p></div>
 }
 
 function RoleUnavailable({ auth }: { auth: ReturnType<typeof useAuth> }) {

@@ -9,17 +9,24 @@ update private.shipping_origin_settings set status='active',origin_destination_i
 select public.bind_address_shipping_destination('f5100000-0000-4000-8000-000000000001','f5200000-0000-4000-8000-000000000001',992,'{"name":"Destination"}');
 set local role service_role;
 do $$ declare q jsonb; items jsonb:='[{"product_id":"10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"}]}]'; begin
- q:=public.create_shipping_quote('f5100000-0000-4000-8000-000000000001','f5200000-0000-4000-8000-000000000001',items,'jne','JNE','REG',18000,'2 days'); perform set_config('app.shipping_checkout_quote',q->>'quote_id',false); perform set_config('app.shipping_checkout_items',items::text,false);
+ q:=public.create_shipping_quote('f5100000-0000-4000-8000-000000000001','f5200000-0000-4000-8000-000000000001',items,'jnt','J&T','REG',18000,'2 days','indonesia-province-v1','java','java'); perform set_config('app.shipping_checkout_quote',q->>'quote_id',false); perform set_config('app.shipping_checkout_items',items::text,false);
 end $$;
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','f5100000-0000-4000-8000-000000000001',true);
 do $$ declare items jsonb:=current_setting('app.shipping_checkout_items')::jsonb; qid uuid:=current_setting('app.shipping_checkout_quote')::uuid; reviewed jsonb; oid uuid; retry uuid; payment jsonb; begin
  reviewed:=public.quote_order('f5200000-0000-4000-8000-000000000001',items,qid);
- if (reviewed->>'shipping')::bigint<>18000 or (reviewed->>'grand_total')::bigint<>127000 then raise exception 'Shipping total was not server calculated: %',reviewed; end if;
+ if (reviewed->>'shipping')::bigint<>13000 or (reviewed->>'grand_total')::bigint<>122000 then raise exception 'Shipping total was not server calculated: %',reviewed; end if;
  oid:=(public.place_order('f5200000-0000-4000-8000-000000000001',items,qid,'f5300000-0000-4000-8000-000000000001',reviewed->>'quote_token')->>'order_id')::uuid;
  retry:=(public.place_order('f5200000-0000-4000-8000-000000000001',items,qid,'f5300000-0000-4000-8000-000000000001',reviewed->>'quote_token')->>'order_id')::uuid;
- if oid<>retry or (select shipping from public.orders where id=oid)<>18000 or (select shipping_quote_snapshot->>'service' from public.orders where id=oid)<>'REG' then raise exception 'Shipping order/idempotency snapshot failed'; end if;
+ if oid<>retry
+    or (select shipping from public.orders where id=oid)<>13000
+    or (select shipping_quote_snapshot->>'service' from public.orders where id=oid)<>'REG'
+    or (select (shipping_quote_snapshot->>'original_shipping_cost')::bigint from public.orders where id=oid)<>18000
+    or (select (shipping_quote_snapshot->>'shipping_discount')::bigint from public.orders where id=oid)<>5000
+    or (select (shipping_quote_snapshot->>'customer_shipping_total')::bigint from public.orders where id=oid)<>13000
+    or (select (shipping_quote_snapshot->>'promotion_subsidy')::bigint from public.orders where id=oid)<>5000
+ then raise exception 'Shipping voucher order/idempotency snapshot failed'; end if;
  perform set_config('app.shipping_checkout_order',oid::text,false);
  begin perform public.quote_order('f5200000-0000-4000-8000-000000000001','[{"product_id":"30ml","quantity":1,"formulas":[{"top":"soapy","middle":"peony","base":"amber"}]}]',qid); raise exception 'Item mismatch accepted'; exception when check_violation then null; end;
 end $$;
@@ -41,7 +48,7 @@ update public.profiles set role='admin' where id='f5100000-0000-4000-8000-000000
 set local role service_role;
 do $$ declare payment_id uuid; begin
  select id into payment_id from public.payments where order_id=current_setting('app.shipping_checkout_order')::uuid;
- perform public.apply_payment_event(payment_id,'fulfillment-paid',127000,'paid',clock_timestamp(),'{}');
+ perform public.apply_payment_event(payment_id,'fulfillment-paid',122000,'paid',clock_timestamp(),'{}');
 end $$;
 reset role;
 set local role authenticated;
@@ -64,12 +71,12 @@ do $$ declare job_id uuid; shipment_id uuid; snapshot jsonb; checklist jsonb:='{
  end loop;
  select id into shipment_id from public.shipments where order_id=current_setting('app.shipping_checkout_order')::uuid;
  if (select status from public.shipments where id=shipment_id)<>'ready_to_ship' then raise exception 'Completed production did not make shipment ready'; end if;
- if (select courier from public.shipments where id=shipment_id)<>'JNE' or (select service from public.shipments where id=shipment_id)<>'REG' then raise exception 'Shipment did not inherit customer service'; end if;
+ if (select courier from public.shipments where id=shipment_id)<>'J&T' or (select service from public.shipments where id=shipment_id)<>'REG' then raise exception 'Shipment did not inherit customer service'; end if;
  perform public.save_shipment_packing(shipment_id,checklist,true); perform public.save_actual_shipping(shipment_id,22000,'vendor');
  begin perform public.fulfill_shipment(shipment_id,'save','SiCepat','BEST',''); raise exception 'Vendor changed customer service'; exception when check_violation then null; end;
  begin perform public.admin_override_shipment_service(shipment_id,'SiCepat','BEST','Attempted vendor override'); raise exception 'Vendor override allowed'; exception when insufficient_privilege then null; end;
  snapshot:=public.list_fulfillment_shipments('ready_to_ship',0);
- if snapshot->'rows'->0->'customer_shipping'->>'courier'<>'JNE' then raise exception 'Vendor cannot see customer service'; end if;
+ if snapshot->'rows'->0->'customer_shipping'->>'courier'<>'J&T' then raise exception 'Vendor cannot see customer service'; end if;
 end $$;
 select set_config('request.jwt.claim.sub','f5100000-0000-4000-8000-000000000004',true);
 do $$ declare shipment_id uuid; before_total bigint; begin
@@ -77,7 +84,7 @@ do $$ declare shipment_id uuid; before_total bigint; begin
  select grand_total into before_total from public.orders where id=current_setting('app.shipping_checkout_order')::uuid;
  begin perform public.admin_override_shipment_service(shipment_id,'J&T','EZ',''); raise exception 'Override without reason allowed'; exception when check_violation then null; end;
  perform public.admin_override_shipment_service(shipment_id,'J&T','EZ','Carrier service outage');
- if (select grand_total from public.orders where id=current_setting('app.shipping_checkout_order')::uuid)<>before_total or (select shipping from public.orders where id=current_setting('app.shipping_checkout_order')::uuid)<>18000 then raise exception 'Override changed customer total'; end if;
+ if (select grand_total from public.orders where id=current_setting('app.shipping_checkout_order')::uuid)<>before_total or (select shipping from public.orders where id=current_setting('app.shipping_checkout_order')::uuid)<>13000 then raise exception 'Override changed customer total'; end if;
 end $$;
 reset role;
 set local role service_role;
@@ -99,5 +106,5 @@ do $$ declare shipment_id uuid; begin
  begin perform public.admin_override_shipment_service(shipment_id,'JNE','REG','Too late'); raise exception 'Shipped override allowed'; exception when check_violation then null; end;
 end $$;
 reset role;
-select 'PASS: checkout locks owned quote, preserves DOKU amount and idempotency, and fulfillment locks customer service with audited admin overrides' as result;
+select 'PASS: checkout applies one server-side Rp5.000 shipping voucher, preserves DOKU amount and idempotency, and fulfillment locks customer service with audited admin overrides' as result;
 rollback;

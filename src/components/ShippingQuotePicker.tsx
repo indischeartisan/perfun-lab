@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Address, OrderIntent } from '../lib/orders'
 import { bindShippingDestination, quoteExpired, searchShippingDestinations, selectShippingRate, shippingRates, type ShippingDestination, type ShippingQuote, type ShippingRate } from '../lib/shipping'
 import { errorMessage } from '../lib/supabase'
 import { formatPrice } from '../lib/currency'
+import { createShippingSearchRequestGate } from '../lib/shippingSearchState'
 
 export function ShippingQuotePicker({ address, items, onQuote }: { address: Address | null; items: OrderIntent[]; onQuote: (quote: ShippingQuote | null) => void }) {
   const [search, setSearch] = useState('')
@@ -14,14 +15,21 @@ export function ShippingQuotePicker({ address, items, onQuote }: { address: Addr
   const [quote, setQuote] = useState<ShippingQuote | null>(null)
   const [selected, setSelected] = useState('')
   const [clock, setClock] = useState<number | null>(null)
+  const searchGate = useRef(createShippingSearchRequestGate())
   useEffect(() => { if (!quote) return; const timer = window.setInterval(() => setClock(Date.now()), 10_000); return () => window.clearInterval(timer) }, [quote])
   useEffect(() => {
-    if (search.trim().length < 3 || bound) return
+    const query = search.trim()
+    const revision = searchGate.current.begin()
+    if (query.length < 3 || bound) return
+    let cancelled = false
     const timer = window.setTimeout(() => {
       setBusy(true); setError('')
-      searchShippingDestinations(search.trim()).then(setDestinations).catch(error => setError(errorMessage(error))).finally(() => setBusy(false))
+      searchShippingDestinations(query)
+        .then(next => { if (!cancelled && searchGate.current.isCurrent(revision)) setDestinations(next) })
+        .catch(error => { if (!cancelled && searchGate.current.isCurrent(revision)) setError(errorMessage(error)) })
+        .finally(() => { if (!cancelled && searchGate.current.isCurrent(revision)) setBusy(false) })
     }, 350)
-    return () => window.clearTimeout(timer)
+    return () => { cancelled = true; window.clearTimeout(timer) }
   }, [search, bound])
   const expired = quote ? quoteExpired(quote, clock ?? 0) : false
   const visibleDestinations = search.trim().length >= 3 && !bound ? destinations : []

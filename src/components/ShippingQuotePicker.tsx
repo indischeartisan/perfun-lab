@@ -1,47 +1,63 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Address, OrderIntent } from '../lib/orders'
 import { bindShippingDestination, quoteExpired, searchShippingDestinations, selectShippingRate, shippingRates, type ShippingDestination, type ShippingQuote, type ShippingRate } from '../lib/shipping'
 import { errorMessage } from '../lib/supabase'
 import { formatPrice } from '../lib/currency'
+import { createShippingSearchRequestGate } from '../lib/shippingSearchState'
 
 export function ShippingQuotePicker({ address, items, onQuote }: { address: Address | null; items: OrderIntent[]; onQuote: (quote: ShippingQuote | null) => void }) {
   const [search, setSearch] = useState('')
   const [destinations, setDestinations] = useState<ShippingDestination[]>([])
   const [bound, setBound] = useState(() => Boolean(address?.rajaongkir_destination_id))
   const [rates, setRates] = useState<ShippingRate[]>([])
-  const [busy, setBusy] = useState(false)
+  const [actionBusy, setActionBusy] = useState(false)
+  const [searchBusy, setSearchBusy] = useState(false)
   const [error, setError] = useState('')
   const [quote, setQuote] = useState<ShippingQuote | null>(null)
   const [selected, setSelected] = useState('')
   const [clock, setClock] = useState<number | null>(null)
+  const searchGate = useRef(createShippingSearchRequestGate())
+  const busy = actionBusy || searchBusy
   useEffect(() => { if (!quote) return; const timer = window.setInterval(() => setClock(Date.now()), 10_000); return () => window.clearInterval(timer) }, [quote])
   useEffect(() => {
-    if (search.trim().length < 3 || bound) return
+    const query = search.trim()
+    const gate = searchGate.current
+    const revision = gate.begin()
+    if (query.length < 3 || bound) return
+    let cancelled = false
     const timer = window.setTimeout(() => {
-      setBusy(true); setError('')
-      searchShippingDestinations(search.trim()).then(setDestinations).catch(error => setError(errorMessage(error))).finally(() => setBusy(false))
+      if (!gate.start(revision)) return
+      setSearchBusy(true); setError('')
+      searchShippingDestinations(query)
+        .then(next => { if (!cancelled && gate.isCurrent(revision)) setDestinations(next) })
+        .catch(error => { if (!cancelled && gate.isCurrent(revision)) setError(errorMessage(error)) })
+        .finally(() => { if (!cancelled && gate.settle(revision)) setSearchBusy(false) })
     }, 350)
-    return () => window.clearTimeout(timer)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+      if (gate.settle(revision)) setSearchBusy(false)
+    }
   }, [search, bound])
   const expired = quote ? quoteExpired(quote, clock ?? 0) : false
   const visibleDestinations = search.trim().length >= 3 && !bound ? destinations : []
   async function chooseDestination(destination: ShippingDestination) {
     if (!address || busy) return
-    setBusy(true); setError('')
+    setActionBusy(true); setError('')
     try { await bindShippingDestination(address.id, search.trim(), destination.id); setBound(true); setDestinations([]) }
-    catch (error) { setError(errorMessage(error)) } finally { setBusy(false) }
+    catch (error) { setError(errorMessage(error)) } finally { setActionBusy(false) }
   }
   async function loadRates() {
     if (!address || !bound || busy) return
-    setBusy(true); setError(''); setQuote(null); onQuote(null)
+    setActionBusy(true); setError(''); setQuote(null); onQuote(null)
     try { const next = await shippingRates(address.id, items); setRates(next) }
-    catch (error) { setError(errorMessage(error)) } finally { setBusy(false) }
+    catch (error) { setError(errorMessage(error)) } finally { setActionBusy(false) }
   }
   async function chooseRate(rate: ShippingRate) {
     if (!address || busy) return
-    setBusy(true); setError(''); setSelected(`${rate.courier_code}:${rate.service}`)
+    setActionBusy(true); setError(''); setSelected(`${rate.courier_code}:${rate.service}`)
     try { const next = await selectShippingRate(address.id, items, rate.service); setClock(Date.parse(next.expires_at) - 600_000); setQuote(next); onQuote(next) }
-    catch (error) { setSelected(''); setQuote(null); onQuote(null); setError(errorMessage(error)) } finally { setBusy(false) }
+    catch (error) { setSelected(''); setQuote(null); onQuote(null); setError(errorMessage(error)) } finally { setActionBusy(false) }
   }
   if (!address) return <section className="shipping-picker"><h2>Shipping</h2><p>Select a delivery address first.</p></section>
   return <section className="shipping-picker" aria-busy={busy}><h2>Shipping</h2>

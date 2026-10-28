@@ -1,4 +1,5 @@
 import { RajaOngkirShippingCostProvider, ShippingError, allowedCouriers, type Rate } from '../_shared/rajaongkir.ts'
+import { dedupeShippingRateRequest } from '../_shared/shipping-rate-dedupe.ts'
 import { assignAutomaticCourier, selectAutomaticRate } from '../_shared/shipping-routing.ts'
 import { shippingCors, shippingFailure, shippingJson, shippingProvider, shippingRpc, shippingUser } from '../_shared/shipping-runtime.ts'
 
@@ -19,7 +20,7 @@ Deno.serve(async req => {
   const weight=await shippingRpc<Weight>('shipping_weight_for_items',{p_items:body.items})
   const cacheKey=await digest(JSON.stringify({v:context.origin_version,p:weight.package_profile_version,o:context.origin_destination_id,d:context.address.destination_id,w:weight.weight_grams,r:route.version,or:route.originRegion,dr:route.destinationRegion,c:route.courier}))
   const cached=await shippingRpc<{rates:Rate[];expires_at:string}|null>('shipping_quote_cache_get',{p_cache_key:cacheKey})
-  const {key,baseUrl}=shippingProvider(), rates=cached?.rates ?? await new RajaOngkirShippingCostProvider(key,baseUrl).rates(context.origin_destination_id,context.address.destination_id,weight.weight_grams,route.courier)
+  const {key,baseUrl}=shippingProvider(), rates=cached?.rates ?? await dedupeShippingRateRequest(cacheKey,()=>new RajaOngkirShippingCostProvider(key,baseUrl).rates(context.origin_destination_id,context.address.destination_id,weight.weight_grams,route.courier))
   if(!rates.length) throw new ShippingError('No shipping service is available for this route.',422)
   if(!cached) await shippingRpc('shipping_quote_cache_put',{p_cache_key:cacheKey,p_origin_version:context.origin_version,p_package_profile_version:weight.package_profile_version,p_origin_destination_id:context.origin_destination_id,p_destination_id:context.address.destination_id,p_weight_grams:weight.weight_grams,p_courier_code:route.courier,p_rates:rates})
   const requestedService=typeof body.service==='string' ? body.service.trim() : ''

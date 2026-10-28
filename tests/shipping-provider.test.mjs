@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { RajaOngkirShippingCostProvider, ShippingError } from '../supabase/functions/_shared/rajaongkir.ts'
+import { dedupeShippingRateRequest } from '../supabase/functions/_shared/shipping-rate-dedupe.ts'
 import { assignAutomaticCourier, resolveShippingRegion, selectAutomaticRate } from '../supabase/functions/_shared/shipping-routing.ts'
 
 function response(status, body) { return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }) }
@@ -51,4 +52,21 @@ test('a client cannot select a rate from a courier other than the assigned route
  ]
  assert.equal(selectAutomaticRate(rates, route, 'REG')?.courier_code, 'anteraja')
  assert.equal(selectAutomaticRate(rates, route, 'EZ'), null)
+})
+
+test('identical in-flight provider rate requests share one request per Edge isolate', async () => {
+ let calls = 0
+ const load = async () => {
+  calls += 1
+  await new Promise(resolve => setTimeout(resolve, 5))
+  return [{ courier_code: 'jnt', courier_name: 'J&T Express', service: 'EZ', amount: 18000, etd: '2 days' }]
+ }
+ const [first, second] = await Promise.all([
+  dedupeShippingRateRequest('same-rate', load),
+  dedupeShippingRateRequest('same-rate', load)
+ ])
+ assert.equal(calls, 1)
+ assert.deepEqual(first, second)
+ await dedupeShippingRateRequest('same-rate', load)
+ assert.equal(calls, 2)
 })

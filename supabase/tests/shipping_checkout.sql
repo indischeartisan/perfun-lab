@@ -16,7 +16,11 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub','f5100000-0000-4000-8000-000000000001',true);
 do $$ declare items jsonb:=current_setting('app.shipping_checkout_items')::jsonb; qid uuid:=current_setting('app.shipping_checkout_quote')::uuid; reviewed jsonb; oid uuid; retry uuid; payment jsonb; begin
  reviewed:=public.quote_order('f5200000-0000-4000-8000-000000000001',items,qid);
- if (reviewed->>'shipping')::bigint<>13000 or (reviewed->>'grand_total')::bigint<>122000 then raise exception 'Shipping total was not server calculated: %',reviewed; end if;
+ if (reviewed->>'shipping')::bigint<>13000 or (reviewed->>'grand_total')::bigint<>122000
+    or (reviewed->'shipping_quote_snapshot'->>'original_shipping_amount')::bigint<>18000
+    or (reviewed->'shipping_quote_snapshot'->>'shipping_discount')::bigint<>5000
+    or (reviewed->'shipping_quote_snapshot'->>'customer_shipping_total')::bigint<>13000
+ then raise exception 'Shipping review breakdown was not server calculated: %',reviewed; end if;
  oid:=(public.place_order('f5200000-0000-4000-8000-000000000001',items,qid,'f5300000-0000-4000-8000-000000000001',reviewed->>'quote_token')->>'order_id')::uuid;
  retry:=(public.place_order('f5200000-0000-4000-8000-000000000001',items,qid,'f5300000-0000-4000-8000-000000000001',reviewed->>'quote_token')->>'order_id')::uuid;
  if oid<>retry
@@ -106,5 +110,42 @@ do $$ declare shipment_id uuid; begin
  begin perform public.admin_override_shipment_service(shipment_id,'JNE','REG','Too late'); raise exception 'Shipped override allowed'; exception when check_violation then null; end;
 end $$;
 reset role;
-select 'PASS: checkout applies one server-side Rp5.000 shipping voucher, preserves DOKU amount and idempotency, and fulfillment locks customer service with audited admin overrides' as result;
+set local role service_role;
+do $$ declare q jsonb; begin
+ q:=public.create_shipping_quote('f5100000-0000-4000-8000-000000000001','f5200000-0000-4000-8000-000000000001',current_setting('app.shipping_checkout_items')::jsonb,'jnt','J&T','REG',4000,'2 days','indonesia-province-v1','java','java');
+ perform set_config('app.shipping_checkout_small_quote',q->>'quote_id',false);
+end $$;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','f5100000-0000-4000-8000-000000000001',true);
+do $$ declare reviewed jsonb; begin
+ reviewed:=public.quote_order('f5200000-0000-4000-8000-000000000001',current_setting('app.shipping_checkout_items')::jsonb,current_setting('app.shipping_checkout_small_quote')::uuid);
+ if (reviewed->'shipping_quote_snapshot'->>'original_shipping_amount')::bigint<>4000
+    or (reviewed->'shipping_quote_snapshot'->>'shipping_discount')::bigint<>4000
+    or (reviewed->'shipping_quote_snapshot'->>'customer_shipping_total')::bigint<>0
+    or (reviewed->>'shipping')::bigint<>0
+ then raise exception 'Small shipping voucher breakdown was not server calculated: %',reviewed; end if;
+end $$;
+reset role;
+set local role service_role;
+do $$ declare expired_quote jsonb; mismatched_quote jsonb; begin
+ expired_quote:=public.create_shipping_quote('f5100000-0000-4000-8000-000000000001','f5200000-0000-4000-8000-000000000001',current_setting('app.shipping_checkout_items')::jsonb,'jnt','J&T','REG',18000,'2 days','indonesia-province-v1','java','java');
+ update private.shipping_quotes
+    set created_at=clock_timestamp()-interval '10 minutes',
+        expires_at=clock_timestamp()-interval '9 minutes 59 seconds'
+  where id=(expired_quote->>'quote_id')::uuid;
+ mismatched_quote:=public.create_shipping_quote('f5100000-0000-4000-8000-000000000001','f5200000-0000-4000-8000-000000000001',current_setting('app.shipping_checkout_items')::jsonb,'jnt','J&T','REG',18000,'2 days','indonesia-province-v1','java','java');
+ update public.addresses set address_line='Changed after quote' where id='f5200000-0000-4000-8000-000000000001';
+ perform set_config('app.shipping_checkout_expired_quote',expired_quote->>'quote_id',false);
+ perform set_config('app.shipping_checkout_mismatched_quote',mismatched_quote->>'quote_id',false);
+end $$;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','f5100000-0000-4000-8000-000000000001',true);
+do $$ begin
+ begin perform public.quote_order('f5200000-0000-4000-8000-000000000001',current_setting('app.shipping_checkout_items')::jsonb,current_setting('app.shipping_checkout_expired_quote')::uuid); raise exception 'Expired shipping quote accepted'; exception when check_violation then null; end;
+ begin perform public.quote_order('f5200000-0000-4000-8000-000000000001',current_setting('app.shipping_checkout_items')::jsonb,current_setting('app.shipping_checkout_mismatched_quote')::uuid); raise exception 'Address-mismatched shipping quote accepted'; exception when check_violation then null; end;
+end $$;
+reset role;
+select 'PASS: checkout applies one server-side Rp5.000 shipping voucher, preserves DOKU amount and idempotency, rejects expired or mismatched quotes, and fulfillment locks customer service with audited admin overrides' as result;
 rollback;

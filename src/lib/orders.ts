@@ -1,5 +1,6 @@
 import { requireSupabase } from './supabase'
 import type { ShipmentSummary } from './shipments'
+export { reviewedShippingBreakdown } from './shippingCheckoutReview'
 
 export interface AddressInput {
   recipient_name: string; phone: string; address_line: string; city: string; province: string; postal_code: string; label: string; is_default: boolean
@@ -12,10 +13,23 @@ export interface OrderLine {
   creations_snapshot: Array<{ id?: string; name: string; notes: Array<{ phase: string; note: { id: string; name: string } }> }>
   quantity: number; normal_unit_price: number; unit_price: number; line_total: number
 }
-export interface Quote { address_snapshot: AddressInput; items: OrderLine[]; subtotal: number; discount: number; shipping: number; grand_total: number; quote_token: string }
+export interface ShippingQuoteSnapshot {
+  quote_id: string
+  courier_code: string
+  courier_name: string
+  service: string
+  amount: number
+  original_shipping_amount: number
+  shipping_discount: number
+  customer_shipping_total: number
+  promotion_subsidy: number
+  etd: string
+  expires_at: string
+}
+export interface Quote { address_snapshot: AddressInput; items: OrderLine[]; subtotal: number; discount: number; shipping: number; grand_total: number; quote_token: string; shipping_quote_snapshot: ShippingQuoteSnapshot }
 export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'expired' | 'refunded'
 export interface PaymentSummary { id: string; provider: string; status: PaymentStatus; amount: number; paid_at: string | null }
-export interface CustomerOrder extends Omit<Quote, 'items' | 'quote_token'> { id: string; user_id: string; order_number: string; status: string; payment_status: PaymentStatus; created_at: string; order_items: OrderLine[]; payments: PaymentSummary[]; shipment: ShipmentSummary | null }
+export interface CustomerOrder extends Omit<Quote, 'items' | 'quote_token' | 'shipping_quote_snapshot'> { id: string; user_id: string; order_number: string; status: string; payment_status: PaymentStatus; created_at: string; shipping_quote_snapshot: ShippingQuoteSnapshot | null; order_items: OrderLine[]; payments: PaymentSummary[]; shipment: ShipmentSummary | null }
 
 export async function listAddresses() {
   const { data, error } = await requireSupabase().from('addresses').select('*').order('is_default', { ascending: false }).order('created_at')

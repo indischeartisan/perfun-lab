@@ -14,7 +14,7 @@ begin
      verified_at=clock_timestamp(),verified_by=owner_id,updated_by=owner_id
  where singleton=true and status='inactive';
  update public.addresses set rajaongkir_destination_id=900002,rajaongkir_destination_label='{"name":"Test destination"}',rajaongkir_destination_verified_at=clock_timestamp() where id=p_address_id and user_id=owner_id and rajaongkir_destination_id is null;
- quote:=private.create_shipping_quote(owner_id,p_address_id,p_items,'jne','JNE','REG',18000,'2 days');
+ quote:=private.create_shipping_quote(owner_id,p_address_id,p_items,'jnt','J&T','REG',18000,'2 days','indonesia-province-v1','java','java');
  review:=public.quote_order(p_address_id,p_items,(quote->>'quote_id')::uuid);
  insert into private.checkout_test_quote_tokens(quote_token,user_id,quote_id)
  values(review->>'quote_token',owner_id,(quote->>'quote_id')::uuid)

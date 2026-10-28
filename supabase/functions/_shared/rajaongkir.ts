@@ -6,7 +6,8 @@ export class ShippingError extends Error {
 type Json = Record<string, unknown>
 const record = (value: unknown): Json => value && typeof value === 'object' && !Array.isArray(value) ? value as Json : {}
 const text = (value: unknown, max = 100) => typeof value === 'string' && value.trim().length > 0 && value.trim().length <= max ? value.trim() : null
-export const allowedCouriers = new Set(['jne', 'jnt', 'sicepat'])
+// These are routing outcomes, not customer-selectable options.
+export const allowedCouriers = new Set(['jnt', 'anteraja'])
 
 export interface Destination { id: number; label: Record<string, unknown> }
 export interface Rate { courier_code: string; courier_name: string; service: string; amount: number; etd: string }

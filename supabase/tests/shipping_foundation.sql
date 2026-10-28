@@ -30,9 +30,15 @@ end $$;
 reset role;
 update private.shipping_origin_settings set status='active',origin_destination_id=999,origin_destination_label='{"name":"Verified Origin"}',verified_at=clock_timestamp(),verified_by='ab100000-0000-4000-8000-000000000003',updated_by='ab100000-0000-4000-8000-000000000003';
 set local role service_role;
-do $$ declare quote jsonb; begin
- quote:=public.create_shipping_quote('ab100000-0000-4000-8000-000000000001','ab200000-0000-4000-8000-000000000001','[{"product_id":"10ml","quantity":1}]','jne','JNE','REG',18000,'2 days');
+do $$ declare quote jsonb; small_quote jsonb; multi_quote jsonb; begin
+ quote:=public.create_shipping_quote('ab100000-0000-4000-8000-000000000001','ab200000-0000-4000-8000-000000000001','[{"product_id":"10ml","quantity":1}]','jnt','J&T','REG',18000,'2 days','indonesia-province-v1','java','java');
  if quote->>'quote_id' is null or (quote->>'weight_grams')::integer<>500 then raise exception 'Quote snapshot failed'; end if;
+ if (quote->>'original_shipping_amount')::bigint<>18000 or (quote->>'shipping_discount')::bigint<>5000 or (quote->>'customer_shipping_total')::bigint<>13000 or (quote->>'promotion_subsidy')::bigint<>5000 or (quote->>'amount')::bigint<>13000 then raise exception 'Rp5.000 voucher quote calculation failed: %',quote; end if;
+ small_quote:=public.create_shipping_quote('ab100000-0000-4000-8000-000000000001','ab200000-0000-4000-8000-000000000001','[{"product_id":"10ml","quantity":1}]','jnt','J&T','REG',4000,'2 days','indonesia-province-v1','java','java');
+ if (small_quote->>'original_shipping_amount')::bigint<>4000 or (small_quote->>'shipping_discount')::bigint<>4000 or (small_quote->>'customer_shipping_total')::bigint<>0 or (small_quote->>'promotion_subsidy')::bigint<>4000 or (small_quote->>'amount')::bigint<>0 then raise exception 'Voucher must cap at the positive provider rate: %',small_quote; end if;
+ multi_quote:=public.create_shipping_quote('ab100000-0000-4000-8000-000000000001','ab200000-0000-4000-8000-000000000001','[{"product_id":"10ml","quantity":2},{"product_id":"bundle-3x10ml","quantity":1}]','jnt','J&T','REG',18000,'2 days','indonesia-province-v1','java','java');
+ if (multi_quote->>'shipping_discount')::bigint<>5000 or (multi_quote->>'customer_shipping_total')::bigint<>13000 then raise exception 'Voucher must apply once per multi-item or bundle order: %',multi_quote; end if;
+ begin perform public.create_shipping_quote('ab100000-0000-4000-8000-000000000001','ab200000-0000-4000-8000-000000000001','[{"product_id":"10ml","quantity":1}]','jnt','J&T','REG',0,'2 days','indonesia-province-v1','java','java'); raise exception 'Zero provider rate accepted'; exception when check_violation then null; end;
  perform set_config('app.shipping_quote_id',quote->>'quote_id',false);
  begin perform public.bind_address_shipping_destination('ab100000-0000-4000-8000-000000000002','ab200000-0000-4000-8000-000000000001',12345,'{"name":"forged"}'); raise exception 'Other user bound address'; exception when insufficient_privilege then null; end;
 end $$;

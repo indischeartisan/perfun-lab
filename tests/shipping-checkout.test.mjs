@@ -1,9 +1,17 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { quoteExpired } from '../src/lib/shippingQuoteState.ts'
+import { reviewedShippingBreakdown } from '../src/lib/shippingCheckoutReview.ts'
 
 test('shipping quote expiry is fail-closed', () => {
   assert.equal(quoteExpired({ expires_at: '2026-10-10T00:00:00.000Z' }, Date.parse('2026-10-10T00:10:00.000Z')), true)
   assert.equal(quoteExpired({ expires_at: '2026-10-10T00:20:00.000Z' }, Date.parse('2026-10-10T00:10:00.000Z')), false)
   assert.equal(quoteExpired({ expires_at: 'not-a-date' }, Date.now()), true)
+})
+
+test('checkout review only renders a complete backend shipping breakdown', () => {
+  const snapshot = { quote_id: 'quote', courier_code: 'jnt', courier_name: 'J&T Express', service: 'EZ', amount: 15000, original_shipping_amount: 20000, shipping_discount: 5000, customer_shipping_total: 15000, promotion_subsidy: 5000, etd: '1-2 days', expires_at: '2026-10-30T00:00:00.000Z' }
+  assert.deepEqual(reviewedShippingBreakdown({ shipping: 15000, shipping_quote_snapshot: snapshot }), snapshot)
+  assert.equal(reviewedShippingBreakdown({ shipping: 15000, shipping_quote_snapshot: { ...snapshot, customer_shipping_total: 14000 } }), null)
+  assert.equal(reviewedShippingBreakdown({ shipping: 15000, shipping_quote_snapshot: { ...snapshot, shipping_discount: -1 } }), null)
 })

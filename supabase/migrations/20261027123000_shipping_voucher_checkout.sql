@@ -16,6 +16,8 @@ where original_shipping_amount is null or customer_shipping_total is null;
 alter table private.shipping_quotes
   alter column original_shipping_amount set not null,
   alter column customer_shipping_total set not null,
+  drop constraint shipping_quotes_amount_check,
+  add constraint shipping_quotes_customer_amount_check check(amount >= 0),
   add constraint shipping_quotes_voucher_math check(
     original_shipping_amount > 0
     and shipping_discount = least(original_shipping_amount,5000)

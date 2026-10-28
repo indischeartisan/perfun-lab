@@ -76,6 +76,8 @@ begin
  return jsonb_build_object('order_id',order_id);
 end $$;
 revoke all on function private.checkout(uuid,jsonb,uuid,uuid,text,boolean) from public,anon,authenticated;
+grant usage on schema private to authenticated;
+grant execute on function private.checkout(uuid,jsonb,uuid,uuid,text,boolean) to authenticated;
 
 -- Preserve an immutable, canonical breakdown for newly created orders. Historical
 -- snapshots are deliberately not rewritten.

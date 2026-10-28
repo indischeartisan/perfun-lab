@@ -130,7 +130,10 @@ reset role;
 set local role service_role;
 do $$ declare expired_quote jsonb; mismatched_quote jsonb; begin
  expired_quote:=public.create_shipping_quote('f5100000-0000-4000-8000-000000000001','f5200000-0000-4000-8000-000000000001',current_setting('app.shipping_checkout_items')::jsonb,'jnt','J&T','REG',18000,'2 days','indonesia-province-v1','java','java');
- update private.shipping_quotes set expires_at=clock_timestamp()-interval '1 second' where id=(expired_quote->>'quote_id')::uuid;
+ update private.shipping_quotes
+    set created_at=clock_timestamp()-interval '2 hours',
+        expires_at=clock_timestamp()-interval '1 hour'
+  where id=(expired_quote->>'quote_id')::uuid;
  mismatched_quote:=public.create_shipping_quote('f5100000-0000-4000-8000-000000000001','f5200000-0000-4000-8000-000000000001',current_setting('app.shipping_checkout_items')::jsonb,'jnt','J&T','REG',18000,'2 days','indonesia-province-v1','java','java');
  update public.addresses set address_line='Changed after quote' where id='f5200000-0000-4000-8000-000000000001';
  perform set_config('app.shipping_checkout_expired_quote',expired_quote->>'quote_id',false);

@@ -5,6 +5,10 @@ export function isShippingCheckoutEnabled(value: string | undefined = buildShipp
   return value === 'true'
 }
 
+export function shippingQuoteRequired(shippingEnabled: boolean, quoteId: string | null | undefined) {
+  return shippingEnabled && !quoteId
+}
+
 export function checkoutErrorMessage(error: unknown) {
   const message = error && typeof error === 'object' && 'message' in error
     ? String(error.message)

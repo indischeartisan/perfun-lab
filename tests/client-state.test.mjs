@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { errorWithCause } from '../src/lib/errors.ts'
 import { loadValue } from '../src/hooks/useLocalStorage.ts'
-import { readPendingCheckout } from '../src/lib/storageValidation.ts'
+import { isCheckoutPending, readPendingCheckout } from '../src/lib/storageValidation.ts'
 
 class MemoryStorage {
   values = new Map()
@@ -59,6 +59,12 @@ test('direct checkout recovery accepts only valid serialized intents', () => {
   assert.deepEqual(readPendingCheckout(JSON.stringify(directItems), noteGroups), directItems)
   assert.equal(readPendingCheckout(JSON.stringify([{ ...directItems[0], formulas: [] }]), noteGroups), null)
   assert.equal(readPendingCheckout('{not json', noteGroups), null)
+})
+
+test('shipping-disabled pending checkout accepts only an explicit null quote', () => {
+  const pending = { addressId: 'address', items: directItems, shippingQuoteId: null, requestId: 'request', token: 'token' }
+  assert.equal(isCheckoutPending(pending), true)
+  assert.equal(isCheckoutPending({ ...pending, shippingQuoteId: '' }), false)
 })
 
 test('authentication errors retain the original error as their cause', () => {

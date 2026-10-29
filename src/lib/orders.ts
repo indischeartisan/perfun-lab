@@ -44,12 +44,12 @@ export async function deleteAddress(id: string) {
   const { error } = await requireSupabase().from('addresses').delete().eq('id', id)
   if (error) throw error
 }
-export async function quoteOrder(addressId: string, items: OrderIntent[], shippingQuoteId: string): Promise<Quote> {
+export async function quoteOrder(addressId: string, items: OrderIntent[], shippingQuoteId: string | null): Promise<Quote> {
   const { data, error } = await requireSupabase().rpc('quote_order', { p_address_id: addressId, p_items: items, p_shipping_quote_id: shippingQuoteId })
   if (error) throw error
   return data as Quote
 }
-export async function placeOrder(addressId: string, items: OrderIntent[], shippingQuoteId: string, requestId: string, token: string) {
+export async function placeOrder(addressId: string, items: OrderIntent[], shippingQuoteId: string | null, requestId: string, token: string) {
   const { data, error } = await requireSupabase().rpc('place_order', { p_address_id: addressId, p_items: items, p_shipping_quote_id: shippingQuoteId, p_request_id: requestId, p_quote_token: token })
   if (error) throw error
   return data.order_id as string

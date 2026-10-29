@@ -9,8 +9,8 @@ select set_config('request.jwt.claim.sub','f5100000-0000-4000-8000-000000000001'
 do $$ declare items jsonb:='[{"product_id":"10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"}]}]'; reviewed jsonb; reviewed_with_quote jsonb; oid uuid; retry uuid; begin
  reviewed:=public.quote_order('f5200000-0000-4000-8000-000000000001',items,null);
  reviewed_with_quote:=public.quote_order('f5200000-0000-4000-8000-000000000001',items,'00000000-0000-4000-8000-000000000099');
- if (reviewed->>'shipping')::bigint<>0 or reviewed->'shipping_quote_snapshot' is not null
-    or (reviewed_with_quote->>'shipping')::bigint<>0 or reviewed_with_quote->'shipping_quote_snapshot' is not null then raise exception 'Disabled shipping checkout accepted a quote or changed its amount'; end if;
+ if (reviewed->>'shipping')::bigint<>0 or reviewed->'shipping_quote_snapshot' is distinct from 'null'::jsonb
+    or (reviewed_with_quote->>'shipping')::bigint<>0 or reviewed_with_quote->'shipping_quote_snapshot' is distinct from 'null'::jsonb then raise exception 'Disabled shipping checkout accepted a quote or changed its amount'; end if;
  oid:=(public.place_order('f5200000-0000-4000-8000-000000000001',items,null,'f5300000-0000-4000-8000-000000000099',reviewed->>'quote_token')->>'order_id')::uuid;
  retry:=(public.place_order('f5200000-0000-4000-8000-000000000001',items,null,'f5300000-0000-4000-8000-000000000099',reviewed->>'quote_token')->>'order_id')::uuid;
  if oid<>retry or (select shipping from public.orders where id=oid)<>0 or (select grand_total from public.orders where id=oid)<>(select subtotal-discount from public.orders where id=oid) then raise exception 'Disabled shipping checkout lost idempotency or server-side totals'; end if;

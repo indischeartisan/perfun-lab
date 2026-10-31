@@ -9,6 +9,14 @@ export function shippingQuoteRequired(shippingEnabled: boolean, quoteId: string 
   return shippingEnabled && !quoteId
 }
 
+export type ShippingReadiness = { enabled: boolean; ready: boolean }
+export function checkoutShippingMode(buildEnabled: boolean, status: ShippingReadiness | null): 'loading' | 'standard' | 'shipping' | 'update' | 'unavailable' {
+  if (!status) return 'loading'
+  if (!status.enabled) return 'standard'
+  if (!buildEnabled) return 'update'
+  return status.ready ? 'shipping' : 'unavailable'
+}
+
 export function checkoutErrorMessage(error: unknown) {
   const message = error && typeof error === 'object' && 'message' in error
     ? String(error.message)

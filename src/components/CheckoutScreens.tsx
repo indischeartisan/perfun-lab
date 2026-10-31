@@ -3,11 +3,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { formatPrice } from '../lib/currency'
 import { getOrder, placeOrder, quoteOrder, type CustomerOrder, type OrderIntent, type OrderLine, type Quote } from '../lib/orders'
 import { reviewedShippingBreakdown } from '../lib/shippingCheckoutReview'
-import { checkoutErrorMessage, isShippingCheckoutEnabled, shippingQuoteRequired } from '../lib/shippingCheckout'
+import { checkoutErrorMessage, checkoutShippingMode, isShippingCheckoutEnabled, shippingQuoteRequired, type ShippingReadiness } from '../lib/shippingCheckout'
 import { AddressBook, AddressText } from './AddressBook'
 import { ShippingQuotePicker } from './ShippingQuotePicker'
 import type { Address } from '../lib/orders'
 import type { ShippingQuote } from '../lib/shipping'
+import { getCheckoutShippingReadiness } from '../lib/shipping'
 import { PaymentActions } from './PaymentActions'
 import { isCheckoutPending } from '../lib/storageValidation'
 
@@ -38,7 +39,15 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
   const locked = useRef(false)
   const itemsFingerprint = JSON.stringify(items)
   const previousItemsFingerprint = useRef(itemsFingerprint)
-  const shippingEnabled = isShippingCheckoutEnabled()
+  const [shippingStatus, setShippingStatus] = useState<ShippingReadiness | null>(null)
+  const [shippingStatusError, setShippingStatusError] = useState(false)
+  const mode = shippingStatusError ? 'unavailable' : checkoutShippingMode(isShippingCheckoutEnabled(), shippingStatus)
+  const shippingEnabled = mode === 'shipping'
+  useEffect(() => {
+    let active = true
+    void getCheckoutShippingReadiness().then(status => { if (active) setShippingStatus(status) }).catch(() => { if (active) setShippingStatusError(true) })
+    return () => { active = false }
+  }, [])
   const selectAddress = useCallback((id: string) => { setAddressId(id); setAddress(null); setShippingQuote(null); setQuote(null); setError('') }, [])
   useEffect(() => {
     if (previousItemsFingerprint.current === itemsFingerprint) return
@@ -57,7 +66,7 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
   async function review() {
     if (locked.current) return
     locked.current = true; setBusy(true); setError('')
-    try { if (shippingQuoteRequired(shippingEnabled, shippingQuote?.quote_id)) throw new Error('Choose a current shipping service before reviewing your order.'); setQuote(await quoteOrder(addressId, items, shippingQuote?.quote_id ?? null)) }
+    try { if (mode !== 'standard' && mode !== 'shipping') throw new Error('Shipping status unavailable. Please refresh and try again.'); if (shippingQuoteRequired(shippingEnabled, shippingQuote?.quote_id)) throw new Error('Choose a current shipping service before reviewing your order.'); setQuote(await quoteOrder(addressId, items, shippingQuote?.quote_id ?? null)) }
     catch (error) { setError(checkoutErrorMessage(error)); setQuote(null) }
     finally { locked.current = false; setBusy(false) }
   }
@@ -82,9 +91,12 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
   }
   return <section className="checkout-screen app-screen"><button className="checkout-back" disabled={busy || !!pending} onClick={onBack}><ArrowLeft/> Back to Bag</button><header className="screen-title"><span>CHECKOUT</span><h1>Almost yours.</h1><p>Choose your delivery address, then review your order.</p></header>
     {error ? <p className="cloud-message" role="alert">{error}</p> : null}
+    {mode === 'update' ? <p role="alert">Pengiriman sudah tersedia. Perbarui aplikasi atau buka ulang halaman sebelum melanjutkan checkout.</p> : null}
+    {mode === 'unavailable' ? <p role="alert">Status pengiriman belum tersedia. Muat ulang halaman dan coba lagi.</p> : null}
+    {mode === 'loading' ? <p role="status">Memeriksa status pengiriman…</p> : null}
     {pending ? <div className="cloud-message"><p>Your order request is saved. Check its result safely without creating another order.</p><button disabled={busy} onClick={submit}>{busy ? 'Checking order…' : 'Check / retry order'}</button></div> : <div className="checkout-grid">
       {!quote ? <><AddressBook selectedId={addressId} onSelect={selectAddress} onAddressSelect={setAddress}/>{shippingEnabled ? <ShippingQuotePicker key={address?.id ?? 'no-address'} address={address} items={items} onQuote={setShippingQuote}/> : null}</> : <div className="guest-form"><h2>Deliver to</h2><AddressText address={quote.address_snapshot}/><button className="checkout-back" disabled={busy} onClick={() => { setShippingQuote(null); setQuote(null) }}>Change address</button></div>}
-      <aside className="checkout-summary"><span>{quote ? 'REVIEW ORDER' : 'ORDER SUMMARY'}</span>{quote ? <><OrderLines items={quote.items}/><OrderTotals totals={quote}/><button disabled={busy} onClick={submit}>{busy ? 'CREATING ORDER…' : 'CREATE ORDER'}</button></> : <><p>{items.length} product selection{items.length === 1 ? '' : 's'} ready.</p><button disabled={!addressId || shippingQuoteRequired(shippingEnabled, shippingQuote?.quote_id) || busy} onClick={review}>{busy ? 'CALCULATING…' : 'REVIEW ORDER'}</button></>}<small>{shippingEnabled ? (shippingQuote ? 'Shipping is included in the total. Payment is not collected at this step.' : 'Choose an official destination and shipping service to continue.') : 'Shipping will be added when delivery service is available.'}</small></aside>
+      <aside className="checkout-summary"><span>{quote ? 'REVIEW ORDER' : 'ORDER SUMMARY'}</span>{quote ? <><OrderLines items={quote.items}/><OrderTotals totals={quote}/><button disabled={busy} onClick={submit}>{busy ? 'CREATING ORDER…' : 'CREATE ORDER'}</button></> : <><p>{items.length} product selection{items.length === 1 ? '' : 's'} ready.</p><button disabled={!addressId || (mode !== 'standard' && mode !== 'shipping') || shippingQuoteRequired(shippingEnabled, shippingQuote?.quote_id) || busy} onClick={review}>{busy ? 'CALCULATING…' : 'REVIEW ORDER'}</button></>}<small>{shippingEnabled ? (shippingQuote ? 'Shipping is included in the total. Payment is not collected at this step.' : 'Choose an official destination and shipping service to continue.') : 'Shipping will be added when delivery service is available.'}</small></aside>
     </div>}
   </section>
 }

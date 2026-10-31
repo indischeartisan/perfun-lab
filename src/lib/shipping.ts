@@ -6,6 +6,13 @@ export interface ShippingDestination { id: number; label: { name: string; city?:
 export interface ShippingRate { courier_code: string; courier_name: string; service: string; amount: number; etd: string }
 export interface ShippingQuote { quote_id: string; courier_code: string; courier_name: string; service: string; amount: number; original_shipping_amount?: number; shipping_discount?: number; customer_shipping_total?: number; promotion_subsidy?: number; etd: string; weight_grams: number; origin_version: number; package_profile_version: number; expires_at: string }
 
+export async function getCheckoutShippingReadiness() {
+  const { data, error } = await requireSupabase().rpc('checkout_shipping_readiness')
+  if (error) throw error
+  if (!data || typeof data.enabled !== 'boolean' || typeof data.ready !== 'boolean') throw new Error('Shipping status unavailable')
+  return { enabled: data.enabled as boolean, ready: data.ready as boolean }
+}
+
 async function invoke<T>(name: 'shipping-destinations' | 'shipping-quote', body: Record<string, unknown>): Promise<T> {
   const { data, error } = await requireSupabase().functions.invoke(name, { body })
   if (error) {

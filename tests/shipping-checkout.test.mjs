@@ -2,7 +2,16 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { quoteExpired } from '../src/lib/shippingQuoteState.ts'
 import { reviewedShippingBreakdown } from '../src/lib/shippingCheckoutReview.ts'
-import { shippingQuoteRequired } from '../src/lib/shippingCheckout.ts'
+import { checkoutShippingMode, shippingQuoteRequired } from '../src/lib/shippingCheckout.ts'
+
+test('checkout fails closed for mismatched or unavailable shipping readiness', () => {
+  assert.equal(checkoutShippingMode(false, { enabled: false, ready: false }), 'standard')
+  assert.equal(checkoutShippingMode(true, { enabled: false, ready: false }), 'standard')
+  assert.equal(checkoutShippingMode(true, { enabled: true, ready: true }), 'shipping')
+  assert.equal(checkoutShippingMode(false, { enabled: true, ready: true }), 'update')
+  assert.equal(checkoutShippingMode(true, { enabled: true, ready: false }), 'unavailable')
+  assert.equal(checkoutShippingMode(true, null), 'loading')
+})
 
 test('shipping quote expiry is fail-closed', () => {
   assert.equal(quoteExpired({ expires_at: '2026-10-10T00:00:00.000Z' }, Date.parse('2026-10-10T00:10:00.000Z')), true)

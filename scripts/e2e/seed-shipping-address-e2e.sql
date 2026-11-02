@@ -1,4 +1,8 @@
 update private.shipping_feature_settings set enabled = true;
+-- The Auth trigger normally creates this profile with the customer role. Keep
+-- the test setup explicit so an Auth-runtime change fails early instead of
+-- accidentally exercising a privileged account.
+update public.profiles set role = 'customer' where id = :'customer_id'::uuid;
 update private.shipping_origin_settings
 set status = 'active',
     origin_destination_id = 73357,

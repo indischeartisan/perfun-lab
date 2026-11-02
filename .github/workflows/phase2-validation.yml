@@ -86,7 +86,8 @@ jobs:
           }
           trap cleanup EXIT
 
-          supabase start
+          # Keep the local stack's generated credentials out of the Actions log.
+          supabase start >"$RUNNER_TEMP/supabase-start.log" 2>&1
           supabase db reset --local --yes
           supabase migration list --local
 
@@ -245,6 +246,11 @@ jobs:
           for attempt in {1..30}; do curl --silent --fail "$E2E_APP_URL" >/dev/null && break; sleep 1; done
           curl --silent --fail "$E2E_APP_URL" >/dev/null
           E2E_RESULT_FILE="$RUNNER_TEMP/e2e-result.json" node scripts/e2e/shipping-address-browser.mjs
+
+          # The browser fixture enables shipping to reach the local Functions.
+          # Restore the baseline before replaying the existing OFF/ON checkout
+          # regression, which deliberately verifies both feature states.
+          docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "update private.shipping_feature_settings set enabled = false"
 
           # Keep psql's \ir helper local to the repository checkout. This avoids
           # depending on a container mount while replaying the established SQL

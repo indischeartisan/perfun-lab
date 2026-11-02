@@ -7,10 +7,17 @@ Deno.serve(async req => {
  if (req.method === 'OPTIONS') return new Response(null,{status:204,headers:shippingCors(req)})
  if (req.method !== 'POST') return new Response(null,{status:405,headers:shippingCors(req)})
  try {
-  const userId=await shippingUser(req), body=await shippingJson(req), action=body.action==='bind' ? 'bind' : 'search', query=typeof body.query==='string' ? body.query.trim().replace(/\s+/g,' ') : ''
+  const userId=await shippingUser(req), body=await shippingJson(req), action=body.action==='bind' ? 'bind' : body.action==='save_address' ? 'save_address' : 'search', query=typeof body.query==='string' ? body.query.trim().replace(/\s+/g,' ') : ''
   if (query.length<3 || query.length>160) throw new ShippingError('Enter at least 3 characters to search a destination.',400)
   if (!await shippingRpc<boolean>('shipping_feature_ready',{})) throw new ShippingError('Shipping is not configured yet. Please try again later.',503)
-  const cacheKey=await digest(query.toLowerCase()), cached=await shippingRpc<unknown[]|null>('shipping_destination_cache_get',{p_cache_key:cacheKey})
+  // Version the cache when the normalized district/subdistrict shape changes.
+  const cacheKey=await digest('destination-v2:'+query.toLowerCase()), cached=await shippingRpc<unknown[]|null>('shipping_destination_cache_get',{p_cache_key:cacheKey})
+  if(action==='save_address') {
+   const addressId=typeof body.address_id==='string' ? body.address_id : '', destinationId=Number(body.destination_id)
+   if(!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(addressId) || !Number.isSafeInteger(destinationId) || destinationId<=0 || !cached || !body.address || typeof body.address!=='object' || Array.isArray(body.address)) throw new ShippingError('Search and select a valid shipping destination first.',422)
+   await shippingRpc('save_verified_shipping_address',{p_user_id:userId,p_id:addressId,p_address:body.address,p_cache_key:cacheKey,p_destination_id:destinationId})
+   return Response.json({saved:true,address_id:addressId},{headers:shippingCors(req)})
+  }
   if(action==='bind') {
    const addressId=typeof body.address_id==='string' ? body.address_id : '', destinationId=Number(body.destination_id)
    if(!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(addressId) || !Number.isSafeInteger(destinationId) || destinationId<=0 || !cached) throw new ShippingError('Search and select a valid shipping destination first.',422)

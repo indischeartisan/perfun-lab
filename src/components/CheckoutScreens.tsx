@@ -1,5 +1,5 @@
 import { ArrowLeft, PackageCheck } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { formatPrice } from '../lib/currency'
 import { getOrder, placeOrder, quoteOrder, type CustomerOrder, type OrderIntent, type OrderLine, type Quote } from '../lib/orders'
 import { reviewedShippingBreakdown } from '../lib/shippingCheckoutReview'
@@ -11,6 +11,7 @@ import type { ShippingQuote } from '../lib/shipping'
 import { getCheckoutShippingReadiness } from '../lib/shipping'
 import { PaymentActions } from './PaymentActions'
 import { isCheckoutPending } from '../lib/storageValidation'
+import { createShippingQuoteOwnerGate } from '../lib/shippingAddressState'
 
 interface Pending { addressId: string; items: OrderIntent[]; shippingQuoteId: string | null; requestId: string; token: string }
 function clearPending(key: string) { try { sessionStorage.removeItem(key) } catch { /* Storage is optional. */ } }
@@ -31,6 +32,7 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
   const storageKey = `perfun-order-submit:${userId}`
   const [pending, setPending] = useState<Pending | null>(() => readPending(storageKey, items))
   const [addressId, setAddressId] = useState(() => readPending(storageKey, items)?.addressId ?? '')
+  const [addressRevision, setAddressRevision] = useState(0)
   const [quote, setQuote] = useState<Quote | null>(null)
   const [shippingQuote, setShippingQuote] = useState<ShippingQuote | null>(null)
   const [address, setAddress] = useState<Address | null>(null)
@@ -38,7 +40,7 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
   const [error, setError] = useState('')
   const locked = useRef(false)
   const itemsFingerprint = JSON.stringify(items)
-  const previousItemsFingerprint = useRef(itemsFingerprint)
+  const quoteOwner = useRef(createShippingQuoteOwnerGate(itemsFingerprint))
   const [shippingStatus, setShippingStatus] = useState<ShippingReadiness | null>(null)
   const [shippingStatusError, setShippingStatusError] = useState(false)
   const mode = shippingStatusError ? 'unavailable' : checkoutShippingMode(isShippingCheckoutEnabled(), shippingStatus)
@@ -48,10 +50,14 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
     void getCheckoutShippingReadiness().then(status => { if (active) setShippingStatus(status) }).catch(() => { if (active) setShippingStatusError(true) })
     return () => { active = false }
   }, [])
-  const selectAddress = useCallback((id: string) => { setAddressId(id); setAddress(null); setShippingQuote(null); setQuote(null); setError('') }, [])
-  useEffect(() => {
-    if (previousItemsFingerprint.current === itemsFingerprint) return
-    previousItemsFingerprint.current = itemsFingerprint
+  const selectAddress = useCallback((id: string) => { const revision = quoteOwner.current.nextAddress(); setAddressId(id); setAddressRevision(revision); setAddress(null); setShippingQuote(null); setQuote(null); setError('') }, [])
+  const acceptShippingQuote = useCallback((next: ShippingQuote | null) => {
+    if (quoteOwner.current.accepts(addressRevision, itemsFingerprint)) setShippingQuote(next)
+  }, [addressRevision, itemsFingerprint])
+  useLayoutEffect(() => {
+    const revision = quoteOwner.current.updateItems(itemsFingerprint)
+    if (revision === null) return
+    setAddressRevision(revision)
     setShippingQuote(null); setQuote(null); setError('')
   }, [itemsFingerprint])
   useEffect(() => {
@@ -95,7 +101,7 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
     {mode === 'unavailable' ? <p role="alert">Status pengiriman belum tersedia. Muat ulang halaman dan coba lagi.</p> : null}
     {mode === 'loading' ? <p role="status">Memeriksa status pengiriman…</p> : null}
     {pending ? <div className="cloud-message"><p>Your order request is saved. Check its result safely without creating another order.</p><button disabled={busy} onClick={submit}>{busy ? 'Checking order…' : 'Check / retry order'}</button></div> : <div className="checkout-grid">
-      {!quote ? <><AddressBook selectedId={addressId} onSelect={selectAddress} onAddressSelect={setAddress}/>{shippingEnabled ? <ShippingQuotePicker key={address?.id ?? 'no-address'} address={address} items={items} onQuote={setShippingQuote}/> : null}</> : <div className="guest-form"><h2>Deliver to</h2><AddressText address={quote.address_snapshot}/><button className="checkout-back" disabled={busy} onClick={() => { setShippingQuote(null); setQuote(null) }}>Change address</button></div>}
+      {!quote ? <>{mode === 'standard' || mode === 'shipping' ? <AddressBook selectedId={addressId} onSelect={selectAddress} onAddressSelect={setAddress} shippingEnabled={shippingEnabled}/> : null}{shippingEnabled ? <ShippingQuotePicker key={`${address?.id ?? 'no-address'}:${addressRevision}:${itemsFingerprint}`} address={address} items={items} onQuote={acceptShippingQuote}/> : null}</> : <div className="guest-form"><h2>Deliver to</h2><AddressText address={quote.address_snapshot}/><button className="checkout-back" disabled={busy} onClick={() => { setShippingQuote(null); setQuote(null) }}>Change address</button></div>}
       <aside className="checkout-summary"><span>{quote ? 'REVIEW ORDER' : 'ORDER SUMMARY'}</span>{quote ? <><OrderLines items={quote.items}/><OrderTotals totals={quote}/><button disabled={busy} onClick={submit}>{busy ? 'CREATING ORDER…' : 'CREATE ORDER'}</button></> : <><p>{items.length} product selection{items.length === 1 ? '' : 's'} ready.</p><button disabled={!addressId || (mode !== 'standard' && mode !== 'shipping') || shippingQuoteRequired(shippingEnabled, shippingQuote?.quote_id) || busy} onClick={review}>{busy ? 'CALCULATING…' : 'REVIEW ORDER'}</button></>}<small>{shippingEnabled ? (shippingQuote ? 'Shipping is included in the total. Payment is not collected at this step.' : 'Choose an official destination and shipping service to continue.') : 'Shipping will be added when delivery service is available.'}</small></aside>
     </div>}
   </section>

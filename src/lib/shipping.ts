@@ -1,8 +1,9 @@
 import type { OrderIntent } from './orders'
+import type { AddressInput } from './orders'
 import { requireSupabase } from './supabase'
 export { quoteExpired } from './shippingQuoteState'
 
-export interface ShippingDestination { id: number; label: { name: string; city?: string | null; district?: string | null; province?: string | null; postal_code?: string | null } }
+export interface ShippingDestination { id: number; label: { name: string; city?: string | null; district?: string | null; subdistrict?: string | null; province?: string | null; postal_code?: string | null } }
 export interface ShippingRate { courier_code: string; courier_name: string; service: string; amount: number; etd: string }
 export interface ShippingQuote { quote_id: string; courier_code: string; courier_name: string; service: string; amount: number; original_shipping_amount?: number; shipping_discount?: number; customer_shipping_total?: number; promotion_subsidy?: number; etd: string; weight_grams: number; origin_version: number; package_profile_version: number; expires_at: string }
 
@@ -26,5 +27,6 @@ async function invoke<T>(name: 'shipping-destinations' | 'shipping-quote', body:
 }
 export async function searchShippingDestinations(query: string) { return (await invoke<{ destinations: ShippingDestination[] }>('shipping-destinations', { action: 'search', query })).destinations }
 export async function bindShippingDestination(addressId: string, query: string, destinationId: number) { await invoke('shipping-destinations', { action: 'bind', address_id: addressId, query, destination_id: destinationId }) }
+export async function saveAddressWithDestination(addressId: string, address: AddressInput, query: string, destinationId: number) { await invoke('shipping-destinations', { action: 'save_address', address_id: addressId, address, query, destination_id: destinationId }) }
 export async function shippingRates(addressId: string, items: OrderIntent[]) { return (await invoke<{ rates: ShippingRate[] }>('shipping-quote', { address_id: addressId, items })).rates }
 export async function selectShippingRate(addressId: string, items: OrderIntent[], service: string) { return (await invoke<{ quote: ShippingQuote }>('shipping-quote', { address_id: addressId, items, service })).quote }

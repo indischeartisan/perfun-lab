@@ -56,6 +56,9 @@ jobs:
       - name: Shipping provider unit tests
         run: npm run test:shipping
 
+      - name: Shipping destination normalization tests
+        run: node --experimental-strip-types --test tests/shipping-destination-normalization.test.mjs tests/shipping-search-state.test.mjs tests/shipping-address-state.test.mjs
+
       - name: Shipping checkout unit tests
         run: npm run test:shipping-checkout
 
@@ -98,6 +101,7 @@ jobs:
             supabase/tests/payouts.sql
             supabase/tests/shipping_foundation.sql
             supabase/tests/shipping_checkout.sql
+            supabase/tests/shipping_address_atomic.sql
             supabase/tests/checkout_shipping_readiness.sql
             supabase/tests/admin.sql
             supabase/tests/vendor_assignment.sql

@@ -22,6 +22,18 @@ test('invalid provider output and upstream failure cannot become a fake rate', a
  const failed = new RajaOngkirShippingCostProvider('test','https://rajaongkir.komerce.id/api/v1/',async () => response(503,{data:null}))
  await assert.rejects(()=>failed.rates(1,2,500,'jnt'),error => error instanceof ShippingError && error.status===502)
 })
+test('provider rejection reports safe status categories without exposing upstream content', async () => {
+ for (const status of [400, 401, 403, 404, 422, 429, 503]) {
+  const provider = new RajaOngkirShippingCostProvider('test-secret','https://rajaongkir.komerce.id/api/v1/',async () => response(status,{message:'sensitive-provider-body test-secret'}))
+  await assert.rejects(() => provider.rates(73357,4866,500,'jnt'), error => {
+   assert.ok(error instanceof ShippingError)
+   assert.equal(error.status,status===429?429:502)
+   assert.doesNotMatch(error.message,/test-secret|sensitive-provider-body/)
+   if (status!==429) assert.match(error.message,new RegExp(String(status)))
+   return true
+  })
+ }
+})
 test('destination IDs and couriers are validated before provider invocation', async () => {
  const provider = new RajaOngkirShippingCostProvider('test','https://rajaongkir.komerce.id/api/v1/',async () => { throw new Error('must not fetch') })
  await assert.rejects(()=>provider.rates(0,2,500,'jnt'),ShippingError)

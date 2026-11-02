@@ -18,7 +18,7 @@ end $$;
 reset role;
 update private.shipping_feature_settings set enabled=true;
 update private.shipping_origin_settings set status='active',origin_destination_id=991,origin_destination_label='{"name":"Origin"}',version=2,verified_at=clock_timestamp(),verified_by='f5100000-0000-4000-8000-000000000001',updated_by='f5100000-0000-4000-8000-000000000001';
-select public.bind_address_shipping_destination('f5100000-0000-4000-8000-000000000001','f5200000-0000-4000-8000-000000000001',992,'{"name":"Destination"}');
+select public.bind_address_shipping_destination('f5100000-0000-4000-8000-000000000001','f5200000-0000-4000-8000-000000000001',992,'{"name":"Destination","city":"Tangerang","province":"Banten","postal_code":"15720"}');
 set local role authenticated;
 select set_config('request.jwt.claim.sub','f5100000-0000-4000-8000-000000000001',true);
 do $$ begin

@@ -37,17 +37,20 @@ do $$ declare a uuid:='a7200000-0000-4000-8000-000000000001'; b uuid:='a7200000-
  if (select count(*) from public.addresses where user_id='a7100000-0000-4000-8000-000000000001' and is_default)<>1 or not exists(select 1 from public.addresses where id=b and is_default) then
   raise exception 'Default switching failed';
  end if;
- -- Legacy clients bind after an ordinary address save; all region fields must
- -- change together with the verified label and ID, not remain mismatched.
- perform public.bind_address_shipping_destination('a7100000-0000-4000-8000-000000000001',b,26027,'{"name":"Dauh Puri","city":"Denpasar","district":"Denpasar Barat","subdistrict":"Dauh Puri","province":"Bali","postal_code":"80113"}');
- if not exists(select 1 from public.addresses where id=b and city='Denpasar' and district='Dauh Puri, Denpasar Barat' and province='Bali' and postal_code='80113' and rajaongkir_destination_id=26027 and rajaongkir_destination_label->>'subdistrict'='Dauh Puri' and rajaongkir_destination_label->>'district'='Denpasar Barat') then
-  raise exception 'Legacy destination bind left inconsistent region';
+ -- A legacy bind must never silently rewrite the customer's saved region.
+ begin
+  perform public.bind_address_shipping_destination('a7100000-0000-4000-8000-000000000001',b,26027,'{"name":"Dauh Puri","city":"Denpasar","district":"Denpasar Barat","subdistrict":"Dauh Puri","province":"Bali","postal_code":"80113"}');
+  raise exception 'Mismatched legacy destination accepted';
+ exception when check_violation then null; end;
+ if not exists(select 1 from public.addresses where id=b and city='Bandung' and district='Cibangkong, Batununggal' and province='Jawa Barat' and postal_code='40273' and rajaongkir_destination_id=4866) then
+  raise exception 'Rejected legacy bind changed the saved address';
  end if;
+ perform public.bind_address_shipping_destination('a7100000-0000-4000-8000-000000000001',b,4866,'{"name":"Batununggal","city":"bandung","district":"batununggal","subdistrict":"cibangkong","province":"jawa barat","postal_code":"40273"}');
  begin
   perform public.bind_address_shipping_destination('a7100000-0000-4000-8000-000000000001',b,77,'{"name":"Incomplete"}');
   raise exception 'Incomplete legacy destination accepted';
  exception when check_violation then null; end;
- if not exists(select 1 from public.addresses where id=b and city='Denpasar' and rajaongkir_destination_id=26027) then
+ if not exists(select 1 from public.addresses where id=b and city='Bandung' and rajaongkir_destination_id=4866) then
   raise exception 'Rejected legacy destination changed the address';
  end if;
 end $$;

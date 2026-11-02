@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { deleteAddress, listAddresses, saveAddress, type Address, type AddressInput } from '../lib/orders'
 import { saveAddressWithDestination, searchShippingDestinations, type ShippingDestination } from '../lib/shipping'
 import { createShippingSearchRequestGate } from '../lib/shippingSearchState'
-import { canSaveShippingAddress, hasVerifiedShippingDestination } from '../lib/shippingAddressState'
+import { canSaveShippingAddress, hasVerifiedShippingDestination, shippingDestinationState } from '../lib/shippingAddressState'
 import { errorMessage } from '../lib/supabase'
 
 const empty: AddressInput = { recipient_name: '', phone: '', address_line: '', city: '', province: '', postal_code: '', label: '', is_default: false }
@@ -100,7 +100,7 @@ export function AddressBook({ selectedId, onSelect, onAddressSelect, shippingEna
     {error ? <p role="alert">{error} <button type="button" onClick={() => { setError(''); setLoading(true); setAttempt(n => n + 1) }}>Coba lagi</button></p> : null}
     <div className="address-list">{items.map(address => <article className={`address-card ${selectedId === address.id ? 'selected' : ''}`} key={address.id}>
       <label><input type="radio" name="address" checked={selectedId === address.id} onChange={() => { onSelect(address.id); onAddressSelect?.(address) }} disabled={busy}/><strong>{address.label}{address.is_default ? ' · Utama' : ''}</strong></label>
-      <AddressText address={address}/><div className="address-actions"><button type="button" disabled={busy} onClick={() => edit(address)}>{shippingEnabled && !hasVerifiedShippingDestination(address) ? 'Lengkapi Lokasi Pengiriman' : 'Ubah'}</button><button type="button" disabled={busy} onClick={() => remove(address.id)}>Hapus</button></div>
+      <AddressText address={address}/><div className="address-actions"><button type="button" disabled={busy} onClick={() => edit(address)}>{shippingEnabled && shippingDestinationState(address) === 'inconsistent' ? 'Periksa lokasi pengiriman' : shippingEnabled && !hasVerifiedShippingDestination(address) ? 'Lengkapi Lokasi Pengiriman' : 'Ubah'}</button><button type="button" disabled={busy} onClick={() => remove(address.id)}>Hapus</button></div>
     </article>)}</div>
     {!loading && !items.length ? <p>Tambahkan alamat pengiriman untuk melanjutkan.</p> : null}
     {!editor ? <button type="button" className="orders-build" disabled={busy} onClick={() => setEditor({ id: crypto.randomUUID(), value: { ...empty, is_default: items.length === 0 }, original: null, selected: null, needsLocation: shippingEnabled })}>Tambah alamat</button> : <form onSubmit={submit} className="address-editor"><h3>{editor.original ? 'Ubah alamat' : 'Alamat baru'}</h3><div className="form-grid">{fields.filter(field => !shippingEnabled || !['city', 'province', 'postal_code'].includes(field.key)).map(field => <label key={field.key} className={field.key === 'address_line' ? 'wide' : ''}><span>{field.label}</span><input required maxLength={field.key === 'address_line' ? 500 : 100} autoComplete={field.autoComplete} value={editor.value[field.key]} onChange={event => setEditor({ ...editor, value: { ...editor.value, [field.key]: event.target.value } })}/></label>)}</div>
@@ -112,6 +112,9 @@ export function AddressBook({ selectedId, onSelect, onAddressSelect, shippingEna
 export function AddressText({ address }: { address: AddressInput }) {
   const label = 'rajaongkir_destination_label' in address ? address.rajaongkir_destination_label : null
   const village = locationField(label, 'subdistrict'), district = locationField(label, 'district')
-  const locality = [village, district].filter((value, index, all) => value && all.indexOf(value) === index).join(', ') || ('district' in address && typeof address.district === 'string' ? address.district : '')
+  const storedDistrict = 'district' in address && typeof address.district === 'string' ? address.district : ''
+  // Never display the provider's district as if it were already saved when a
+  // legacy address requires the customer's explicit location confirmation.
+  const locality = shippingDestinationState(address) === 'inconsistent' ? storedDistrict : [village, district].filter((value, index, all) => value && all.indexOf(value) === index).join(', ') || storedDistrict
   return <div className="address-text"><strong>{address.recipient_name}</strong><p>{address.phone}</p><p>{address.address_line}</p>{locality ? <p>{locality}</p> : null}<p>{address.city}, {address.province} {address.postal_code}</p></div>
 }

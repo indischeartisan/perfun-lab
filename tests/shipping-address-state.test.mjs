@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { canSaveShippingAddress, createShippingQuoteOwnerGate, hasVerifiedShippingDestination } from '../src/lib/shippingAddressState.ts'
+import { canSaveShippingAddress, createShippingQuoteOwnerGate, hasVerifiedShippingDestination, shippingDestinationState } from '../src/lib/shippingAddressState.ts'
 
 test('editor opened before shipping readiness cannot save an unverified address when shipping becomes enabled', () => {
-  const verified = { rajaongkir_destination_id: 12, rajaongkir_destination_label: { name: 'Lokasi', city: 'Bandung', province: 'Jawa Barat', postal_code: '40000' }, rajaongkir_destination_verified_at: '2026-11-01T00:00:00Z' }
+  const verified = { city: 'Bandung', province: 'Jawa Barat', postal_code: '40000', district: '', rajaongkir_destination_id: 12, rajaongkir_destination_label: { name: 'Lokasi', city: 'Bandung', province: 'Jawa Barat', postal_code: '40000' }, rajaongkir_destination_verified_at: '2026-11-01T00:00:00Z' }
   assert.equal(canSaveShippingAddress(false, null, false, false), true)
   assert.equal(canSaveShippingAddress(true, null, false, false), false)
   assert.equal(canSaveShippingAddress(true, null, true, false), true)
@@ -14,7 +14,7 @@ test('editor opened before shipping readiness cannot save an unverified address 
 
 test('only a verified destination with complete canonical location is bound', () => {
   const label = { name: 'Lokasi resmi', city: 'Bandung', province: 'Jawa Barat', postal_code: '40000' }
-  const address = { rajaongkir_destination_id: 12, rajaongkir_destination_label: label, rajaongkir_destination_verified_at: '2026-11-01T00:00:00Z' }
+  const address = { city: 'Bandung', province: 'Jawa Barat', district: '', postal_code: '40000', rajaongkir_destination_id: 12, rajaongkir_destination_label: label, rajaongkir_destination_verified_at: '2026-11-01T00:00:00Z' }
   assert.equal(hasVerifiedShippingDestination(address), true)
   assert.equal(hasVerifiedShippingDestination({ ...address, rajaongkir_destination_verified_at: null }), false)
   assert.equal(hasVerifiedShippingDestination({ ...address, rajaongkir_destination_label: {} }), false)
@@ -23,6 +23,21 @@ test('only a verified destination with complete canonical location is bound', ()
   }
   assert.equal(hasVerifiedShippingDestination({ ...address, rajaongkir_destination_id: 0 }), false)
   assert.equal(hasVerifiedShippingDestination(null), false)
+})
+
+test('shipping destination must match every stored region field before use', () => {
+  const label = { name: 'Lokasi', city: 'Bandung', province: 'Jawa Barat', district: 'Cimenyan', subdistrict: 'Mekar', postal_code: '40000' }
+  const address = { city: ' bandung ', province: 'JAWA BARAT', district: 'MEKAR, cimenyan', postal_code: '40000', rajaongkir_destination_id: 12, rajaongkir_destination_label: label, rajaongkir_destination_verified_at: '2026-11-01T00:00:00Z' }
+  assert.equal(shippingDestinationState(address), 'valid')
+  for (const key of ['city', 'province', 'district', 'postal_code']) {
+    const changed = { ...address, [key]: 'berbeda' }
+    assert.equal(shippingDestinationState(changed), 'inconsistent', key)
+    assert.equal(canSaveShippingAddress(true, changed, false, false), false, key)
+    assert.equal(canSaveShippingAddress(true, changed, true, false), true, key)
+  }
+  assert.equal(shippingDestinationState({ ...address, district: 'Cimenyan', rajaongkir_destination_label: { ...label, subdistrict: undefined } }), 'valid', 'legacy district-only label')
+  assert.equal(shippingDestinationState({ ...address, district: 'Mekar', rajaongkir_destination_label: { ...label, district: 'mekar' } }), 'valid', 'duplicate district and subdistrict')
+  assert.equal(shippingDestinationState({ ...address, rajaongkir_destination_id: null }), 'missing')
 })
 
 test('a deferred quote from a previously selected address is ignored', async () => {

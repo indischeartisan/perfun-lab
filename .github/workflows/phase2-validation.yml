@@ -102,6 +102,7 @@ jobs:
             supabase/tests/shipping_foundation.sql
             supabase/tests/shipping_checkout.sql
             supabase/tests/shipping_address_atomic.sql
+            supabase/tests/shipping_address_consistency.sql
             supabase/tests/checkout_shipping_readiness.sql
             supabase/tests/admin.sql
             supabase/tests/vendor_assignment.sql

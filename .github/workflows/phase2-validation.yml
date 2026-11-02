@@ -217,7 +217,9 @@ jobs:
           }
           trap cleanup EXIT
 
-          supabase start
+          # The stack is ephemeral, but its generated local credentials must
+          # still not be emitted in an Actions log.
+          supabase start >"$RUNNER_TEMP/supabase-start.log" 2>&1
           supabase db reset --local --yes
           eval "$(supabase status -o env)"
           db_container="$(docker ps --format '{{.ID}} {{.Names}}' | awk '$2 ~ /^supabase_db_/ { print $1; exit }')"

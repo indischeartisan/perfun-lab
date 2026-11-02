@@ -221,8 +221,14 @@ jobs:
           trap cleanup EXIT
 
           # The stack is ephemeral, but its generated local credentials must
-          # still not be emitted in an Actions log.
-          supabase start >"$RUNNER_TEMP/supabase-start.log" 2>&1
+          # still not be emitted in an Actions log. Show only a redacted error
+          # classification if Docker or the local stack cannot start.
+          start_log="$RUNNER_TEMP/supabase-start.log"
+          if ! supabase start >"$start_log" 2>&1; then
+            echo '::error::Local Supabase stack failed to start (sanitized diagnostics follow).'
+            { grep -Ei 'error|fail|unable|cannot|denied|timeout|pull|start' "$start_log" || true; } | tail -n 30 | sed -E 's/(sb_(publishable|secret)_[A-Za-z0-9_-]+)/[redacted]/g; s/(postgres(ql)?:\/\/)[^@[:space:]]+@/\1[redacted]@/g; s/(service_role|anon|api[_-]?key|secret)[=:][^[:space:]]+/\1=[redacted]/Ig'
+            exit 1
+          fi
           supabase db reset --local --yes
           eval "$(supabase status -o env)"
           db_container="$(docker ps --format '{{.ID}} {{.Names}}' | awk '$2 ~ /^supabase_db_/ { print $1; exit }')"

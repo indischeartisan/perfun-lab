@@ -59,11 +59,15 @@ do $$ declare payment jsonb; begin
  if (payment->>'amount')::bigint<>(select grand_total from public.orders where id=current_setting('app.shipping_checkout_order')::uuid) then raise exception 'DOKU amount did not use final total'; end if;
 end $$;
 reset role;
+set local role authenticated;
 select set_config('request.jwt.claim.sub','f5100000-0000-4000-8000-000000000002',true);
 do $$ begin
  begin perform public.get_shipping_quote(current_setting('app.shipping_checkout_quote')::uuid); raise exception 'Foreign quote exposed'; exception when insufficient_privilege then null; end;
 end $$;
 select public.save_address('f5200000-0000-4000-8000-000000000002','{"recipient_name":"Other","phone":"0813","address_line":"Other street","city":"Tangerang","province":"Banten","postal_code":"15720","label":"Home"}');
+reset role;
+select public.bind_address_shipping_destination('f5100000-0000-4000-8000-000000000002','f5200000-0000-4000-8000-000000000002',992,'{"name":"Destination","city":"Tangerang","province":"Banten","postal_code":"15720"}');
+set local role authenticated;
 do $$ begin
  begin perform public.quote_order('f5200000-0000-4000-8000-000000000002',current_setting('app.shipping_checkout_items')::jsonb,current_setting('app.shipping_checkout_quote')::uuid); raise exception 'Foreign quote accepted for checkout'; exception when insufficient_privilege then null; end;
 end $$;

@@ -1,5 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.116.0'
-import { ShippingError } from './rajaongkir.ts'
+import { ShippingError, shippingProviderBaseUrlAllowed } from './rajaongkir.ts'
 
 export function shippingCors(req: Request) {
   const origin = req.headers.get('origin') ?? ''
@@ -48,12 +48,6 @@ export async function shippingRpc<T>(name: string,args: Record<string, unknown>)
 export function shippingProvider() {
   const key = Deno.env.get('RAJAONGKIR_SHIPPING_COST_API_KEY'), baseUrl = Deno.env.get('RAJAONGKIR_SHIPPING_COST_BASE_URL')
   if (!key || !baseUrl) throw new ShippingError('Shipping service is not configured',503)
-  try {
-    const url = new URL(baseUrl)
-    // A Shipping Cost sandbox host must be confirmed by RajaOngkir before it is configured.
-    if (url.protocol !== 'https:' || url.username || url.password || !url.hostname.endsWith('.komerce.id') || !url.pathname.startsWith('/api/v1')) throw new Error('invalid')
-    return { key, baseUrl: url.toString() }
-  } catch {
-    throw new ShippingError('Shipping service is not configured',503)
-  }
+  if (!shippingProviderBaseUrlAllowed(baseUrl, Deno.env.get('SHIPPING_ENVIRONMENT'))) throw new ShippingError('Shipping service is not configured',503)
+  return { key, baseUrl }
 }

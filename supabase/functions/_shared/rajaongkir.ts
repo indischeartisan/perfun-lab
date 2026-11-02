@@ -12,6 +12,18 @@ export const allowedCouriers = new Set(['jnt', 'anteraja'])
 export interface Destination { id: number; label: Record<string, unknown> }
 export interface Rate { courier_code: string; courier_name: string; service: string; amount: number; etd: string }
 
+/** Production accepts only the verified provider host. The integration host is
+ * deliberately exact and only usable by the disposable CI Docker network. */
+export function shippingProviderBaseUrlAllowed(value: string, environment: string | undefined): boolean {
+  try {
+    const url = new URL(value)
+    if (environment === 'integration-test') {
+      return url.protocol === 'http:' && url.hostname === 'rajaongkir-mock' && url.port === '8788' && url.pathname.startsWith('/api/v1') && !url.username && !url.password
+    }
+    return url.protocol === 'https:' && !url.username && !url.password && url.hostname.endsWith('.komerce.id') && url.pathname.startsWith('/api/v1')
+  } catch { return false }
+}
+
 export class RajaOngkirShippingCostProvider {
   private readonly apiKey: string
   private readonly baseUrl: string

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { deleteAddress, listAddresses, saveAddress, type Address, type AddressInput } from '../lib/orders'
 import { saveAddressWithDestination, searchShippingDestinations, type ShippingDestination } from '../lib/shipping'
 import { createShippingSearchRequestGate } from '../lib/shippingSearchState'
-import { canSaveShippingAddress, hasVerifiedShippingDestination, shippingDestinationState } from '../lib/shippingAddressState'
+import { canSaveShippingAddress, hasVerifiedShippingDestination, shippingDestinationState, storedAddressRegionSummary } from '../lib/shippingAddressState'
 import { errorMessage } from '../lib/supabase'
 
 const empty: AddressInput = { recipient_name: '', phone: '', address_line: '', city: '', province: '', postal_code: '', label: '', is_default: false }
@@ -23,7 +23,7 @@ function locationField(label: unknown, key: string): string | null {
 function LocationDetails({ label }: { label: unknown }) {
   const rows = ([['Provinsi', 'province'], ['Kabupaten / kota', 'city'], ['Kecamatan', 'district'], ['Kelurahan / desa', 'subdistrict'], ['Kode pos', 'postal_code']] as const)
     .map(([title, key]) => [title, locationField(label, key)] as const).filter(([, value]) => value)
-  return <><p>{locationField(label, 'name') ?? 'Lokasi tersimpan'}</p>{rows.length ? <dl>{rows.map(([title, value]) => <div key={title}><dt>{title}</dt><dd>{value}</dd></div>)}</dl> : null}</>
+  return <div className="shipping-location-details"><p>{locationField(label, 'name') ?? 'Lokasi tersimpan'}</p>{rows.length ? <dl>{rows.map(([title, value]) => <div key={title}><dt>{title}</dt><dd>{value}</dd></div>)}</dl> : null}</div>
 }
 
 function DestinationSearch({ onSelect }: { onSelect: (value: SelectedDestination) => void }) {
@@ -104,7 +104,7 @@ export function AddressBook({ selectedId, onSelect, onAddressSelect, shippingEna
     </article>)}</div>
     {!loading && !items.length ? <p>Tambahkan alamat pengiriman untuk melanjutkan.</p> : null}
     {!editor ? <button type="button" className="orders-build" disabled={busy} onClick={() => setEditor({ id: crypto.randomUUID(), value: { ...empty, is_default: items.length === 0 }, original: null, selected: null, needsLocation: shippingEnabled })}>Tambah alamat</button> : <form onSubmit={submit} className="address-editor"><h3>{editor.original ? 'Ubah alamat' : 'Alamat baru'}</h3><div className="form-grid">{fields.filter(field => !shippingEnabled || !['city', 'province', 'postal_code'].includes(field.key)).map(field => <label key={field.key} className={field.key === 'address_line' ? 'wide' : ''}><span>{field.label}</span><input required maxLength={field.key === 'address_line' ? 500 : 100} autoComplete={field.autoComplete} value={editor.value[field.key]} onChange={event => setEditor({ ...editor, value: { ...editor.value, [field.key]: event.target.value } })}/></label>)}</div>
-      {shippingEnabled ? <div><h4>Lokasi pengiriman</h4>{editor.needsLocation ? <DestinationSearch onSelect={selected => setEditor(current => current ? { ...current, selected, needsLocation: false, value: { ...current.value, city: selected.destination.label.city ?? '', province: selected.destination.label.province ?? '', postal_code: selected.destination.label.postal_code ?? '' } } : current)}/> : <><LocationDetails label={editor.selected?.destination.label ?? editor.original?.rajaongkir_destination_label}/><button type="button" disabled={busy} onClick={() => setEditor({ ...editor, selected: null, needsLocation: true })}>Ubah lokasi</button></>}</div> : null}
+      {shippingEnabled ? <div><h4>Lokasi pengiriman</h4>{editor.needsLocation ? <><div className="shipping-location-review" role="note"><span>Wilayah tersimpan saat ini</span><p>{storedAddressRegionSummary(editor.value)}</p><small>Lokasi RajaOngkir sebelumnya tidak cocok. Pilih lokasi yang benar untuk melanjutkan.</small></div><DestinationSearch onSelect={selected => setEditor(current => current ? { ...current, selected, needsLocation: false, value: { ...current.value, city: selected.destination.label.city ?? '', province: selected.destination.label.province ?? '', postal_code: selected.destination.label.postal_code ?? '' } } : current)}/></> : <><LocationDetails label={editor.selected?.destination.label ?? editor.original?.rajaongkir_destination_label}/><button type="button" disabled={busy} onClick={() => setEditor({ ...editor, selected: null, needsLocation: true })}>Ubah lokasi</button></>}</div> : null}
       <label className="default-address"><input type="checkbox" checked={editor.value.is_default} onChange={event => setEditor({ ...editor, value: { ...editor.value, is_default: event.target.checked } })}/> Jadikan alamat utama</label><div className="address-actions"><button type="submit" disabled={busy || !canSaveShippingAddress(shippingEnabled, editor.original, !!editor.selected, editor.needsLocation)}>{busy ? 'Menyimpan…' : 'Simpan alamat'}</button><button type="button" disabled={busy} onClick={() => setEditor(null)}>Batal</button></div></form>}
   </div>
 }

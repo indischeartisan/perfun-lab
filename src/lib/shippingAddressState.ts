@@ -11,6 +11,14 @@ type DestinationAddress = {
 type ShippingDestinationState = 'missing' | 'inconsistent' | 'valid'
 const normalize = (value: unknown) => typeof value === 'string' ? value.trim().toLowerCase() : ''
 
+/** Shows the customer's saved region while they explicitly reconfirm it. */
+export function storedAddressRegionSummary(address: Pick<DestinationAddress, 'city' | 'province' | 'district' | 'postal_code'> | null | undefined): string {
+  const values = [address?.district, address?.city, address?.province, address?.postal_code]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .map(value => value.trim())
+  return values.length ? values.join(' · ') : 'Wilayah tersimpan belum lengkap.'
+}
+
 /** Compare stored address fields to the verified provider label, including legacy labels. */
 export function shippingDestinationState(address: DestinationAddress | null | undefined): ShippingDestinationState {
   const id = address?.rajaongkir_destination_id

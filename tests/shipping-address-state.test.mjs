@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { canSaveShippingAddress, createShippingQuoteOwnerGate, hasVerifiedShippingDestination, shippingDestinationState } from '../src/lib/shippingAddressState.ts'
+import { canSaveShippingAddress, createShippingQuoteOwnerGate, hasVerifiedShippingDestination, shippingDestinationState, storedAddressRegionSummary } from '../src/lib/shippingAddressState.ts'
 
 test('editor opened before shipping readiness cannot save an unverified address when shipping becomes enabled', () => {
   const verified = { city: 'Bandung', province: 'Jawa Barat', postal_code: '40000', district: '', rajaongkir_destination_id: 12, rajaongkir_destination_label: { name: 'Lokasi', city: 'Bandung', province: 'Jawa Barat', postal_code: '40000' }, rajaongkir_destination_verified_at: '2026-11-01T00:00:00Z' }
@@ -38,6 +38,13 @@ test('shipping destination must match every stored region field before use', () 
   assert.equal(shippingDestinationState({ ...address, district: 'Cimenyan', rajaongkir_destination_label: { ...label, subdistrict: undefined } }), 'valid', 'legacy district-only label')
   assert.equal(shippingDestinationState({ ...address, district: 'Mekar', rajaongkir_destination_label: { ...label, district: 'mekar' } }), 'valid', 'duplicate district and subdistrict')
   assert.equal(shippingDestinationState({ ...address, rajaongkir_destination_id: null }), 'missing')
+})
+
+test('legacy-region review keeps the saved region visible until the customer confirms a provider location', () => {
+  const legacy = { city: 'Kota Manual', province: 'Provinsi Manual', district: 'Kecamatan Manual', postal_code: '11111' }
+  assert.equal(storedAddressRegionSummary(legacy), 'Kecamatan Manual · Kota Manual · Provinsi Manual · 11111')
+  assert.equal(storedAddressRegionSummary({ city: 'Bandung', province: 'Jawa Barat', postal_code: '40273' }), 'Bandung · Jawa Barat · 40273')
+  assert.equal(storedAddressRegionSummary({}), 'Wilayah tersimpan belum lengkap.')
 })
 
 test('a deferred quote from a previously selected address is ignored', async () => {

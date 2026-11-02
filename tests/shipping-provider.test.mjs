@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { RajaOngkirShippingCostProvider, ShippingError } from '../supabase/functions/_shared/rajaongkir.ts'
+import { RajaOngkirShippingCostProvider, ShippingError, shippingProviderBaseUrlAllowed } from '../supabase/functions/_shared/rajaongkir.ts'
 import { dedupeShippingRateRequest } from '../supabase/functions/_shared/shipping-rate-dedupe.ts'
 import { assignAutomaticCourier, resolveShippingRegion, selectAutomaticRate } from '../supabase/functions/_shared/shipping-routing.ts'
 
@@ -15,6 +15,14 @@ test('RajaOngkir provider sends secret only as key header and normalizes automat
  assert.equal(request.init.headers.key,'test-secret')
  assert.match(request.init.body.toString(),/origin=1/)
  assert.doesNotMatch(request.url,/test-secret/)
+})
+
+test('provider base URL only permits the exact disposable integration mock outside production', () => {
+  assert.equal(shippingProviderBaseUrlAllowed('https://rajaongkir.komerce.id/api/v1', 'production'), true)
+  assert.equal(shippingProviderBaseUrlAllowed('http://rajaongkir-mock:8788/api/v1', 'integration-test'), true)
+  assert.equal(shippingProviderBaseUrlAllowed('http://rajaongkir-mock:8788/api/v1', 'production'), false)
+  assert.equal(shippingProviderBaseUrlAllowed('http://arbitrary-host:8788/api/v1', 'integration-test'), false)
+  assert.equal(shippingProviderBaseUrlAllowed('https://rajaongkir-mock:8788/api/v1', 'integration-test'), false)
 })
 test('invalid provider output and upstream failure cannot become a fake rate', async () => {
  const invalid = new RajaOngkirShippingCostProvider('test','https://rajaongkir.komerce.id/api/v1/',async () => response(200,{data:[{name:'AnterAja',code:'anteraja',service:'REG',cost:0}]}))

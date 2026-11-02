@@ -1,0 +1,93 @@
+name: Shipping address E2E integration
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      E2E_EMAIL: customer-e2e@example.test
+      E2E_PASSWORD: E2e-Only-Local-Shipping-123!
+      E2E_APP_URL: http://127.0.0.1:4174/shipping-address-e2e.html
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.81.3
+      - name: Install application dependencies
+        run: npm ci
+      - name: Install disposable browser runner
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.59.1
+          npx playwright install --with-deps chromium
+      - name: Run local Supabase, mock provider, Edge Functions, and browser
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cleanup() {
+            [[ -n "${vite_pid:-}" ]] && kill "$vite_pid" 2>/dev/null || true
+            [[ -n "${functions_pid:-}" ]] && kill "$functions_pid" 2>/dev/null || true
+            docker rm -f rajaongkir-mock 2>/dev/null || true
+            supabase stop --no-backup || true
+          }
+          trap cleanup EXIT
+
+          supabase start
+          supabase db reset --local --yes
+          eval "$(supabase status -o env)"
+          db_container="$(docker ps --format '{{.ID}} {{.Names}}' | awk '$2 ~ /^supabase_db_/ { print $1; exit }')"
+          network="$(docker network ls --format '{{.Name}}' | awk '/^supabase_network_/ { print; exit }')"
+          test -n "$db_container" && test -n "$network"
+
+          user_json="$RUNNER_TEMP/e2e-user.json"
+          curl --fail --silent --show-error \
+            -X POST "$API_URL/auth/v1/admin/users" \
+            -H "apikey: $SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+            -H 'Content-Type: application/json' \
+            --data "{\"email\":\"$E2E_EMAIL\",\"password\":\"$E2E_PASSWORD\",\"email_confirm\":true}" \
+            > "$user_json"
+          customer_id="$(jq -r '.id' "$user_json")"
+          test "$customer_id" != null && test -n "$customer_id"
+          docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -v customer_id="$customer_id" < scripts/e2e/seed-shipping-address-e2e.sql
+
+          docker run -d --rm --name rajaongkir-mock --network "$network" \
+            -v "$GITHUB_WORKSPACE/scripts/e2e/rajaongkir-mock.mjs:/app/mock.mjs:ro" \
+            node:24-alpine node /app/mock.mjs >/dev/null
+          function_env="$RUNNER_TEMP/shipping-functions.env"
+          cat > "$function_env" <<EOF
+          SUPABASE_URL=http://kong:8000
+          SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY
+          RAJAONGKIR_SHIPPING_COST_API_KEY=e2e-mock-key
+          RAJAONGKIR_SHIPPING_COST_BASE_URL=http://rajaongkir-mock:8788/api/v1
+          SHIPPING_ENVIRONMENT=integration-test
+          SHIPPING_ALLOWED_ORIGINS=http://127.0.0.1:4174
+          APP_URL=http://127.0.0.1:4174
+          EOF
+          supabase functions serve --env-file "$function_env" --network-id "$network" >"$RUNNER_TEMP/functions.log" 2>&1 & functions_pid=$!
+
+          VITE_SUPABASE_URL="$API_URL" \
+          VITE_SUPABASE_PUBLISHABLE_KEY="$ANON_KEY" \
+          VITE_E2E_CUSTOMER_EMAIL="$E2E_EMAIL" \
+          VITE_E2E_CUSTOMER_PASSWORD="$E2E_PASSWORD" \
+          npx vite --config vite.shipping-address-e2e.config.ts --host 127.0.0.1 --port 4174 >"$RUNNER_TEMP/vite.log" 2>&1 & vite_pid=$!
+          for attempt in {1..30}; do curl --silent --fail "$E2E_APP_URL" >/dev/null && break; sleep 1; done
+          curl --silent --fail "$E2E_APP_URL" >/dev/null
+          E2E_RESULT_FILE="$RUNNER_TEMP/e2e-result.json" node scripts/e2e/shipping-address-browser.mjs
+
+          # Existing transaction-scoped regression exercises the rejected legacy
+          # address, expired quote, foreign quote, idempotency, voucher, and
+          # canonical fulfillment snapshot against this same ephemeral database.
+          sed '/^\\ir checkout_test_helpers.sql$/r supabase/tests/checkout_test_helpers.sql' supabase/tests/shipping_address_consistency.sql \
+            | docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres
+          jq -e '.javaQuote and .finalQuote and .addressCards >= 2' "$RUNNER_TEMP/e2e-result.json" >/dev/null

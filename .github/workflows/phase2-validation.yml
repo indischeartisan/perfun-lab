@@ -187,7 +187,6 @@ jobs:
     timeout-minutes: 30
     env:
       E2E_EMAIL: customer-e2e@example.test
-      E2E_PASSWORD: E2e-Only-Local-Shipping-123!
       E2E_APP_URL: http://127.0.0.1:4174/shipping-address-e2e.html
     steps:
       - uses: actions/checkout@v4
@@ -209,6 +208,10 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          E2E_PASSWORD="$(openssl rand -hex 24)"
+          mock_provider_key="$(openssl rand -hex 24)"
+          echo "::add-mask::$E2E_PASSWORD"
+          echo "::add-mask::$mock_provider_key"
           cleanup() {
             [[ -n "${vite_pid:-}" ]] && kill "$vite_pid" 2>/dev/null || true
             [[ -n "${functions_pid:-}" ]] && kill "$functions_pid" 2>/dev/null || true
@@ -237,7 +240,7 @@ jobs:
           cat > "$function_env" <<EOF
           SUPABASE_URL=http://kong:8000
           SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY
-          RAJAONGKIR_SHIPPING_COST_API_KEY=e2e-mock-key
+          RAJAONGKIR_SHIPPING_COST_API_KEY=$mock_provider_key
           RAJAONGKIR_SHIPPING_COST_BASE_URL=http://rajaongkir-mock:8788/api/v1
           SHIPPING_ENVIRONMENT=integration-test
           SHIPPING_ALLOWED_ORIGINS=http://127.0.0.1:4174

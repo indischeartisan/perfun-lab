@@ -11,7 +11,7 @@ select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000001'
 select public.save_address('ab200000-0000-4000-8000-000000000001','{"recipient_name":"Customer","phone":"0812","address_line":"Street","city":"Tangerang","province":"Banten","postal_code":"15720","label":"Home"}');
 reset role;
 set local role service_role;
-select public.bind_address_shipping_destination('ab100000-0000-4000-8000-000000000001','ab200000-0000-4000-8000-000000000001',12345,'{"name":"Tigaraksa"}');
+select public.bind_address_shipping_destination('ab100000-0000-4000-8000-000000000001','ab200000-0000-4000-8000-000000000001',12345,'{"name":"Tigaraksa","city":"Tangerang","province":"Banten","postal_code":"15720"}');
 do $$ declare result jsonb; begin
  result:=public.shipping_weight_for_items('[{"product_id":"10ml","quantity":2},{"product_id":"30ml","quantity":1},{"product_id":"bundle-3x10ml","quantity":2}]');
  if (result->>'weight_grams')::integer<>2300 or result->>'package_profile_version'<>'1' then raise exception 'Weight calculation failed: %',result; end if;

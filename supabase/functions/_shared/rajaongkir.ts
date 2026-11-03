@@ -12,6 +12,18 @@ export const allowedCouriers = new Set(['jnt', 'anteraja'])
 export interface Destination { id: number; label: Record<string, unknown> }
 export interface Rate { courier_code: string; courier_name: string; service: string; amount: number; etd: string }
 
+/** Production accepts only the verified provider host. The integration host is
+ * deliberately exact and only usable by the disposable CI Docker network. */
+export function shippingProviderBaseUrlAllowed(value: string, environment: string | undefined): boolean {
+  try {
+    const url = new URL(value)
+    if (environment === 'integration-test') {
+      return url.protocol === 'http:' && url.hostname === 'rajaongkir-mock' && url.port === '8788' && url.pathname.startsWith('/api/v1') && !url.username && !url.password
+    }
+    return url.protocol === 'https:' && !url.username && !url.password && url.hostname.endsWith('.komerce.id') && url.pathname.startsWith('/api/v1')
+  } catch { return false }
+}
+
 export class RajaOngkirShippingCostProvider {
   private readonly apiKey: string
   private readonly baseUrl: string
@@ -44,14 +56,21 @@ export class RajaOngkirShippingCostProvider {
       if (!Number.isSafeInteger(rawId) || rawId <= 0) return []
       const name = text(source.label ?? source.name ?? source.subdistrict_name ?? source.city_name, 300)
       if (!name) return []
-      return [{ id: rawId, label: { name, city: text(source.city_name, 160), district: text(source.subdistrict_name ?? source.district_name, 160), province: text(source.province_name, 160), postal_code: text(source.zip_code ?? source.postal_code, 24) } }]
+      return [{ id: rawId, label: { name, city: text(source.city_name, 160), district: text(source.district_name, 160), subdistrict: text(source.subdistrict_name, 160), province: text(source.province_name, 160), postal_code: text(source.zip_code ?? source.postal_code, 24) } }]
     })
   }
   async rates(origin: number, destination: number, weight: number, courier: string): Promise<Rate[]> {
     if (!Number.isSafeInteger(origin) || origin <= 0 || !Number.isSafeInteger(destination) || destination <= 0 || !Number.isSafeInteger(weight) || weight <= 0 || !allowedCouriers.has(courier)) throw new ShippingError('Invalid shipping quote input', 400)
     const form = new URLSearchParams({ origin: String(origin), destination: String(destination), weight: String(weight), courier })
     const response = await this.request(this.url('calculate/domestic-cost'), { method: 'POST', headers: { key: this.apiKey, 'Content-Type': 'application/x-www-form-urlencoded' }, body: form })
-    if (!response.ok) throw new ShippingError('Shipping quote is unavailable. Please try again.', response.status === 429 ? 429 : 502)
+    if (!response.ok) {
+      // Surface only the HTTP category, never provider response bodies or credentials.
+      if (response.status === 429) throw new ShippingError('Layanan ongkir sedang membatasi permintaan. Coba lagi nanti.', 429)
+      if (response.status === 401 || response.status === 403) throw new ShippingError(`Otorisasi layanan ongkir ditolak (provider HTTP ${response.status}).`, 502)
+      if (response.status === 400 || response.status === 422) throw new ShippingError(`Permintaan ongkir ditolak provider (HTTP ${response.status}).`, 502)
+      if (response.status === 404) throw new ShippingError('Endpoint layanan ongkir tidak ditemukan (provider HTTP 404).', 502)
+      throw new ShippingError(`Layanan ongkir tidak tersedia (provider HTTP ${response.status}).`, 502)
+    }
     const body = record(await response.json()), rows = Array.isArray(body.data) ? body.data : []
     return rows.flatMap(row => {
       const source = record(row), amount = Number(source.cost), service = text(source.service, 100), name = text(source.name, 100), code = text(source.code, 30)?.toLowerCase()

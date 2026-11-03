@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { RajaOngkirShippingCostProvider, ShippingError } from '../supabase/functions/_shared/rajaongkir.ts'
+import { RajaOngkirShippingCostProvider, ShippingError, shippingProviderBaseUrlAllowed } from '../supabase/functions/_shared/rajaongkir.ts'
 import { dedupeShippingRateRequest } from '../supabase/functions/_shared/shipping-rate-dedupe.ts'
 import { assignAutomaticCourier, resolveShippingRegion, selectAutomaticRate } from '../supabase/functions/_shared/shipping-routing.ts'
 
@@ -16,11 +16,31 @@ test('RajaOngkir provider sends secret only as key header and normalizes automat
  assert.match(request.init.body.toString(),/origin=1/)
  assert.doesNotMatch(request.url,/test-secret/)
 })
+
+test('provider base URL only permits the exact disposable integration mock outside production', () => {
+  assert.equal(shippingProviderBaseUrlAllowed('https://rajaongkir.komerce.id/api/v1', 'production'), true)
+  assert.equal(shippingProviderBaseUrlAllowed('http://rajaongkir-mock:8788/api/v1', 'integration-test'), true)
+  assert.equal(shippingProviderBaseUrlAllowed('http://rajaongkir-mock:8788/api/v1', 'production'), false)
+  assert.equal(shippingProviderBaseUrlAllowed('http://arbitrary-host:8788/api/v1', 'integration-test'), false)
+  assert.equal(shippingProviderBaseUrlAllowed('https://rajaongkir-mock:8788/api/v1', 'integration-test'), false)
+})
 test('invalid provider output and upstream failure cannot become a fake rate', async () => {
  const invalid = new RajaOngkirShippingCostProvider('test','https://rajaongkir.komerce.id/api/v1/',async () => response(200,{data:[{name:'AnterAja',code:'anteraja',service:'REG',cost:0}]}))
  assert.deepEqual(await invalid.rates(1,2,500,'anteraja'),[])
  const failed = new RajaOngkirShippingCostProvider('test','https://rajaongkir.komerce.id/api/v1/',async () => response(503,{data:null}))
  await assert.rejects(()=>failed.rates(1,2,500,'jnt'),error => error instanceof ShippingError && error.status===502)
+})
+test('provider rejection reports safe status categories without exposing upstream content', async () => {
+ for (const status of [400, 401, 403, 404, 422, 429, 503]) {
+  const provider = new RajaOngkirShippingCostProvider('test-secret','https://rajaongkir.komerce.id/api/v1/',async () => response(status,{message:'sensitive-provider-body test-secret'}))
+  await assert.rejects(() => provider.rates(73357,4866,500,'jnt'), error => {
+   assert.ok(error instanceof ShippingError)
+   assert.equal(error.status,status===429?429:502)
+   assert.doesNotMatch(error.message,/test-secret|sensitive-provider-body/)
+   if (status!==429) assert.match(error.message,new RegExp(String(status)))
+   return true
+  })
+ }
 })
 test('destination IDs and couriers are validated before provider invocation', async () => {
  const provider = new RajaOngkirShippingCostProvider('test','https://rajaongkir.komerce.id/api/v1/',async () => { throw new Error('must not fetch') })

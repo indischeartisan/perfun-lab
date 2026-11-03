@@ -3,6 +3,12 @@ name: Phase 2 local validation
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      shipping_address_e2e:
+        description: Run the isolated shipping-address browser integration job
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - codex/admin-testing-mode
@@ -56,6 +62,9 @@ jobs:
       - name: Shipping provider unit tests
         run: npm run test:shipping
 
+      - name: Shipping destination normalization tests
+        run: node --experimental-strip-types --test tests/shipping-destination-normalization.test.mjs tests/shipping-search-state.test.mjs tests/shipping-address-state.test.mjs
+
       - name: Shipping checkout unit tests
         run: npm run test:shipping-checkout
 
@@ -77,7 +86,8 @@ jobs:
           }
           trap cleanup EXIT
 
-          supabase start
+          # Keep the local stack's generated credentials out of the Actions log.
+          supabase start >"$RUNNER_TEMP/supabase-start.log" 2>&1
           supabase db reset --local --yes
           supabase migration list --local
 
@@ -98,6 +108,8 @@ jobs:
             supabase/tests/payouts.sql
             supabase/tests/shipping_foundation.sql
             supabase/tests/shipping_checkout.sql
+            supabase/tests/shipping_address_atomic.sql
+            supabase/tests/shipping_address_consistency.sql
             supabase/tests/checkout_shipping_readiness.sql
             supabase/tests/admin.sql
             supabase/tests/vendor_assignment.sql
@@ -167,3 +179,105 @@ jobs:
           wait "$second"
           docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < supabase/tests/test_run_concurrency_check.sql
           echo '::endgroup::'
+
+  shipping-address-e2e:
+    name: Isolated shipping-address browser integration
+    if: github.event_name == 'workflow_dispatch' && inputs.shipping_address_e2e
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      E2E_EMAIL: customer-e2e@example.test
+      E2E_APP_URL: http://127.0.0.1:4174/shipping-address-e2e.html
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.81.3
+      - name: Install application dependencies
+        run: npm ci
+      - name: Install disposable browser runner
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.59.1
+          npx playwright install --with-deps chromium
+      - name: Exercise local Auth, Edge Functions, mock provider, and browser
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          E2E_PASSWORD="$(openssl rand -hex 24)"
+          mock_provider_key="$(openssl rand -hex 24)"
+          echo "::add-mask::$E2E_PASSWORD"
+          echo "::add-mask::$mock_provider_key"
+          cleanup() {
+            [[ -n "${vite_pid:-}" ]] && kill "$vite_pid" 2>/dev/null || true
+            [[ -n "${functions_pid:-}" ]] && kill "$functions_pid" 2>/dev/null || true
+            docker rm -f rajaongkir-mock 2>/dev/null || true
+            supabase stop --no-backup || true
+          }
+          trap cleanup EXIT
+
+          # The stack is ephemeral, but its generated local credentials must
+          # still not be emitted in an Actions log. Show only a redacted error
+          # classification if Docker or the local stack cannot start.
+          start_log="$RUNNER_TEMP/supabase-start.log"
+          if ! supabase start >"$start_log" 2>&1; then
+            echo '::error::Local Supabase stack failed to start (sanitized diagnostics follow).'
+            { grep -Ei 'error|fail|unable|cannot|denied|timeout|pull|start' "$start_log" || true; } | tail -n 30 | sed -E 's/(sb_(publishable|secret)_[A-Za-z0-9_-]+)/[redacted]/g; s/(postgres(ql)?:\/\/)[^@[:space:]]+@/\1[redacted]@/g; s/(service_role|anon|api[_-]?key|secret)[=:][^[:space:]]+/\1=[redacted]/Ig'
+            exit 1
+          fi
+          supabase db reset --local --yes
+          eval "$(supabase status -o env)"
+          db_container="$(docker ps --format '{{.ID}} {{.Names}}' | awk '$2 ~ /^supabase_db_/ { print $1; exit }')"
+          network="$(docker network ls --format '{{.Name}}' | awk '/^supabase_network_/ { print; exit }')"
+          test -n "$db_container" && test -n "$network"
+
+          user_json="$RUNNER_TEMP/e2e-user.json"
+          curl --fail --silent --show-error -X POST "$API_URL/auth/v1/admin/users" -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY" -H 'Content-Type: application/json' --data "{\"email\":\"$E2E_EMAIL\",\"password\":\"$E2E_PASSWORD\",\"email_confirm\":true}" > "$user_json"
+          customer_id="$(jq -r '.id' "$user_json")"
+          test "$customer_id" != null && test -n "$customer_id"
+          docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -v customer_id="$customer_id" < scripts/e2e/seed-shipping-address-e2e.sql
+
+          docker run -d --rm --name rajaongkir-mock --network "$network" -v "$GITHUB_WORKSPACE/scripts/e2e/rajaongkir-mock.mjs:/app/mock.mjs:ro" node:24-alpine node /app/mock.mjs >/dev/null
+          function_env="$RUNNER_TEMP/shipping-functions.env"
+          cat > "$function_env" <<EOF
+          SUPABASE_URL=http://kong:8000
+          SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY
+          RAJAONGKIR_SHIPPING_COST_API_KEY=$mock_provider_key
+          RAJAONGKIR_SHIPPING_COST_BASE_URL=http://rajaongkir-mock:8788/api/v1
+          SHIPPING_ENVIRONMENT=integration-test
+          SHIPPING_ALLOWED_ORIGINS=http://127.0.0.1:4174
+          APP_URL=http://127.0.0.1:4174
+          EOF
+          supabase functions serve --env-file "$function_env" --network-id "$network" >"$RUNNER_TEMP/functions.log" 2>&1 & functions_pid=$!
+          VITE_SUPABASE_URL="$API_URL" VITE_SUPABASE_PUBLISHABLE_KEY="$ANON_KEY" VITE_E2E_CUSTOMER_EMAIL="$E2E_EMAIL" VITE_E2E_CUSTOMER_PASSWORD="$E2E_PASSWORD" npx vite --config vite.shipping-address-e2e.config.ts --host 127.0.0.1 --port 4174 >"$RUNNER_TEMP/vite.log" 2>&1 & vite_pid=$!
+          for attempt in {1..30}; do curl --silent --fail "$E2E_APP_URL" >/dev/null && break; sleep 1; done
+          curl --silent --fail "$E2E_APP_URL" >/dev/null
+          E2E_RESULT_FILE="$RUNNER_TEMP/e2e-result.json" node scripts/e2e/shipping-address-browser.mjs
+
+          # The browser fixture enables shipping to reach the local Functions.
+          # Restore the baseline before replaying the existing OFF/ON checkout
+          # regression, which deliberately verifies both feature states.
+          docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "update private.shipping_feature_settings set enabled = false"
+
+          # Keep psql's \ir helper local to the repository checkout. This avoids
+          # depending on a container mount while replaying the established SQL
+          # regressions against the same ephemeral Postgres instance.
+          run_shipping_sql() {
+            local test_file="$1"
+            {
+              while IFS= read -r line || [[ -n "$line" ]]; do
+                if [[ "$line" == '\ir checkout_test_helpers.sql' ]]; then
+                  cat supabase/tests/checkout_test_helpers.sql
+                else
+                  printf '%s\n' "$line"
+                fi
+              done < "$test_file"
+            } | docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres
+          }
+          run_shipping_sql supabase/tests/shipping_address_consistency.sql
+          run_shipping_sql supabase/tests/shipping_checkout.sql
+          jq -e '.javaQuote and .finalQuote and .addressCards >= 2' "$RUNNER_TEMP/e2e-result.json" >/dev/null

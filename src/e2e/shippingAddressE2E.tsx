@@ -40,7 +40,7 @@ function App() {
   if (!ready) return <p data-testid="e2e-auth">Signing in to local Supabase…</p>
   return <main className="customer-app"><section className="checkout-screen app-screen">
     <p data-testid="e2e-auth">Authenticated local customer</p>
-    <AddressBook selectedId={addressId} onSelect={id => { setAddressId(id); setShippingQuote(null); setReview(null) }} onAddressSelect={next => { setAddress(next); setAddressId(next.id); setShippingQuote(null); setReview(null) }} shippingEnabled/>
+    <AddressBook selectedId={addressId} onSelect={id => { setAddressId(id); setShippingQuote(null); setReview(null) }} onAddressSelect={next => { setAddress(next); setAddressId(next.id); setShippingQuote(null); setReview(null) }} destinationSearchEnabled/>
     {address ? <ShippingQuotePicker key={address.id} address={address} items={items} onQuote={setShippingQuote}/> : null}
     {shippingQuote ? <><output data-testid="quote-id">{shippingQuote.quote_id}</output><button type="button" data-testid="review-checkout" onClick={reviewCheckout}>Review checkout</button></> : null}
     {review ? <p data-testid="checkout-review">{JSON.stringify({ shipping: review.shipping, grand_total: review.grand_total, address: review.address_snapshot, quote: review.shipping_quote_snapshot })}</p> : null}

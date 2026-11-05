@@ -66,11 +66,27 @@ do $$ begin
   raise exception 'Overlong district accepted';
  exception when check_violation then null; end;
 end $$;
-update private.shipping_feature_settings set enabled=false where singleton=true;
+-- This snapshot assertion exercises the shipping-enabled checkout contract.
+-- The shipping-OFF rejection remains covered independently in shipping_checkout.sql.
+update private.shipping_feature_settings set enabled=true where singleton=true;
+update private.shipping_origin_settings
+set status='active',
+    origin_destination_id=991,
+    origin_destination_label='{"name":"Atomic test origin"}',
+    version=2,
+    verified_at=clock_timestamp(),
+    verified_by='a7100000-0000-4000-8000-000000000001',
+    updated_by='a7100000-0000-4000-8000-000000000001';
+set local role service_role;
+do $$ declare quote jsonb; items jsonb:='[{"product_id":"10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"}]}]'; begin
+ quote:=public.create_shipping_quote('a7100000-0000-4000-8000-000000000001','a7200000-0000-4000-8000-000000000001',items,'jnt','J&T','REG',18000,'2 days','indonesia-province-v1','java','java');
+ perform set_config('app.shipping_address_atomic_quote',quote->>'quote_id',false);
+end $$;
+reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','a7100000-0000-4000-8000-000000000001',true);
 do $$ declare review jsonb; begin
- review:=public.quote_order('a7200000-0000-4000-8000-000000000001','[{"product_id":"10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"}]}]',null);
+ review:=public.quote_order('a7200000-0000-4000-8000-000000000001','[{"product_id":"10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"}]}]',current_setting('app.shipping_address_atomic_quote')::uuid);
  if review->'address_snapshot'->>'district'<>'Cibangkong, Batununggal' then
   raise exception 'Checkout snapshot omitted verified kelurahan or kecamatan';
  end if;

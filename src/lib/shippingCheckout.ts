@@ -1,4 +1,4 @@
-const shippingUnavailable = 'Shipping belum tersedia. Checkout akan dibuka setelah layanan pengiriman siap.'
+const shippingUnavailable = 'Layanan pengiriman sedang disiapkan. Pesanan belum dapat dibuat karena ongkir belum tersedia.'
 const buildShippingEnabled = import.meta.env?.VITE_SHIPPING_CHECKOUT_ENABLED
 
 export function isShippingCheckoutEnabled(value: string | undefined = buildShippingEnabled) {
@@ -10,9 +10,9 @@ export function shippingQuoteRequired(shippingEnabled: boolean, quoteId: string 
 }
 
 export type ShippingReadiness = { enabled: boolean; ready: boolean }
-export function checkoutShippingMode(buildEnabled: boolean, status: ShippingReadiness | null): 'loading' | 'standard' | 'shipping' | 'update' | 'unavailable' {
+export function checkoutShippingMode(buildEnabled: boolean, status: ShippingReadiness | null): 'loading' | 'paused' | 'shipping' | 'update' | 'unavailable' {
   if (!status) return 'loading'
-  if (!status.enabled) return 'standard'
+  if (!status.enabled) return 'paused'
   if (!buildEnabled) return 'update'
   return status.ready ? 'shipping' : 'unavailable'
 }

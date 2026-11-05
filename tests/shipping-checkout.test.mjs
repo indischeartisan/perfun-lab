@@ -5,8 +5,8 @@ import { reviewedShippingBreakdown } from '../src/lib/shippingCheckoutReview.ts'
 import { checkoutShippingMode, shippingQuoteRequired } from '../src/lib/shippingCheckout.ts'
 
 test('checkout fails closed for mismatched or unavailable shipping readiness', () => {
-  assert.equal(checkoutShippingMode(false, { enabled: false, ready: false }), 'standard')
-  assert.equal(checkoutShippingMode(true, { enabled: false, ready: false }), 'standard')
+  assert.equal(checkoutShippingMode(false, { enabled: false, ready: false }), 'paused')
+  assert.equal(checkoutShippingMode(true, { enabled: false, ready: false }), 'paused')
   assert.equal(checkoutShippingMode(true, { enabled: true, ready: true }), 'shipping')
   assert.equal(checkoutShippingMode(false, { enabled: true, ready: true }), 'update')
   assert.equal(checkoutShippingMode(true, { enabled: true, ready: false }), 'unavailable')

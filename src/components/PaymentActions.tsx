@@ -14,16 +14,16 @@ export function PaymentActions({ order, onRefresh }: { order: CustomerOrder; onR
     try {
       const data = await paymentRequest(pay ? 'payments-create' : 'payments-sync', order.id)
       if (pay) {
-        if (!data.payment_url || new URL(data.payment_url).protocol !== 'https:') throw new Error('Payment link is unavailable. Refresh your order.')
+        if (!data.payment_url || new URL(data.payment_url).protocol !== 'https:') throw new Error('Tautan pembayaran belum tersedia. Muat ulang pesanan Anda.')
         window.location.assign(data.payment_url)
       } else onRefresh()
-    } catch (error) { setError(errorMessage(error)) }
+    } catch (cause) { setError(errorMessage(cause)) }
     finally { lock.current = false; setBusy(false) }
   }
-  return <div className="payment-actions"><p className={`payment-label payment-${order.payment_status}`}>Payment: <strong>{order.payment_status}</strong></p>
+  return <div className="payment-actions"><p className={`payment-label payment-${order.payment_status}`}>Pembayaran: <strong>{order.payment_status}</strong></p>
     {error ? <p role="alert">{error}</p> : null}
-    <div>{payable ? <button className="orders-build" disabled={busy} onClick={() => action(true)}>{busy ? 'Please wait…' : order.payments?.length ? 'PAY AGAIN' : 'PAY'}</button> : null}
-      {order.payments?.length ? <button disabled={busy} onClick={() => action(false)}>Check payment status</button> : null}
+    <div>{payable ? <button className="orders-build" disabled={busy} onClick={() => action(true)}>{busy ? 'Menyiapkan pembayaran…' : order.payments?.length ? 'Bayar lagi di DOKU' : 'Bayar di DOKU'}</button> : null}
+      {order.payments?.length ? <button disabled={busy} onClick={() => action(false)}>Cek status pembayaran</button> : null}
     </div>
   </div>
 }

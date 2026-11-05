@@ -4,12 +4,13 @@ import { cartIdentity, isPlaySet, playSetIdentity, sameBlendAndSize } from '../l
 import type { BottleSize, CartItem, CompleteSelection } from '../types'
 import { useLocalStorage } from './useLocalStorage'
 import { rehydrateCompleteSelection, rehydratePlaySet } from '../lib/storageValidation'
+import { reconcileCartSelection, remapSelectedCartItem, removeSelectedCartItems, type PersistedCartSelection } from '../lib/cartSelection'
 
 export function useCart(catalog: Catalog, ownerId: string | null) {
   const scope = ownerId === null ? null : ownerId === 'guest' ? 'perfun:guest' : `perfun:user:${ownerId}`
   const migrationKeys = ownerId === null ? [] : ownerId === 'guest' ? ['perfun-bag-v2'] : ['perfun:guest:bag']
   const [items, setItems] = useLocalStorage<CartItem[]>(scope ? `${scope}:bag` : null, [], { restore: value => restoreCart(value, catalog), migrateFromKeys: migrationKeys })
-  const [selection, setSelection] = useLocalStorage<{ initialized: boolean; ids: string[] }>(scope ? `${scope}:bag-selection` : null, { initialized: false, ids: [] }, { restore: restoreSelection })
+  const [selection, setSelection] = useLocalStorage<PersistedCartSelection>(scope ? `${scope}:bag-selection` : null, { initialized: false, ids: [] }, { restore: restoreSelection })
   const available = (id: number | string) => catalog.productOptions.some(option => option.id === id)
   const visibleItems = items.filter(item => available(isPlaySet(item) ? 'play-set' : item.size))
   const count = visibleItems.reduce((sum, item) => sum + item.quantity, 0)
@@ -19,8 +20,8 @@ export function useCart(catalog: Catalog, ownerId: string | null) {
   useEffect(() => {
     const visibleIds = visibleItems.map(item => item.id)
     setSelection(current => {
-      const ids = current.initialized ? current.ids.filter(id => visibleIds.includes(id)) : visibleIds
-      return current.initialized && ids.length === current.ids.length && ids.every((id, index) => id === current.ids[index]) ? current : { initialized: true, ids }
+      const next = reconcileCartSelection(visibleIds, current)
+      return current.initialized && next.ids.length === current.ids.length && next.ids.every((id, index) => id === current.ids[index]) ? current : next
     })
   }, [setSelection, visibleItems])
 
@@ -77,21 +78,18 @@ export function useCart(catalog: Catalog, ownerId: string | null) {
     const target = visibleItems.find(item => item.id === id)
     if (!target || isPlaySet(target)) return
     const nextId = cartIdentity(target.notes, nextSize)
-    setSelection(current => {
-      if (!current.initialized || !current.ids.includes(id)) return current
-      return { ...current, ids: [...new Set(current.ids.filter(value => value !== id).concat(nextId))] }
-    })
+    setSelection(current => remapSelectedCartItem(current, id, nextId))
   }
 
   function toggleSelection(id: string) { setSelection(current => ({ initialized: true, ids: current.ids.includes(id) ? current.ids.filter(value => value !== id) : [...current.ids, id] })) }
   function selectAll(selected: boolean) { setSelection({ initialized: true, ids: selected ? visibleItems.map(item => item.id) : [] }) }
   function remove(id: string) { setItems(current => current.filter(item => item.id !== id)); setSelection(current => ({ ...current, ids: current.ids.filter(value => value !== id) })) }
-  function removeMany(ids: string[]) { const selected = new Set(ids); setItems(current => current.filter(item => !selected.has(item.id))); setSelection(current => ({ ...current, ids: current.ids.filter(value => !selected.has(value)) })) }
+  function removeMany(ids: string[]) { const selected = new Set(ids); setItems(current => removeSelectedCartItems(current, ids)); setSelection(current => ({ ...current, ids: current.ids.filter(value => !selected.has(value)) })) }
   function clear() { setItems([]); setSelection({ initialized: true, ids: [] }) }
   return { items: visibleItems, selectedItems, selectedIds, count, add, addPlaySet, setQuantity, setSize, toggleSelection, selectAll, remove, removeMany, clear }
 }
 
-function restoreSelection(value: unknown): { initialized: boolean; ids: string[] } | null {
+function restoreSelection(value: unknown): PersistedCartSelection | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const candidate = value as { initialized?: unknown; ids?: unknown }
   if (typeof candidate.initialized !== 'boolean' || !Array.isArray(candidate.ids) || !candidate.ids.every(id => typeof id === 'string' && id.length > 0)) return null

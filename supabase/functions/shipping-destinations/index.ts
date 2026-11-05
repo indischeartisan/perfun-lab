@@ -9,7 +9,9 @@ Deno.serve(async req => {
  try {
   const userId=await shippingUser(req), body=await shippingJson(req), action=body.action==='bind' ? 'bind' : body.action==='save_address' ? 'save_address' : 'search', query=typeof body.query==='string' ? body.query.trim().replace(/\s+/g,' ') : ''
   if (query.length<3 || query.length>160) throw new ShippingError('Enter at least 3 characters to search a destination.',400)
-  if (!await shippingRpc<boolean>('shipping_feature_ready',{})) throw new ShippingError('Shipping is not configured yet. Please try again later.',503)
+  // Destination lookup and verified-address saving are intentionally independent
+  // from checkout-rate activation. This keeps address data canonical while the
+  // production shipping feature remains off.
   // Version the cache when the normalized district/subdistrict shape changes.
   const cacheKey=await digest('destination-v2:'+query.toLowerCase()), cached=await shippingRpc<unknown[]|null>('shipping_destination_cache_get',{p_cache_key:cacheKey})
   if(action==='save_address') {

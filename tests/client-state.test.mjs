@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { errorWithCause } from '../src/lib/errors.ts'
 import { loadValue } from '../src/hooks/useLocalStorage.ts'
-import { isCheckoutPending, readPendingCheckout } from '../src/lib/storageValidation.ts'
+import { isCheckoutDraft, isCheckoutPending, readPendingCheckout } from '../src/lib/storageValidation.ts'
 
 class MemoryStorage {
   values = new Map()
@@ -65,6 +65,12 @@ test('shipping-disabled pending checkout accepts only an explicit null quote', (
   const pending = { addressId: 'address', items: directItems, shippingQuoteId: null, requestId: 'request', token: 'token' }
   assert.equal(isCheckoutPending(pending), true)
   assert.equal(isCheckoutPending({ ...pending, shippingQuoteId: '' }), false)
+})
+
+test('bag checkout drafts retain only valid selected cart identities', () => {
+  const draft = { userId: 'customer', source: 'bag', items: directItems, cartItemIds: ['blend-a', 'blend-b'] }
+  assert.equal(isCheckoutDraft(draft), true)
+  assert.equal(isCheckoutDraft({ ...draft, cartItemIds: ['blend-a', 4] }), false)
 })
 
 test('authentication errors retain the original error as their cause', () => {

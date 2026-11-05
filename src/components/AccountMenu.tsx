@@ -1,10 +1,10 @@
 import { UserRound } from 'lucide-react'
 import type { useAuth } from '../hooks/useAuth'
 
-export function AccountMenu({ auth, onLogin }: { auth: ReturnType<typeof useAuth>; onLogin: () => void }) {
-  return <details className="header-account" key={auth.user?.id ?? 'guest'}><summary aria-label="Account"><UserRound size={22}/></summary><div className="header-account-panel">
-    {auth.loading ? <p role="status">Loading account…</p> : auth.user ? <><strong>Google account</strong><p>{auth.user.email}</p><button onClick={auth.logout}>Sign out</button></> : <button onClick={auth.login}>Continue with Google</button>}
-    {!auth.loading && !auth.user ? <button className="email-login-button" onClick={onLogin}>Sign in or create account</button> : null}
-    {auth.user ? <strong className="email-account-label">Signed in</strong> : null}
+export function AccountMenu({ auth, onLogin, onAccount }: { auth: ReturnType<typeof useAuth>; onLogin: () => void; onAccount?: () => void }) {
+  return <details className="header-account" key={auth.user?.id ?? 'guest'}><summary aria-label="Akun"><UserRound size={22}/></summary><div className="header-account-panel">
+    {auth.loading ? <p role="status">Memuat akun…</p> : auth.user ? <><strong>Akun saya</strong><p>{auth.user.email}</p>{onAccount ? <button type="button" onClick={onAccount}>Buka akun saya</button> : null}<button type="button" onClick={auth.logout}>Keluar</button></> : <button onClick={auth.login}>Lanjutkan dengan Google</button>}
+    {!auth.loading && !auth.user ? <button className="email-login-button" onClick={onLogin}>Masuk atau buat akun</button> : null}
+    {auth.user ? <strong className="email-account-label">Sudah masuk</strong> : null}
   </div></details>
 }

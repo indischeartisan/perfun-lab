@@ -45,6 +45,8 @@ const OrderConfirmationPage = lazy(() => import('../pages/CheckoutPage').then(mo
 const MorePage = lazy(() => import('../pages/MorePage').then(module => ({ default: module.MorePage })))
 const NoteLibraryPage = lazy(() => import('../pages/NoteLibraryPage').then(module => ({ default: module.NoteLibraryPage })))
 const OrdersPage = lazy(() => import('../pages/OrdersPage').then(module => ({ default: module.OrdersPage })))
+const AccountPage = lazy(() => import('../pages/AccountPage').then(module => ({ default: module.AccountPage })))
+const AddressesPage = lazy(() => import('../pages/AddressesPage').then(module => ({ default: module.AddressesPage })))
 const ExploreArticlePage = lazy(() => import('../pages/ExploreArticlePage').then(module => ({ default: module.ExploreArticlePage })))
 const ExploreQuickCard = lazy(() => import('../components/ExploreQuickCard').then(module => ({ default: module.ExploreQuickCard })))
 const ExploreCollectionPage = lazy(() => import('../pages/ExploreCollectionPage').then(module => ({ default: module.ExploreCollectionPage })))
@@ -110,7 +112,7 @@ function ConnectedApp({ catalog, auth }: { catalog: Catalog; auth: ReturnType<ty
   const [confirmedOrder, setConfirmedOrder] = useState<CustomerOrder | null>(null)
   const blend = useBlend(catalog.noteGroups, storageOwner)
   const cart = useCart(catalog, storageOwner)
-  const [checkoutDraft, setCheckoutDraft] = useLocalStorage<{ userId: string; items: OrderIntent[]; source?: 'bag' | 'direct' } | null>(auth.loading || !auth.user ? null : `perfun:user:${auth.user.id}:checkout-draft`, null, { restore: value => isCheckoutDraft(value) && orderIntentsMatchCatalog(value.items, catalog.noteGroups) ? value : null })
+  const [checkoutDraft, setCheckoutDraft] = useLocalStorage<{ userId: string; items: OrderIntent[]; source?: 'bag' | 'direct'; cartItemIds?: string[] } | null>(auth.loading || !auth.user ? null : `perfun:user:${auth.user.id}:checkout-draft`, null, { restore: value => isCheckoutDraft(value) && orderIntentsMatchCatalog(value.items, catalog.noteGroups) ? value : null })
   const preparing = useRef(false)
   const [checkoutBusy, setCheckoutBusy] = useState(false)
   const [checkoutError, setCheckoutError] = useState('')
@@ -224,12 +226,12 @@ function ConnectedApp({ catalog, auth }: { catalog: Catalog; auth: ReturnType<ty
     if (preparing.current || auth.loading) return
     if (!auth.user) { writeSessionValue(bagCheckoutResumeKey, '1'); setResumeCheckout(true); setAuthDialogOpen(true); return }
     preparing.current = true; setCheckoutBusy(true); setCheckoutError('')
-    try { startCheckout(auth.user.id, prepareBagCheckout(cart.items), 'bag') }
+    try { if (!cart.selectedItems.length) throw new Error('Pilih setidaknya satu parfum untuk checkout.'); startCheckout(auth.user.id, prepareBagCheckout(cart.selectedItems), 'bag', cart.selectedIds) }
     catch (error) { setCheckoutError(errorMessage(error)) }
     finally { preparing.current = false; setCheckoutBusy(false) }
   }
-  const startCheckout = useCallback((userId: string, items: OrderIntent[], source: 'bag' | 'direct' = 'bag') => {
-    setCheckoutDraft({ userId, items, source })
+  const startCheckout = useCallback((userId: string, items: OrderIntent[], source: 'bag' | 'direct' = 'bag', cartItemIds?: string[]) => {
+    setCheckoutDraft({ userId, items, source, cartItemIds })
     navigate('checkout')
   }, [navigate, setCheckoutDraft])
 
@@ -240,10 +242,10 @@ function ConnectedApp({ catalog, auth }: { catalog: Catalog; auth: ReturnType<ty
     preparing.current = true
     setCheckoutBusy(true)
     setCheckoutError('')
-    try { startCheckout(userId, prepareBagCheckout(cart.items), 'bag') }
+    try { if (!cart.selectedItems.length) throw new Error('Pilih setidaknya satu parfum untuk checkout.'); startCheckout(userId, prepareBagCheckout(cart.selectedItems), 'bag', cart.selectedIds) }
     catch (error) { setCheckoutError(errorMessage(error)) }
     finally { preparing.current = false; setCheckoutBusy(false) }
-  }, [cart.items, resumeCheckout, startCheckout])
+  }, [cart.selectedIds, cart.selectedItems, resumeCheckout, startCheckout])
   function checkoutDirect(product: ProductChoice, formula: CompleteSelection, playSetBlends: CompleteSelection[]) {
     if (preparing.current || directCheckoutBusy) return
     if (auth.loading) { setDirectCheckoutError('Your account is still loading. Please try again.'); return }
@@ -301,13 +303,13 @@ function ConnectedApp({ catalog, auth }: { catalog: Catalog; auth: ReturnType<ty
   }, [])
   function orderPlaced(order: CustomerOrder) {
     setConfirmedOrder(order)
-    if (checkoutDraft?.source !== 'direct') cart.clear()
+    if (checkoutDraft?.source !== 'direct') cart.removeMany(checkoutDraft?.cartItemIds ?? [])
     setCheckoutDraft(null)
     navigate('confirmation')
   }
 
   return <div className="app-shell product-app customer-app">
-    <Header itemCount={cart.count} activeView={view === 'article' || view === 'wheel' || view === 'fresh' || view === 'study' || view === 'library' ? 'explore' : view} onNavigate={navigate} fulfillmentOnly={auth.role === 'vendor'} account={<AccountMenu auth={auth} onLogin={() => setAuthDialogOpen(true)}/>}/>
+    <Header itemCount={cart.count} activeView={view === 'article' || view === 'wheel' || view === 'fresh' || view === 'study' || view === 'library' ? 'explore' : view} onNavigate={navigate} fulfillmentOnly={auth.role === 'vendor'} account={<AccountMenu auth={auth} onLogin={() => setAuthDialogOpen(true)} onAccount={() => navigate('account')}/>}/>
     {auth.error ? <p className="cloud-message" role="alert">{auth.error}</p> : null}
     <main className="app-main">{view === 'bag' && checkoutBusy ? <p className="cloud-message" role="status">Preparing checkout…</p> : null}{view === 'bag' && checkoutError ? <p className="cloud-message" role="alert">{checkoutError}</p> : null}
       <WorkspaceLoadBoundary key={view}><Suspense fallback={<WorkspaceLoading/>}>
@@ -323,11 +325,13 @@ function ConnectedApp({ catalog, auth }: { catalog: Catalog; auth: ReturnType<ty
       {view === 'note' ? <Suspense fallback={<ExploreArticleLoading/>}><NoteLibraryDetailPage catalog={catalog} noteId={noteId} onBack={() => navigate('library')} onOpenNote={openNote}/></Suspense> : null}
       {view === 'article' ? <Suspense fallback={<ExploreArticleLoading/>}><ExploreArticlePage key={articleId ?? 'missing'} articleId={articleId} backLabel={articleBackLabel(articleOrigin)} onBack={() => navigate(articleOrigin)} onMix={() => navigate('build')}/></Suspense> : null}
       {view === 'build' ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><BuildPage catalog={catalog} selection={blend.selection} product={catalog.productOptions.some(option => option.id === blend.product) ? blend.product : null} playSetBlends={blend.playSetBlends} editingPlaySetIndex={blend.editingPlaySetIndex} added={blend.added} onSelect={blend.choose} onProduct={blend.setProduct} onAdd={addToBag} onSavePlaySetBlend={savePlaySetBlend} onAddPlaySet={addPlaySetToBag} onEditPlaySetBlend={blend.editPlaySetBlend} onCancelPlaySetEdit={blend.cancelPlaySetEdit} onExitPlaySet={blend.exitPlaySet} onGetItNow={checkoutDirect} getItNowBusy={directCheckoutBusy} getItNowError={directCheckoutError} onClearFormula={blend.clearCurrentFormula} onViewBag={() => navigate('bag')}/></Suspense></CustomerRouteLoadBoundary> : null}
-      {view === 'bag' ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><BagPage items={cart.items} onQuantity={cart.setQuantity} onSize={cart.setSize} onRemove={cart.remove} onBuild={() => { blend.clearCurrentFormula(); navigate('build') }} onCheckout={checkoutBag}/></Suspense></CustomerRouteLoadBoundary> : null}
+      {view === 'bag' ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><BagPage items={cart.items} selectedIds={cart.selectedIds} onToggle={cart.toggleSelection} onSelectAll={cart.selectAll} onQuantity={cart.setQuantity} onSize={cart.setSize} onRemove={cart.remove} onBuild={() => { blend.clearCurrentFormula(); navigate('build') }} onCheckout={checkoutBag}/></Suspense></CustomerRouteLoadBoundary> : null}
       {view === 'checkout' ? auth.user && checkoutDraft?.userId === auth.user.id ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><CheckoutPage key={auth.user.id} userId={auth.user.id} items={checkoutDraft.items} onBack={() => navigate('bag')} onPlaced={orderPlaced}/></Suspense></CustomerRouteLoadBoundary> : <div className="screen-empty"><p>{auth.loading ? 'Loading account…' : 'Add a perfume to your bag to checkout.'}</p><button onClick={() => navigate('bag')}>View Bag</button></div> : null}
       {view === 'confirmation' && confirmedOrder && confirmedOrder.user_id === auth.user?.id ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><OrderConfirmationPage order={confirmedOrder} onBuild={() => { blend.clearCurrentFormula(); navigate('build') }} onOrders={() => navigate('orders')}/></Suspense></CustomerRouteLoadBoundary> : null}
       {view === 'orders' ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><OrdersPage key={auth.user?.id ?? 'guest'} userId={auth.user?.id} onLogin={() => setAuthDialogOpen(true)} onBuild={() => navigate('bag')}/></Suspense></CustomerRouteLoadBoundary> : null}
-      {view === 'more' ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><MorePage onOrders={() => navigate('orders')} onFresh={() => navigate('fresh')} onStudy={() => navigate('study')} onLibrary={() => navigate('library')}/></Suspense></CustomerRouteLoadBoundary> : null}
+      {view === 'account' ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><AccountPage email={auth.user?.email} onAddresses={() => navigate('addresses')} onOrders={() => navigate('orders')}/></Suspense></CustomerRouteLoadBoundary> : null}
+      {view === 'addresses' ? auth.user ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><AddressesPage onBack={() => navigate('account')}/></Suspense></CustomerRouteLoadBoundary> : <div className="screen-empty"><h2>Masuk untuk mengatur alamat</h2><button type="button" onClick={() => setAuthDialogOpen(true)}>Masuk</button></div> : null}
+      {view === 'more' ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><MorePage onOrders={() => navigate('orders')} onFresh={() => navigate('fresh')} onStudy={() => navigate('study')} onLibrary={() => navigate('library')} onAccount={() => navigate('account')}/></Suspense></CustomerRouteLoadBoundary> : null}
     </main>
     {quickContentId ? <Suspense fallback={null}><ExploreQuickCard contentId={quickContentId} onClose={() => setQuickContentId(null)} onMix={() => { setQuickContentId(null); navigate('build') }}/></Suspense> : null}
     {wheelTransferReview ? <WheelTransferDialog kind={wheelTransferReview.kind} issues={wheelTransferReview.resolution.issues} canContinue={wheelTransferReview.resolution.hasAvailableNotes} onContinueAvailable={continueWheelTransfer} onReplace={replaceWheelTransfer} onClose={() => setWheelTransferReview(null)}/> : null}

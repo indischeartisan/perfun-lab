@@ -1,8 +1,8 @@
 import type { AppView } from '../types'
 
-const hashViews = new Set<AppView>(['explore', 'wheel', 'fresh', 'study', 'library', 'note', 'article', 'build', 'more', 'bag', 'checkout', 'orders', 'production', 'fulfillment', 'payouts', 'admin'])
+const hashViews = new Set<AppView>(['explore', 'wheel', 'fresh', 'study', 'library', 'note', 'article', 'build', 'more', 'bag', 'checkout', 'orders', 'account', 'addresses', 'production', 'fulfillment', 'payouts', 'admin'])
 const vendorViews = new Set<AppView>(['production', 'fulfillment', 'payouts'])
-const customerViews = new Set<AppView>(['explore', 'wheel', 'fresh', 'study', 'library', 'note', 'article', 'build', 'bag', 'checkout', 'confirmation', 'orders', 'more'])
+const customerViews = new Set<AppView>(['explore', 'wheel', 'fresh', 'study', 'library', 'note', 'article', 'build', 'bag', 'checkout', 'confirmation', 'orders', 'more', 'account', 'addresses'])
 
 export type ArticleOrigin = 'explore' | 'fresh' | 'study'
 

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { deleteAddress, listAddresses, saveAddress, type Address, type AddressInput } from '../lib/orders'
-import { saveAddressWithDestination, searchShippingDestinations, type ShippingDestination } from '../lib/shipping'
+import { saveAddressWithDestination, searchShippingDestinations, shippingErrorMessage, type ShippingDestination } from '../lib/shipping'
 import { createShippingSearchRequestGate } from '../lib/shippingSearchState'
 import { canSaveShippingAddress, hasVerifiedShippingDestination, shippingDestinationState, storedAddressRegionSummary } from '../lib/shippingAddressState'
 import { errorMessage } from '../lib/supabase'
 import { shouldAutoSelectAddress, type AddressBookMode } from '../lib/addressBookMode'
+import { addressEditorFocusKey } from '../lib/addressEditorFocus'
 
 const empty: AddressInput = { recipient_name: '', phone: '', address_line: '', city: '', province: '', postal_code: '', label: '', is_default: false }
 const fields: Array<{ key: Exclude<keyof AddressInput, 'is_default'>; label: string; autoComplete?: string }> = [
@@ -45,7 +46,7 @@ function DestinationSearch({ onSelect }: { onSelect: (value: SelectedDestination
       setSearchBusy(true); setError('')
       searchShippingDestinations(query)
         .then(rows => { if (active && currentGate.isCurrent(revision)) setDestinations(rows) })
-        .catch(cause => { if (active && currentGate.isCurrent(revision)) setError(errorMessage(cause)) })
+        .catch(cause => { if (active && currentGate.isCurrent(revision)) setError(shippingErrorMessage(cause)) })
         .finally(() => { if (active && currentGate.settle(revision)) setSearchBusy(false) })
     }, 350)
     return () => { active = false; window.clearTimeout(timer); currentGate.invalidate() }
@@ -73,18 +74,19 @@ export function AddressBook({ selectedId, onSelect, onAddressSelect, destination
   const initialFocus = useRef<HTMLInputElement>(null)
   const restoreFocus = useRef<HTMLElement | null>(null)
   const selecting = shouldAutoSelectAddress(mode)
+  const editorFocusKey = addressEditorFocusKey(editor)
   useEffect(() => {
     let active = true
     listAddresses().then(rows => { if (active) { setItems(rows); if (selecting && !selectedId) { const preferred = rows.find(row => row.is_default); if (preferred) { onSelect(preferred.id); onAddressSelect?.(preferred) } } } }).catch(cause => { if (active) setError(errorMessage(cause)) }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [attempt, selectedId, onSelect, onAddressSelect, selecting])
   useEffect(() => {
-    if (!editor) return
+    if (!editorFocusKey) return
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const timer = window.setTimeout(() => initialFocus.current?.focus(), 0)
     return () => { window.clearTimeout(timer); document.body.style.overflow = previousOverflow; restoreFocus.current?.focus(); restoreFocus.current = null }
-  }, [editor])
+  }, [editorFocusKey])
   function openEditor(next: Editor) { restoreFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; setEditorError(''); setEditor(next) }
   function closeEditor() { setEditor(null) }
   function trapFocus(event: KeyboardEvent<HTMLElement>) {
@@ -111,7 +113,7 @@ export function AddressBook({ selectedId, onSelect, onAddressSelect, destination
       if (!saved) throw new Error('Alamat tersimpan tetapi tidak dapat dimuat ulang. Silakan coba lagi.')
       if (selecting) { onSelect(saved.id); onAddressSelect?.(saved) }
       closeEditor()
-    } catch (cause) { setEditorError(errorMessage(cause)) } finally { setBusy(false) }
+    } catch (cause) { setEditorError(destinationSearchEnabled ? shippingErrorMessage(cause) : errorMessage(cause)) } finally { setBusy(false) }
   }
   async function remove(id: string) {
     if (!window.confirm('Hapus alamat ini?')) return

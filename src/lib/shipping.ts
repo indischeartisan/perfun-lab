@@ -1,6 +1,7 @@
 import type { OrderIntent } from './orders'
 import type { AddressInput } from './orders'
 import { requireSupabase } from './supabase'
+export { shippingErrorMessage } from './shippingMessages'
 export { quoteExpired } from './shippingQuoteState'
 
 export interface ShippingDestination { id: number; label: { name: string; city?: string | null; district?: string | null; subdistrict?: string | null; province?: string | null; postal_code?: string | null } }

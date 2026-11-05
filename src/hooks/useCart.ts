@@ -9,9 +9,20 @@ export function useCart(catalog: Catalog, ownerId: string | null) {
   const scope = ownerId === null ? null : ownerId === 'guest' ? 'perfun:guest' : `perfun:user:${ownerId}`
   const migrationKeys = ownerId === null ? [] : ownerId === 'guest' ? ['perfun-bag-v2'] : ['perfun:guest:bag']
   const [items, setItems] = useLocalStorage<CartItem[]>(scope ? `${scope}:bag` : null, [], { restore: value => restoreCart(value, catalog), migrateFromKeys: migrationKeys })
+  const [selection, setSelection] = useLocalStorage<{ initialized: boolean; ids: string[] }>(scope ? `${scope}:bag-selection` : null, { initialized: false, ids: [] }, { restore: restoreSelection })
   const available = (id: number | string) => catalog.productOptions.some(option => option.id === id)
   const visibleItems = items.filter(item => available(isPlaySet(item) ? 'play-set' : item.size))
   const count = visibleItems.reduce((sum, item) => sum + item.quantity, 0)
+  const selectedIds = selection.ids.filter(id => visibleItems.some(item => item.id === id))
+  const selectedItems = visibleItems.filter(item => selectedIds.includes(item.id))
+
+  useEffect(() => {
+    const visibleIds = visibleItems.map(item => item.id)
+    setSelection(current => {
+      const ids = current.initialized ? current.ids.filter(id => visibleIds.includes(id)) : visibleIds
+      return current.initialized && ids.length === current.ids.length && ids.every((id, index) => id === current.ids[index]) ? current : { initialized: true, ids }
+    })
+  }, [setSelection, visibleItems])
 
   useEffect(() => {
     setItems(current => {
@@ -29,11 +40,13 @@ export function useCart(catalog: Catalog, ownerId: string | null) {
 
   function add(notes: CompleteSelection, size: BottleSize) {
     if (!available(size)) return
+    const id = cartIdentity(notes, size)
     setItems(current => {
       const existing = current.find(item => !isPlaySet(item) && sameBlendAndSize(item, notes, size))
       if (existing) return current.map(item => item.id === existing.id ? { ...item, quantity: item.quantity + 1 } : item)
-      return [...current, { kind: 'single', id: cartIdentity(notes, size), notes: { ...notes }, size, quantity: 1, price: catalog.price(size) }]
+      return [...current, { kind: 'single', id, notes: { ...notes }, size, quantity: 1, price: catalog.price(size) }]
     })
+    setSelection(current => current.initialized ? { ...current, ids: [...new Set([...current.ids, id])] } : current)
   }
 
   function addPlaySet(blends: CompleteSelection[]) {
@@ -44,6 +57,7 @@ export function useCart(catalog: Catalog, ownerId: string | null) {
       if (existing) return current.map(item => item.id === id ? { ...item, quantity: item.quantity + 1 } : item)
       return [...current, { kind: 'play-set', id, blends: blends.map(blend => ({ ...blend })), quantity: 1, price: catalog.price('play-set') }]
     })
+    setSelection(current => current.initialized ? { ...current, ids: [...new Set([...current.ids, id])] } : current)
   }
 
   function setQuantity(id: string, quantity: number) {
@@ -60,9 +74,28 @@ export function useCart(catalog: Catalog, ownerId: string | null) {
       if (duplicate) return current.filter(item => item.id !== id).map(item => item.id === duplicate.id ? { ...item, quantity: item.quantity + target.quantity } : item)
       return current.map(item => item.id === id ? { ...item, id: cartIdentity(target.notes, nextSize), size: nextSize, price: catalog.price(nextSize) } : item)
     })
+    const target = visibleItems.find(item => item.id === id)
+    if (!target || isPlaySet(target)) return
+    const nextId = cartIdentity(target.notes, nextSize)
+    setSelection(current => {
+      if (!current.initialized || !current.ids.includes(id)) return current
+      return { ...current, ids: [...new Set(current.ids.filter(value => value !== id).concat(nextId))] }
+    })
   }
 
-  return { items: visibleItems, count, add, addPlaySet, setQuantity, setSize, remove: (id: string) => setItems(current => current.filter(item => item.id !== id)), clear: () => setItems([]) }
+  function toggleSelection(id: string) { setSelection(current => ({ initialized: true, ids: current.ids.includes(id) ? current.ids.filter(value => value !== id) : [...current.ids, id] })) }
+  function selectAll(selected: boolean) { setSelection({ initialized: true, ids: selected ? visibleItems.map(item => item.id) : [] }) }
+  function remove(id: string) { setItems(current => current.filter(item => item.id !== id)); setSelection(current => ({ ...current, ids: current.ids.filter(value => value !== id) })) }
+  function removeMany(ids: string[]) { const selected = new Set(ids); setItems(current => current.filter(item => !selected.has(item.id))); setSelection(current => ({ ...current, ids: current.ids.filter(value => !selected.has(value)) })) }
+  function clear() { setItems([]); setSelection({ initialized: true, ids: [] }) }
+  return { items: visibleItems, selectedItems, selectedIds, count, add, addPlaySet, setQuantity, setSize, toggleSelection, selectAll, remove, removeMany, clear }
+}
+
+function restoreSelection(value: unknown): { initialized: boolean; ids: string[] } | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const candidate = value as { initialized?: unknown; ids?: unknown }
+  if (typeof candidate.initialized !== 'boolean' || !Array.isArray(candidate.ids) || !candidate.ids.every(id => typeof id === 'string' && id.length > 0)) return null
+  return { initialized: candidate.initialized, ids: [...new Set(candidate.ids)] }
 }
 
 function restoreCart(value: unknown, catalog: Catalog): CartItem[] | null {

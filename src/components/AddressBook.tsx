@@ -31,6 +31,7 @@ function DestinationSearch({ onSelect }: { onSelect: (value: SelectedDestination
   const [destinations, setDestinations] = useState<ShippingDestination[]>([])
   const [searchBusy, setSearchBusy] = useState(false)
   const [error, setError] = useState('')
+  const [retry, setRetry] = useState(0)
   const gate = useRef(createShippingSearchRequestGate())
   useEffect(() => {
     const query = search.trim()
@@ -47,14 +48,14 @@ function DestinationSearch({ onSelect }: { onSelect: (value: SelectedDestination
         .finally(() => { if (active && currentGate.settle(revision)) setSearchBusy(false) })
     }, 350)
     return () => { active = false; window.clearTimeout(timer); currentGate.invalidate() }
-  }, [search])
+  }, [search, retry])
   function updateSearch(value: string) {
     gate.current.invalidate(); setSearchBusy(false); setDestinations([]); setError(''); setSearch(value)
   }
   return <div className="shipping-search" aria-busy={searchBusy}>
     <label><span>Cari lokasi pengiriman</span><input value={search} onChange={event => updateSearch(event.target.value)} placeholder="Kecamatan, kota, atau kode pos" autoComplete="off"/></label>
     {searchBusy ? <p role="status">Mencari lokasi…</p> : null}
-    {error ? <p role="alert">{error}</p> : null}
+    {error ? <p role="alert">{error} <button type="button" onClick={() => setRetry(value => value + 1)}>Coba lagi</button></p> : null}
     {search.trim().length >= 3 && !searchBusy && !destinations.length && !error ? <p>Belum ada lokasi. Periksa kata pencarian.</p> : null}
     <div className="shipping-destinations">{destinations.map(destination => <button type="button" key={destination.id} onClick={() => { gate.current.invalidate(); onSelect({ destination, query: search.trim() }) }}><b>{destination.label.name}</b><small>{[destination.label.district, destination.label.city, destination.label.province, destination.label.postal_code].filter(Boolean).join(', ')}</small></button>)}</div>
   </div>

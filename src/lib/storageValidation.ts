@@ -76,8 +76,8 @@ export function readPendingCheckout(value: string | null, noteGroups: Record<Not
   }
 }
 
-export function isCheckoutDraft(value: unknown): value is { userId: string; items: OrderIntent[]; source?: 'bag' | 'direct' } {
-  return isRecord(value) && typeof value.userId === 'string' && value.userId.length > 0 && (value.source === undefined || value.source === 'bag' || value.source === 'direct') && isOrderIntents(value.items)
+export function isCheckoutDraft(value: unknown): value is { userId: string; items: OrderIntent[]; source?: 'bag' | 'direct'; cartItemIds?: string[] } {
+  return isRecord(value) && typeof value.userId === 'string' && value.userId.length > 0 && (value.source === undefined || value.source === 'bag' || value.source === 'direct') && (value.cartItemIds === undefined || (Array.isArray(value.cartItemIds) && value.cartItemIds.every(id => typeof id === 'string' && id.length > 0))) && isOrderIntents(value.items)
 }
 
 export function isCheckoutPending(value: unknown): value is { addressId: string; items: OrderIntent[]; shippingQuoteId: string | null; requestId: string; token: string } {

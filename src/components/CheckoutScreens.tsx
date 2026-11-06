@@ -5,6 +5,7 @@ import { getOrder, placeOrder, quoteOrder, type CustomerOrder, type OrderIntent,
 import { reviewedShippingBreakdown } from '../lib/shippingCheckoutReview'
 import { checkoutErrorMessage, checkoutShippingMode, isShippingCheckoutEnabled, shippingUnavailable, type ShippingReadiness } from '../lib/shippingCheckout'
 import { canSubmitReviewedOrder, shouldAutoReview } from '../lib/checkoutReviewState'
+import { checkoutProductSummaries } from '../lib/checkoutProductSummary'
 import { AddressBook, AddressText } from './AddressBook'
 import { ShippingQuotePicker } from './ShippingQuotePicker'
 import type { Address } from '../lib/orders'
@@ -13,6 +14,7 @@ import { getCheckoutShippingReadiness } from '../lib/shipping'
 import { PaymentActions } from './PaymentActions'
 import { isCheckoutPending } from '../lib/storageValidation'
 import { createShippingQuoteOwnerGate } from '../lib/shippingAddressState'
+import type { Catalog } from '../lib/catalog'
 
 interface Pending { addressId: string; items: OrderIntent[]; shippingQuoteId: string | null; requestId: string; token: string }
 function clearPending(key: string) { try { sessionStorage.removeItem(key) } catch { /* Storage is optional. */ } }
@@ -29,7 +31,7 @@ function readPending(key: string, expectedItems: OrderIntent[]): Pending | null 
   }
 }
 
-export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: string; items: OrderIntent[]; onBack: () => void; onPlaced: (order: CustomerOrder) => void }) {
+export function CheckoutScreen({ userId, items, catalog, onBack, onPlaced }: { userId: string; items: OrderIntent[]; catalog: Catalog; onBack: () => void; onPlaced: (order: CustomerOrder) => void }) {
   const storageKey = `perfun-order-submit:${userId}`
   const [storedPending, setStoredPending] = useState<Pending | null>(() => readPending(storageKey, items))
   const [addressId, setAddressId] = useState(() => readPending(storageKey, items)?.addressId ?? '')
@@ -115,7 +117,7 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
     {error ? <p className="cloud-message" role="alert">{error}</p> : null}
     {mode === 'update' ? <p role="alert">Pengiriman sudah tersedia. Perbarui aplikasi atau buka ulang halaman sebelum melanjutkan checkout.</p> : null}
     {mode === 'unavailable' ? <p role="alert">Status pengiriman belum tersedia. Muat ulang halaman dan coba lagi.</p> : null}
-    {mode === 'paused' ? <div className="checkout-unified-flow"><CheckoutAddressCard address={address} onChange={() => setAddressSheetOpen(true)}/><section className="checkout-section"><span>RINGKASAN PESANAN</span><p>{items.length} pilihan parfum siap dipesan saat layanan pengiriman dibuka.</p></section><section className="checkout-section"><span>PENGIRIMAN</span><p>{shippingUnavailable}</p></section><aside className="checkout-summary"><span>TOTAL PESANAN</span><p>Harga akhir akan tersedia setelah ongkir dapat dihitung.</p><small>Anda tetap dapat menambah atau mengubah alamat pengiriman.</small></aside></div> : null}
+    {mode === 'paused' ? <div className="checkout-unified-flow"><CheckoutAddressCard address={address} onChange={() => setAddressSheetOpen(true)}/><section className="checkout-section"><span>RINGKASAN PESANAN</span><CheckoutProductPreview items={items} catalog={catalog}/><p>Harga produk ditampilkan dari katalog saat ini. Harga final, diskon, dan total tetap menunggu validasi server setelah ongkir tersedia.</p></section><section className="checkout-section"><span>PENGIRIMAN</span><p>{shippingUnavailable}</p></section><aside className="checkout-summary"><span>TOTAL PESANAN</span><p>Harga akhir akan tersedia setelah ongkir dapat dihitung.</p><small>Anda tetap dapat menambah atau mengubah alamat pengiriman.</small></aside></div> : null}
     {mode === 'loading' ? <p role="status">Memeriksa status pengiriman…</p> : null}
     {mode === 'paused' ? null : pending ? <div className="cloud-message"><p>Permintaan pesanan tersimpan. Periksa hasilnya tanpa membuat pesanan kedua.</p><button disabled={busy} onClick={submit}>{busy ? 'Memeriksa pesanan…' : 'Periksa / coba lagi'}</button></div> : <div className="checkout-unified-flow">
       {mode === 'shipping' ? <><CheckoutAddressCard address={address} onChange={() => setAddressSheetOpen(true)}/><section className="checkout-section"><span>RINGKASAN PESANAN</span>{quote ? <OrderLines items={quote.items}/> : <p role="status">Menyiapkan ringkasan pesanan…</p>}</section>{shippingEnabled ? <ShippingQuotePicker key={`${address?.id ?? 'no-address'}:${addressRevision}:${itemsFingerprint}`} address={address} items={items} onQuote={acceptShippingQuote}/> : null}<aside className="checkout-summary"><span>TOTAL PESANAN</span>{quote ? <OrderTotals totals={quote}/> : <p>{reviewBusy ? 'Memvalidasi harga akhir…' : shippingQuote ? 'Menyiapkan total pesanan…' : 'Menunggu ongkir untuk menghitung total.'}</p>}<button disabled={!canSubmitReviewedOrder(mode, quote?.quote_token, busy, reviewBusy)} onClick={submit}>{busy ? 'Membuat pesanan…' : 'Buat pesanan'}</button><small>{quote ? 'Harga dan ongkir telah divalidasi. Pembayaran belum dilakukan pada tahap ini.' : 'Buat Pesanan tersedia setelah harga akhir tervalidasi.'}</small>{error && shippingQuote && !reviewBusy ? <button type="button" className="checkout-retry" onClick={() => setReviewAttempt(value => value + 1)}>Coba lagi</button> : null}</aside></> : null}
@@ -127,6 +129,9 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
 
 function CheckoutAddressCard({ address, onChange }: { address: Address | null; onChange: () => void }) {
   return <section className="checkout-address-card"><header><div><span>ALAMAT PENGIRIMAN</span><h2>{address ? address.label || 'Alamat pengiriman' : 'Pilih alamat'}</h2></div><button type="button" onClick={onChange}>{address ? 'Ganti alamat' : 'Tambah alamat'}</button></header>{address ? <AddressText address={address}/> : <p>Alamat utama yang valid akan dipilih otomatis.</p>}</section>
+}
+function CheckoutProductPreview({ items, catalog }: { items: OrderIntent[]; catalog: Catalog }) {
+  return <div className="checkout-items checkout-product-preview">{checkoutProductSummaries(items, catalog).map((item, index) => <article key={`${item.productId}:${index}`}><div><strong>{item.label}</strong><small>{item.bottleCount} Ã— {item.volumeMl} ml Â· Jumlah {item.quantity}</small>{item.blends.map((blend, blendIndex) => <div className="snapshot-blend" key={blendIndex}><b>{blend.label}</b><small>{blend.notes.map(note => `${note.phase}: ${note.name}`).join(' Â· ')}</small></div>)}{item.price ? <small>{item.price.discount > 0 ? <>Harga normal <s>{formatPrice(item.price.normal)}</s><br/>Harga peluncuran {formatPrice(item.price.opening)} Â· Hemat {formatPrice(item.price.discount)}</> : <>Harga produk {formatPrice(item.price.opening)}</>}</small> : <small>Harga produk akan dikonfirmasi saat checkout tersedia.</small>}</div></article>)}</div>
 }
 export function OrderLines({ items }: { items: OrderLine[] }) {
   return <div className="checkout-items">{items.map((item, index) => <article key={index}><div><strong>{item.product_snapshot.label}</strong><small>{item.product_snapshot.bottle_count} × {item.product_snapshot.volume_ml} ml · Jumlah {item.quantity}</small>{item.creations_snapshot.map((creation, i) => <div className="snapshot-blend" key={i}><b>{creation.name}</b><small>{creation.notes.map(n => `${n.phase}: ${n.note.name}`).join(' · ')}</small></div>)}<small>Harga satuan {formatPrice(item.unit_price)}</small></div><b>{formatPrice(item.line_total)}</b></article>)}</div>

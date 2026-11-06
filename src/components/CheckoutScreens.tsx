@@ -1,4 +1,4 @@
-import { ArrowLeft, PackageCheck } from 'lucide-react'
+import { ArrowLeft, PackageCheck, X } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { formatPrice } from '../lib/currency'
 import { getOrder, placeOrder, quoteOrder, type CustomerOrder, type OrderIntent, type OrderLine, type Quote } from '../lib/orders'
@@ -36,6 +36,7 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
   const [quote, setQuote] = useState<Quote | null>(null)
   const [shippingQuote, setShippingQuote] = useState<ShippingQuote | null>(null)
   const [address, setAddress] = useState<Address | null>(null)
+  const [addressSheetOpen, setAddressSheetOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const locked = useRef(false)
@@ -51,7 +52,7 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
     void getCheckoutShippingReadiness().then(status => { if (active) setShippingStatus(status) }).catch(() => { if (active) setShippingStatusError(true) })
     return () => { active = false }
   }, [])
-  const selectAddress = useCallback((id: string) => { const revision = quoteOwner.current.nextAddress(); setAddressId(id); setAddressRevision(revision); setAddress(null); setShippingQuote(null); setQuote(null); setError('') }, [])
+  const selectAddress = useCallback((id: string) => { const revision = quoteOwner.current.nextAddress(); setAddressId(id); setAddressRevision(revision); setAddress(null); setShippingQuote(null); setQuote(null); setError(''); setAddressSheetOpen(false) }, [])
   const acceptShippingQuote = useCallback((next: ShippingQuote | null) => {
     if (quoteOwner.current.accepts(addressRevision, itemsFingerprint)) setShippingQuote(next)
   }, [addressRevision, itemsFingerprint])
@@ -65,7 +66,7 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
     const expiresAt = quote?.shipping_quote_snapshot?.expires_at ?? shippingQuote?.expires_at
     if (!quote || !expiresAt) return
     const deadline = Date.parse(expiresAt)
-    const expire = () => { setShippingQuote(null); setQuote(null); setError('Your shipping quote expired. Select a service again.') }
+    const expire = () => { setShippingQuote(null); setQuote(null); setError('Quote ongkir kedaluwarsa. Hitung ulang sebelum meninjau pesanan.') }
     if (Number.isNaN(deadline) || deadline <= Date.now()) { expire(); return }
     const timer = window.setTimeout(expire, deadline - Date.now() + 1)
     return () => window.clearTimeout(timer)
@@ -73,7 +74,7 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
   async function review() {
     if (locked.current) return
     locked.current = true; setBusy(true); setError('')
-    try { if (mode !== 'shipping') throw new Error('Shipping checkout is not enabled. No order was created.'); if (shippingQuoteRequired(shippingEnabled, shippingQuote?.quote_id)) throw new Error('Choose a current shipping service before reviewing your order.'); setQuote(await quoteOrder(addressId, items, shippingQuote?.quote_id ?? null)) }
+    try { if (mode !== 'shipping') throw new Error('Shipping checkout is not enabled. No order was created.'); if (shippingQuoteRequired(shippingEnabled, shippingQuote?.quote_id)) throw new Error('Ongkir belum tersedia. Coba lagi sebelum meninjau pesanan.'); setQuote(await quoteOrder(addressId, items, shippingQuote?.quote_id ?? null)) }
     catch (error) { setError(checkoutErrorMessage(error)); setQuote(null) }
     finally { locked.current = false; setBusy(false) }
   }
@@ -96,17 +97,23 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
       }
     } finally { locked.current = false; setBusy(false) }
   }
-  return <section className="checkout-screen app-screen"><button className="checkout-back" disabled={busy || !!pending} onClick={onBack}><ArrowLeft/> Kembali ke keranjang</button><header className="screen-title"><span>CHECKOUT</span><h1>Hampir jadi.</h1><p>Pilih alamat pengiriman, lalu tinjau pesanan Anda.</p></header>
+  return <section className="checkout-screen app-screen"><button className="checkout-back" disabled={busy || !!pending} onClick={onBack}><ArrowLeft/> Kembali ke keranjang</button><header className="screen-title"><span>CHECKOUT</span><h1>Hampir jadi.</h1><p>Alamat utama dan ongkir terbaik akan disiapkan otomatis.</p></header>
     {error ? <p className="cloud-message" role="alert">{error}</p> : null}
     {mode === 'update' ? <p role="alert">Pengiriman sudah tersedia. Perbarui aplikasi atau buka ulang halaman sebelum melanjutkan checkout.</p> : null}
     {mode === 'unavailable' ? <p role="alert">Status pengiriman belum tersedia. Muat ulang halaman dan coba lagi.</p> : null}
-    {mode === 'paused' ? <div className="checkout-grid"><AddressBook selectedId={addressId} onSelect={selectAddress} onAddressSelect={setAddress} destinationSearchEnabled/><aside className="checkout-summary"><span>CHECKOUT DITAHAN</span><p>{shippingUnavailable}</p><small>Anda tetap dapat menambah atau mengubah alamat pengiriman.</small></aside></div> : null}
+    {mode === 'paused' ? <div className="checkout-grid"><CheckoutAddressCard address={address} onChange={() => setAddressSheetOpen(true)}/><aside className="checkout-summary"><span>CHECKOUT DITAHAN</span><p>{shippingUnavailable}</p><small>Anda tetap dapat menambah atau mengubah alamat pengiriman.</small></aside></div> : null}
     {mode === 'loading' ? <p role="status">Memeriksa status pengiriman…</p> : null}
     {mode === 'paused' ? null : pending ? <div className="cloud-message"><p>Permintaan pesanan tersimpan. Periksa hasilnya tanpa membuat pesanan kedua.</p><button disabled={busy} onClick={submit}>{busy ? 'Memeriksa pesanan…' : 'Periksa / coba lagi'}</button></div> : <div className="checkout-grid">
-      {!quote ? <>{mode === 'shipping' ? <AddressBook selectedId={addressId} onSelect={selectAddress} onAddressSelect={setAddress} destinationSearchEnabled/> : null}{shippingEnabled ? <ShippingQuotePicker key={`${address?.id ?? 'no-address'}:${addressRevision}:${itemsFingerprint}`} address={address} items={items} onQuote={acceptShippingQuote}/> : null}</> : <div className="guest-form"><h2>Alamat pengiriman</h2><AddressText address={quote.address_snapshot}/><button className="checkout-back" disabled={busy} onClick={() => { setShippingQuote(null); setQuote(null) }}>Ubah alamat</button></div>}
-      <aside className="checkout-summary"><span>{quote ? 'TINJAU PESANAN' : 'RINGKASAN PESANAN'}</span>{quote ? <><OrderLines items={quote.items}/><OrderTotals totals={quote}/><button disabled={busy} onClick={submit}>{busy ? 'Membuat pesanan…' : 'Buat pesanan'}</button></> : <><p>{items.length} pilihan parfum siap dipesan.</p><button disabled={!addressId || mode !== 'shipping' || shippingQuoteRequired(shippingEnabled, shippingQuote?.quote_id) || busy} onClick={review}>{busy ? 'Menghitung…' : 'Tinjau pesanan'}</button></>}<small>{shippingEnabled ? (shippingQuote ? 'Ongkir telah masuk total. Pembayaran belum dilakukan pada tahap ini.' : 'Pilih layanan pengiriman untuk melanjutkan.') : shippingUnavailable}</small></aside>
+      {!quote ? <>{mode === 'shipping' ? <><CheckoutAddressCard address={address} onChange={() => setAddressSheetOpen(true)}/>{shippingEnabled ? <ShippingQuotePicker key={`${address?.id ?? 'no-address'}:${addressRevision}:${itemsFingerprint}`} address={address} items={items} onQuote={acceptShippingQuote}/> : null}</> : null}</> : <div className="guest-form"><h2>Alamat pengiriman</h2><AddressText address={quote.address_snapshot}/><button className="checkout-back" disabled={busy} onClick={() => { setShippingQuote(null); setQuote(null) }}>Ubah alamat</button></div>}
+      <aside className="checkout-summary"><span>{quote ? 'TINJAU PESANAN' : 'RINGKASAN PESANAN'}</span>{quote ? <><OrderLines items={quote.items}/><OrderTotals totals={quote}/><button disabled={busy} onClick={submit}>{busy ? 'Membuat pesanan…' : 'Buat pesanan'}</button></> : <><p>{items.length} pilihan parfum siap dipesan.</p><button disabled={!addressId || mode !== 'shipping' || shippingQuoteRequired(shippingEnabled, shippingQuote?.quote_id) || busy} onClick={review}>{busy ? 'Menghitung…' : 'Tinjau pesanan'}</button></>}<small>{shippingEnabled ? (shippingQuote ? 'Ongkir telah masuk total. Pembayaran belum dilakukan pada tahap ini.' : 'Menyiapkan ongkir berdasarkan alamat pengiriman.') : shippingUnavailable}</small></aside>
     </div>}
+    <AddressBook hidden selectedId={addressId} onSelect={selectAddress} onAddressSelect={setAddress} destinationSearchEnabled/>
+    {addressSheetOpen ? <div className="checkout-address-sheet-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !busy) setAddressSheetOpen(false) }}><section className="checkout-address-sheet" role="dialog" aria-modal="true" aria-labelledby="checkout-address-sheet-title"><header><div><span>ALAMAT PENGIRIMAN</span><h2 id="checkout-address-sheet-title">Ganti alamat</h2></div><button type="button" aria-label="Tutup" onClick={() => setAddressSheetOpen(false)}><X/></button></header><AddressBook selectedId={addressId} onSelect={selectAddress} onAddressSelect={setAddress} destinationSearchEnabled/></section></div> : null}
   </section>
+}
+
+function CheckoutAddressCard({ address, onChange }: { address: Address | null; onChange: () => void }) {
+  return <section className="checkout-address-card"><header><div><span>ALAMAT PENGIRIMAN</span><h2>{address ? address.label || 'Alamat pengiriman' : 'Pilih alamat'}</h2></div><button type="button" onClick={onChange}>{address ? 'Ganti alamat' : 'Tambah alamat'}</button></header>{address ? <AddressText address={address}/> : <p>Alamat utama yang valid akan dipilih otomatis.</p>}</section>
 }
 export function OrderLines({ items }: { items: OrderLine[] }) {
   return <div className="checkout-items">{items.map((item, index) => <article key={index}><div><strong>{item.product_snapshot.label}</strong><small>{item.product_snapshot.bottle_count} × {item.product_snapshot.volume_ml} ml · Jumlah {item.quantity}</small>{item.creations_snapshot.map((creation, i) => <div className="snapshot-blend" key={i}><b>{creation.name}</b><small>{creation.notes.map(n => `${n.phase}: ${n.note.name}`).join(' · ')}</small></div>)}<small>Harga satuan {formatPrice(item.unit_price)}</small></div><b>{formatPrice(item.line_total)}</b></article>)}</div>

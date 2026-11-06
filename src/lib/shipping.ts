@@ -31,3 +31,4 @@ export async function bindShippingDestination(addressId: string, query: string, 
 export async function saveAddressWithDestination(addressId: string, address: AddressInput, query: string, destinationId: number) { await invoke('shipping-destinations', { action: 'save_address', address_id: addressId, address, query, destination_id: destinationId }) }
 export async function shippingRates(addressId: string, items: OrderIntent[]) { return (await invoke<{ rates: ShippingRate[] }>('shipping-quote', { address_id: addressId, items })).rates }
 export async function selectShippingRate(addressId: string, items: OrderIntent[], service: string) { return (await invoke<{ quote: ShippingQuote }>('shipping-quote', { address_id: addressId, items, service })).quote }
+export async function autoSelectShippingRate(addressId: string, items: OrderIntent[]) { return (await invoke<{ quote: ShippingQuote }>('shipping-quote', { address_id: addressId, items, auto_select: true })).quote }

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { RajaOngkirShippingCostProvider, ShippingError, shippingProviderBaseUrlAllowed } from '../supabase/functions/_shared/rajaongkir.ts'
 import { dedupeShippingRateRequest } from '../supabase/functions/_shared/shipping-rate-dedupe.ts'
-import { assignAutomaticCourier, resolveShippingRegion, selectAutomaticRate } from '../supabase/functions/_shared/shipping-routing.ts'
+import { assignAutomaticCourier, resolveShippingRegion, selectAutomaticRate, selectLowestAutomaticRate } from '../supabase/functions/_shared/shipping-routing.ts'
 
 function response(status, body) { return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }) }
 test('RajaOngkir provider sends secret only as key header and normalizes automatic J&T rates', async () => {
@@ -72,6 +72,19 @@ test('a client cannot select a rate from a courier other than the assigned route
  ]
  assert.equal(selectAutomaticRate(rates, route, 'REG')?.courier_code, 'anteraja')
  assert.equal(selectAutomaticRate(rates, route, 'EZ'), null)
+})
+
+test('server chooses the lowest valid routed service with deterministic ties', () => {
+ const route = assignAutomaticCourier({ province: 'Banten' }, { province: 'Jawa Barat' })
+ const rates = [
+  { courier_code: 'jnt', courier_name: 'J&T Express', service: 'REG', amount: 9000, etd: '2 days' },
+  { courier_code: 'jnt', courier_name: 'J&T Express', service: 'EZ', amount: 9000, etd: '2 days' },
+  { courier_code: 'jnt', courier_name: 'J&T Express', service: 'ECO', amount: 11000, etd: '3 days' },
+  { courier_code: 'anteraja', courier_name: 'AnterAja', service: 'REG', amount: 1000, etd: '1 day' },
+  { courier_code: 'jnt', courier_name: 'J&T Express', service: 'BAD', amount: 0, etd: '' },
+ ]
+ assert.deepEqual(selectLowestAutomaticRate(rates, route), rates[1])
+ assert.equal(selectLowestAutomaticRate([], route), null)
 })
 
 test('identical in-flight provider rate requests share one request per Edge isolate', async () => {

@@ -15,6 +15,7 @@ import '../responsive.css'
 import '../cloud.css'
 import { loadCatalog, type Catalog } from '../lib/catalog'
 import { errorMessage } from '../lib/supabase'
+import { globalLoadingMessage } from '../lib/loadingCopy'
 import { useAuth } from '../hooks/useAuth'
 import { AccountMenu } from '../components/AccountMenu'
 import { EmailPasswordDialog } from '../components/EmailPasswordDialog'
@@ -85,7 +86,7 @@ export default function App() {
   if (auth.loading || (auth.user && auth.roleLoading)) return <RoleLoading/>
   if (auth.user && auth.role && auth.role !== 'customer') return <WorkspaceApp auth={auth}/>
   if (auth.user && !auth.role) return <RoleUnavailable auth={auth}/>
-  if (!catalog) return <div className="app-shell product-app customer-app"><Header itemCount={0} activeView="build" onNavigate={() => {}} account={<AccountMenu auth={auth} onLogin={() => {}}/>}/><main className="cloud-message">{error ? <><p role="alert">{error}</p><button onClick={() => { setError(''); setAttempt(value => value + 1) }}>Try again</button></> : <p role="status">Loading the lab…</p>}</main></div>
+  if (!catalog) return <div className="app-shell product-app customer-app"><Header itemCount={0} activeView="build" onNavigate={() => {}} account={<AccountMenu auth={auth} onLogin={() => {}}/>}/><main>{error ? <div className="cloud-message"><p role="alert">{error}</p><button onClick={() => { setError(''); setAttempt(value => value + 1) }}>Try again</button></div> : <GlobalLoading/>}</main></div>
   return <ConnectedApp catalog={catalog} auth={auth}/>
 }
 
@@ -341,7 +342,11 @@ function ConnectedApp({ catalog, auth }: { catalog: Catalog; auth: ReturnType<ty
 }
 
 function RoleLoading() {
-  return <div className="app-shell product-app workspace-app"><main className="cloud-message" aria-busy="true"><p role="status">Loading secure workspace…</p></main></div>
+  return <div className="app-shell product-app workspace-app"><main><GlobalLoading/></main></div>
+}
+
+function GlobalLoading() {
+  return <div className="global-loading" aria-busy="true"><img src="/brand/perfun-lab-logo.webp" alt="Perfun Lab"/><p role="status">{globalLoadingMessage}</p></div>
 }
 
 function WorkspaceLoading() {
@@ -353,7 +358,7 @@ function ExploreArticleLoading() {
 }
 
 function CustomerRouteLoading() {
-  return <div className="explore-article-loading" aria-busy="true"><p role="status">Loading the lab…</p></div>
+  return <div className="explore-article-loading section-loading" aria-busy="true"><p role="status">Menyiapkan bagian ini…</p></div>
 }
 
 function RoleUnavailable({ auth }: { auth: ReturnType<typeof useAuth> }) {

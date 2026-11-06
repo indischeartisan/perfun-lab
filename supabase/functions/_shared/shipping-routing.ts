@@ -57,3 +57,12 @@ export function assignAutomaticCourier(originLabel: Record<string, unknown>, des
 export function selectAutomaticRate(rates: Rate[], route: ShippingRoute, service: string) {
   return rates.find(rate => rate.courier_code === route.courier && rate.service === service) ?? null
 }
+
+/** Server-side default service policy: lowest valid rate, then stable lexical ties. */
+export function selectLowestAutomaticRate(rates: Rate[], route: ShippingRoute) {
+  return rates
+    .filter(rate => rate.courier_code === route.courier && Number.isSafeInteger(rate.amount) && rate.amount > 0 && rate.service.trim())
+    .sort((left, right) => left.amount - right.amount
+      || left.service.localeCompare(right.service, 'id')
+      || left.courier_name.localeCompare(right.courier_name, 'id'))[0] ?? null
+}

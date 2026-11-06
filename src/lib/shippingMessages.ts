@@ -5,6 +5,7 @@ export function shippingErrorMessage(error: unknown) {
   if (/sign in required|invalid session/i.test(message)) return 'Sesi Anda berakhir. Masuk kembali lalu coba lagi.'
   if (/customer account required/i.test(message)) return 'Akun pelanggan diperlukan untuk mencari lokasi.'
   if (/shipping provider is unavailable|shipping destination search is unavailable/i.test(message)) return 'Layanan RajaOngkir sedang tidak tersedia. Coba lagi beberapa saat lagi.'
+  if (/no shipping service is available|selected shipping service is not available/i.test(message)) return 'Layanan pengiriman belum tersedia untuk alamat ini. Coba lagi nanti.'
   if (/rate limit|too many|membatasi permintaan/i.test(message)) return 'Terlalu banyak permintaan pencarian. Coba lagi beberapa saat lagi.'
   return message || 'Pencarian lokasi tidak dapat dilakukan. Coba lagi.'
 }

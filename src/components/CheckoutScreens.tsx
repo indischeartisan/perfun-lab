@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { formatPrice } from '../lib/currency'
 import { getOrder, placeOrder, quoteOrder, type CustomerOrder, type OrderIntent, type OrderLine, type Quote } from '../lib/orders'
 import { reviewedShippingBreakdown } from '../lib/shippingCheckoutReview'
-import { checkoutErrorMessage, checkoutShippingMode, isShippingCheckoutEnabled, shippingQuoteRequired, type ShippingReadiness } from '../lib/shippingCheckout'
+import { checkoutErrorMessage, checkoutShippingMode, isShippingCheckoutEnabled, shippingQuoteRequired, shippingUnavailable, type ShippingReadiness } from '../lib/shippingCheckout'
 import { AddressBook, AddressText } from './AddressBook'
 import { ShippingQuotePicker } from './ShippingQuotePicker'
 import type { Address } from '../lib/orders'
@@ -30,7 +30,7 @@ function readPending(key: string, expectedItems: OrderIntent[]): Pending | null 
 
 export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: string; items: OrderIntent[]; onBack: () => void; onPlaced: (order: CustomerOrder) => void }) {
   const storageKey = `perfun-order-submit:${userId}`
-  const [pending, setPending] = useState<Pending | null>(() => readPending(storageKey, items))
+  const [storedPending, setStoredPending] = useState<Pending | null>(() => readPending(storageKey, items))
   const [addressId, setAddressId] = useState(() => readPending(storageKey, items)?.addressId ?? '')
   const [addressRevision, setAddressRevision] = useState(0)
   const [quote, setQuote] = useState<Quote | null>(null)
@@ -45,6 +45,7 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
   const [shippingStatusError, setShippingStatusError] = useState(false)
   const mode = shippingStatusError ? 'unavailable' : checkoutShippingMode(isShippingCheckoutEnabled(), shippingStatus)
   const shippingEnabled = mode === 'shipping'
+  const pending = mode === 'paused' ? null : storedPending
   useEffect(() => {
     let active = true
     void getCheckoutShippingReadiness().then(status => { if (active) setShippingStatus(status) }).catch(() => { if (active) setShippingStatusError(true) })
@@ -72,7 +73,7 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
   async function review() {
     if (locked.current) return
     locked.current = true; setBusy(true); setError('')
-    try { if (mode !== 'standard' && mode !== 'shipping') throw new Error('Shipping status unavailable. Please refresh and try again.'); if (shippingQuoteRequired(shippingEnabled, shippingQuote?.quote_id)) throw new Error('Choose a current shipping service before reviewing your order.'); setQuote(await quoteOrder(addressId, items, shippingQuote?.quote_id ?? null)) }
+    try { if (mode !== 'shipping') throw new Error('Shipping checkout is not enabled. No order was created.'); if (shippingQuoteRequired(shippingEnabled, shippingQuote?.quote_id)) throw new Error('Choose a current shipping service before reviewing your order.'); setQuote(await quoteOrder(addressId, items, shippingQuote?.quote_id ?? null)) }
     catch (error) { setError(checkoutErrorMessage(error)); setQuote(null) }
     finally { locked.current = false; setBusy(false) }
   }
@@ -82,16 +83,16 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
     const request = pending ?? { addressId, items, shippingQuoteId: shippingQuote?.quote_id ?? null, requestId: crypto.randomUUID(), token: quote!.quote_token }
     let committed = false
     try {
-      savePending(storageKey, request); setPending(request)
+      savePending(storageKey, request); setStoredPending(request)
       const id = await placeOrder(request.addressId, request.items, request.shippingQuoteId, request.requestId, request.token)
       committed = true
       const order = await getOrder(id)
-      clearPending(storageKey); setPending(null); onPlaced(order)
+      clearPending(storageKey); setStoredPending(null); onPlaced(order)
     } catch (error) {
       setError(checkoutErrorMessage(error))
       // Only definitive database validation failures clear the intent. Network errors preserve it.
       if (!committed && error && typeof error === 'object' && 'code' in error && ['P0001', '42501', '23514', '22P02'].includes(String(error.code))) {
-        clearPending(storageKey); setPending(null); setQuote(null)
+        clearPending(storageKey); setStoredPending(null); setQuote(null)
       }
     } finally { locked.current = false; setBusy(false) }
   }
@@ -99,10 +100,11 @@ export function CheckoutScreen({ userId, items, onBack, onPlaced }: { userId: st
     {error ? <p className="cloud-message" role="alert">{error}</p> : null}
     {mode === 'update' ? <p role="alert">Pengiriman sudah tersedia. Perbarui aplikasi atau buka ulang halaman sebelum melanjutkan checkout.</p> : null}
     {mode === 'unavailable' ? <p role="alert">Status pengiriman belum tersedia. Muat ulang halaman dan coba lagi.</p> : null}
+    {mode === 'paused' ? <div className="checkout-grid"><AddressBook selectedId={addressId} onSelect={selectAddress} onAddressSelect={setAddress} destinationSearchEnabled/><aside className="checkout-summary"><span>CHECKOUT DITAHAN</span><p>{shippingUnavailable}</p><small>Anda tetap dapat menambah atau mengubah alamat pengiriman.</small></aside></div> : null}
     {mode === 'loading' ? <p role="status">Memeriksa status pengiriman…</p> : null}
-    {pending ? <div className="cloud-message"><p>Permintaan pesanan tersimpan. Periksa hasilnya tanpa membuat pesanan kedua.</p><button disabled={busy} onClick={submit}>{busy ? 'Memeriksa pesanan…' : 'Periksa / coba lagi'}</button></div> : <div className="checkout-grid">
-      {!quote ? <>{mode === 'standard' || mode === 'shipping' ? <AddressBook selectedId={addressId} onSelect={selectAddress} onAddressSelect={setAddress} destinationSearchEnabled/> : null}{shippingEnabled ? <ShippingQuotePicker key={`${address?.id ?? 'no-address'}:${addressRevision}:${itemsFingerprint}`} address={address} items={items} onQuote={acceptShippingQuote}/> : null}</> : <div className="guest-form"><h2>Alamat pengiriman</h2><AddressText address={quote.address_snapshot}/><button className="checkout-back" disabled={busy} onClick={() => { setShippingQuote(null); setQuote(null) }}>Ubah alamat</button></div>}
-      <aside className="checkout-summary"><span>{quote ? 'TINJAU PESANAN' : 'RINGKASAN PESANAN'}</span>{quote ? <><OrderLines items={quote.items}/><OrderTotals totals={quote}/><button disabled={busy} onClick={submit}>{busy ? 'Membuat pesanan…' : 'Buat pesanan'}</button></> : <><p>{items.length} pilihan parfum siap dipesan.</p><button disabled={!addressId || (mode !== 'standard' && mode !== 'shipping') || shippingQuoteRequired(shippingEnabled, shippingQuote?.quote_id) || busy} onClick={review}>{busy ? 'Menghitung…' : 'Tinjau pesanan'}</button></>}<small>{shippingEnabled ? (shippingQuote ? 'Ongkir telah masuk total. Pembayaran belum dilakukan pada tahap ini.' : 'Pilih layanan pengiriman untuk melanjutkan.') : 'Ongkir akan ditambahkan saat layanan pengiriman tersedia.'}</small></aside>
+    {mode === 'paused' ? null : pending ? <div className="cloud-message"><p>Permintaan pesanan tersimpan. Periksa hasilnya tanpa membuat pesanan kedua.</p><button disabled={busy} onClick={submit}>{busy ? 'Memeriksa pesanan…' : 'Periksa / coba lagi'}</button></div> : <div className="checkout-grid">
+      {!quote ? <>{mode === 'shipping' ? <AddressBook selectedId={addressId} onSelect={selectAddress} onAddressSelect={setAddress} destinationSearchEnabled/> : null}{shippingEnabled ? <ShippingQuotePicker key={`${address?.id ?? 'no-address'}:${addressRevision}:${itemsFingerprint}`} address={address} items={items} onQuote={acceptShippingQuote}/> : null}</> : <div className="guest-form"><h2>Alamat pengiriman</h2><AddressText address={quote.address_snapshot}/><button className="checkout-back" disabled={busy} onClick={() => { setShippingQuote(null); setQuote(null) }}>Ubah alamat</button></div>}
+      <aside className="checkout-summary"><span>{quote ? 'TINJAU PESANAN' : 'RINGKASAN PESANAN'}</span>{quote ? <><OrderLines items={quote.items}/><OrderTotals totals={quote}/><button disabled={busy} onClick={submit}>{busy ? 'Membuat pesanan…' : 'Buat pesanan'}</button></> : <><p>{items.length} pilihan parfum siap dipesan.</p><button disabled={!addressId || mode !== 'shipping' || shippingQuoteRequired(shippingEnabled, shippingQuote?.quote_id) || busy} onClick={review}>{busy ? 'Menghitung…' : 'Tinjau pesanan'}</button></>}<small>{shippingEnabled ? (shippingQuote ? 'Ongkir telah masuk total. Pembayaran belum dilakukan pada tahap ini.' : 'Pilih layanan pengiriman untuk melanjutkan.') : shippingUnavailable}</small></aside>
     </div>}
   </section>
 }

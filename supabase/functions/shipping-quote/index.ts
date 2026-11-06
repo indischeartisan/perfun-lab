@@ -1,6 +1,6 @@
 import { RajaOngkirShippingCostProvider, ShippingError, allowedCouriers, type Rate } from '../_shared/rajaongkir.ts'
 import { dedupeShippingRateRequest } from '../_shared/shipping-rate-dedupe.ts'
-import { assignAutomaticCourier, selectAutomaticRate } from '../_shared/shipping-routing.ts'
+import { assignAutomaticCourier, selectAutomaticRate, selectLowestAutomaticRate } from '../_shared/shipping-routing.ts'
 import { shippingCors, shippingFailure, shippingJson, shippingProvider, shippingRpc, shippingUser } from '../_shared/shipping-runtime.ts'
 
 type Context={origin_destination_id:number;origin_destination_label:Record<string,unknown>;origin_version:number;package_profile_version:number;address:{destination_id:number;destination_label:Record<string,unknown>}}
@@ -24,8 +24,9 @@ Deno.serve(async req => {
   if(!rates.length) throw new ShippingError('No shipping service is available for this route.',422)
   if(!cached) await shippingRpc('shipping_quote_cache_put',{p_cache_key:cacheKey,p_origin_version:context.origin_version,p_package_profile_version:weight.package_profile_version,p_origin_destination_id:context.origin_destination_id,p_destination_id:context.address.destination_id,p_weight_grams:weight.weight_grams,p_courier_code:route.courier,p_rates:rates})
   const requestedService=typeof body.service==='string' ? body.service.trim() : ''
-  if(!requestedService) return Response.json({origin_version:context.origin_version,package_profile_version:weight.package_profile_version,weight_grams:weight.weight_grams,courier:route.courier,rates},{headers:shippingCors(req)})
-  const selected=selectAutomaticRate(rates,route,requestedService)
+  const automaticSelection=body.auto_select===true
+  if(!requestedService && !automaticSelection) return Response.json({origin_version:context.origin_version,package_profile_version:weight.package_profile_version,weight_grams:weight.weight_grams,courier:route.courier,rates},{headers:shippingCors(req)})
+  const selected=requestedService ? selectAutomaticRate(rates,route,requestedService) : selectLowestAutomaticRate(rates,route)
   if(!selected) throw new ShippingError('Selected shipping service is not available.',422)
   const quote=await shippingRpc('create_shipping_quote',{p_user_id:userId,p_address_id:addressId,p_items:body.items,p_courier_code:selected.courier_code,p_courier_name:selected.courier_name,p_service:selected.service,p_amount:selected.amount,p_etd:selected.etd,p_routing_version:route.version,p_origin_region:route.originRegion,p_destination_region:route.destinationRegion})
   return Response.json({quote},{headers:shippingCors(req)})

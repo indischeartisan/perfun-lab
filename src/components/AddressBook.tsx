@@ -63,7 +63,7 @@ function DestinationSearch({ onSelect }: { onSelect: (value: SelectedDestination
   </div>
 }
 
-export function AddressBook({ selectedId, onSelect, onAddressSelect, destinationSearchEnabled = true, mode = 'select' }: { selectedId: string; onSelect: (id: string) => void; onAddressSelect?: (address: Address) => void; destinationSearchEnabled?: boolean; mode?: AddressBookMode }) {
+export function AddressBook({ selectedId, onSelect, onAddressSelect, destinationSearchEnabled = true, mode = 'select', hidden = false }: { selectedId: string; onSelect: (id: string) => void; onAddressSelect?: (address: Address) => void; destinationSearchEnabled?: boolean; mode?: AddressBookMode; hidden?: boolean }) {
   const [items, setItems] = useState<Address[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -77,7 +77,7 @@ export function AddressBook({ selectedId, onSelect, onAddressSelect, destination
   const editorFocusKey = addressEditorFocusKey(editor)
   useEffect(() => {
     let active = true
-    listAddresses().then(rows => { if (active) { setItems(rows); if (selecting && !selectedId) { const preferred = rows.find(row => row.is_default); if (preferred) { onSelect(preferred.id); onAddressSelect?.(preferred) } } } }).catch(cause => { if (active) setError(errorMessage(cause)) }).finally(() => { if (active) setLoading(false) })
+    listAddresses().then(rows => { if (active) { setItems(rows); const selected = rows.find(row => row.id === selectedId); if (selecting && selected) onAddressSelect?.(selected); else if (selecting && !selectedId) { const preferred = rows.find(row => row.is_default); if (preferred) { onSelect(preferred.id); onAddressSelect?.(preferred) } } } }).catch(cause => { if (active) setError(errorMessage(cause)) }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [attempt, selectedId, onSelect, onAddressSelect, selecting])
   useEffect(() => {
@@ -121,6 +121,7 @@ export function AddressBook({ selectedId, onSelect, onAddressSelect, destination
     try { await deleteAddress(id); setItems(current => current.filter(row => row.id !== id)); if (selectedId === id) onSelect('') }
     catch (cause) { setError(errorMessage(cause)) } finally { setBusy(false) }
   }
+  if (hidden) return null
   return <div className="guest-form"><h2>Alamat pengiriman</h2>
     {loading ? <p role="status">Memuat alamat…</p> : null}
     {error ? <p role="alert">{error} <button type="button" onClick={() => { setError(''); setLoading(true); setAttempt(n => n + 1) }}>Coba lagi</button></p> : null}

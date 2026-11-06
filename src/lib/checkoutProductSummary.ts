@@ -5,7 +5,7 @@ type ProductShape = { bottleCount: number; volumeMl: number; fallbackLabel: stri
 const shapes: Record<OrderIntent['product_id'], ProductShape> = {
   '10ml': { bottleCount: 1, volumeMl: 10, fallbackLabel: 'Parfum 10 ml' },
   '30ml': { bottleCount: 1, volumeMl: 30, fallbackLabel: 'Parfum 30 ml' },
-  'bundle-3x10ml': { bottleCount: 3, volumeMl: 10, fallbackLabel: 'Play Set 3 Ã— 10 ml' },
+  'bundle-3x10ml': { bottleCount: 3, volumeMl: 10, fallbackLabel: 'Play Set 3 × 10 ml' },
 }
 
 function optionId(productId: OrderIntent['product_id']) { return productId === 'bundle-3x10ml' ? 'play-set' : Number(productId.slice(0, -2)) }

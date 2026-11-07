@@ -1,4 +1,4 @@
-import { ArrowLeft, PackageCheck, X } from 'lucide-react'
+import { ArrowLeft, Check, Copy, PackageCheck, X } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { formatPrice } from '../lib/currency'
 import { getOrder, placeOrder, quoteOrder, type CustomerOrder, type OrderIntent, type OrderLine, type Quote } from '../lib/orders'
@@ -141,5 +141,15 @@ export function OrderTotals({ totals }: { totals: Pick<Quote, 'subtotal' | 'disc
   return <dl><div><dt>Subtotal produk</dt><dd>{formatPrice(totals.subtotal)}</dd></div><div><dt>Diskon peluncuran</dt><dd>−{formatPrice(totals.discount)}</dd></div>{shipping ? <div className="shipping-customer-total"><dt>Ongkir setelah voucher</dt><dd>{formatPrice(shipping.customer_shipping_total)}</dd></div> : <div><dt>Ongkir</dt><dd>{formatPrice(totals.shipping)}</dd></div>}<div className="total"><dt>Total pesanan</dt><dd>{formatPrice(totals.grand_total)}</dd></div></dl>
 }
 export function ConfirmationScreen({ order, onBuild, onOrders }: { order: CustomerOrder; onBuild: () => void; onOrders: () => void }) {
-  return <section className="confirmation-screen app-screen"><div className="confirmation-mark"><PackageCheck/></div><span>PESANAN DIBUAT</span><h1>Siap dibayar.</h1><p>Terima kasih, {order.address_snapshot.recipient_name}. Pesanan Anda menunggu pembayaran.</p><div className="confirmation-card"><strong>{order.order_number}</strong><span>Menunggu pembayaran</span><span>Total · {formatPrice(order.grand_total)}</span><small>Lanjutkan ke DOKU untuk menyelesaikan pembayaran dengan aman.</small></div><PaymentActions order={order} onRefresh={onOrders}/><div className="confirmation-actions"><button onClick={onBuild}>RACIK LAGI</button><button onClick={onOrders}>LIHAT PESANAN</button></div></section>
+  const [copied, setCopied] = useState(false)
+  async function copyOrderNumber() {
+    try {
+      await navigator.clipboard.writeText(order.order_number)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch { setCopied(false) }
+  }
+  return <section className="confirmation-screen app-screen"><div className="confirmation-intro"><div className="confirmation-mark"><PackageCheck/></div><span>PESANAN DIBUAT</span><h1>Siap dibayar.</h1><p>Terima kasih, {order.address_snapshot.recipient_name}. Pesanan Anda menunggu pembayaran.</p></div>
+    <section className="confirmation-card" aria-label="Status pesanan"><div className="confirmation-status"><span>STATUS PESANAN</span><strong>Menunggu pembayaran</strong></div><div className="confirmation-total"><span>TOTAL PEMBAYARAN</span><strong>{formatPrice(order.grand_total)}</strong></div><div className="confirmation-number"><span>NOMOR PESANAN</span><div><strong>{order.order_number}</strong><button type="button" onClick={() => void copyOrderNumber()} aria-label="Salin nomor pesanan">{copied ? <Check/> : <Copy/>}<span>{copied ? 'Tersalin' : 'Salin'}</span></button></div><details><summary>Lihat nomor pesanan lengkap</summary><code>{order.order_number}</code></details></div></section>
+    <PaymentActions order={order} onRefresh={onOrders}/><div className="confirmation-actions"><button className="confirmation-orders" onClick={onOrders}>Lihat detail pesanan</button><button className="confirmation-build" onClick={onBuild}>Racik lagi</button></div></section>
 }

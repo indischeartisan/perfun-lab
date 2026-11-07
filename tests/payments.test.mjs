@@ -4,6 +4,7 @@ import { createHash, createHmac } from 'node:crypto'
 import { DokuProvider, signature, parseDokuEvent } from '../supabase/functions/_shared/doku.ts'
 import { initiatePayment, processWebhook } from '../supabase/functions/_shared/payment-service.ts'
 import { CreationRejected } from '../supabase/functions/_shared/payment-provider.ts'
+import { paymentErrorMessage } from '../src/lib/paymentErrorMessage.ts'
 
 const config = { clientId: 'test-client', secret: 'test-only-secret', environment: 'sandbox' }
 const payment = () => ({ id: 'e3000000-0000-4000-8000-000000000001', order_id: 'test-order', provider: 'doku', environment: 'sandbox', provider_reference: 'PF123456789', amount: 109000, currency: 'IDR', status: 'pending', payment_url: null, created_at: new Date().toISOString(), request_payload: { amount: 109000, currency: 'IDR', return_url: 'https://shop.example/#orders' } })
@@ -83,4 +84,10 @@ test('payment URL and provider amount are validated; unknown failures do not mak
   const rejected = { ...provider, create: async () => { throw new CreationRejected('rejected') } }
   await assert.rejects(initiatePayment('test-order','owner',repo,rejected), /rejected/)
   assert.equal(repo.p.status,'failed')
+})
+
+test('customer payment errors are Indonesian and do not expose provider details', () => {
+  assert.equal(paymentErrorMessage(new Error('Payment service is unavailable. Please try again.')), 'Layanan pembayaran belum dapat dihubungi. Coba lagi beberapa saat.')
+  assert.equal(paymentErrorMessage(new Error('Payments are not configured yet. Please contact the shop.')), 'Pembayaran belum siap. Silakan hubungi Perfun Lab.')
+  assert.equal(paymentErrorMessage(new Error('unexpected upstream response: secret=never-show')), 'Layanan pembayaran belum dapat dihubungi. Coba lagi beberapa saat.')
 })

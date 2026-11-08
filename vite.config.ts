@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['icon.svg'],
+        includeAssets: ['icon.svg', 'icons/perfun-192.png', 'icons/perfun-512.png', 'icons/perfun-maskable-512.png'],
         devOptions: { enabled: true },
         manifest: {
           name: 'Perfun Lab',
@@ -22,7 +22,11 @@ export default defineConfig(({ mode }) => {
           background_color: '#f4f0e7',
           display: 'standalone',
           start_url: '/',
-          icons: [{ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }]
+          icons: [
+            { src: '/icons/perfun-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: '/icons/perfun-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+            { src: '/icons/perfun-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+          ]
         },
         workbox: { globPatterns: ['**/*.{js,css,html,svg,woff2,png,webp}'] }
       })

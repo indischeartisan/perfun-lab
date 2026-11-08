@@ -35,20 +35,38 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Set up Supabase CLI
-        uses: supabase/setup-cli@v1
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          version: 2.81.3
+          go-version: '1.24.0'
+
+      - name: Build pinned Supabase CLI from official source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export GOBIN="$RUNNER_TEMP/supabase-cli-bin"
+          export GOPROXY=https://proxy.golang.org
+          cli_source="$RUNNER_TEMP/supabase-cli-source"
+          mkdir -p "$GOBIN"
+          git init --quiet "$cli_source"
+          git -C "$cli_source" remote add origin https://github.com/supabase/cli.git
+          git -C "$cli_source" fetch --depth=1 origin bce705147ae90b9bddd6dfc24986744ced1d97d4
+          git -C "$cli_source" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$cli_source" rev-parse HEAD)" = bce705147ae90b9bddd6dfc24986744ced1d97d4
+          (cd "$cli_source" && go build -trimpath -o "$GOBIN/supabase" .)
+          echo "$GOBIN" >> "$GITHUB_PATH"
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Verify local CI prerequisites
         shell: bash
         run: |
           set -Eeuo pipefail
-          supabase --version
+          # The source build does not carry the release-time --version ldflag.
+          # Its immutable tag commit was checked before compilation above.
+          supabase --help >/dev/null
           docker info
-
-      - name: Install dependencies
-        run: npm ci
 
       - name: TypeScript check
         run: npm exec tsc -- -b
@@ -195,9 +213,25 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: package-lock.json
-      - uses: supabase/setup-cli@v1
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          version: 2.81.3
+          go-version: '1.24.0'
+      - name: Build pinned Supabase CLI from official source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export GOBIN="$RUNNER_TEMP/supabase-cli-bin"
+          export GOPROXY=https://proxy.golang.org
+          cli_source="$RUNNER_TEMP/supabase-cli-source"
+          mkdir -p "$GOBIN"
+          git init --quiet "$cli_source"
+          git -C "$cli_source" remote add origin https://github.com/supabase/cli.git
+          git -C "$cli_source" fetch --depth=1 origin bce705147ae90b9bddd6dfc24986744ced1d97d4
+          git -C "$cli_source" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$cli_source" rev-parse HEAD)" = bce705147ae90b9bddd6dfc24986744ced1d97d4
+          (cd "$cli_source" && go build -trimpath -o "$GOBIN/supabase" .)
+          echo "$GOBIN" >> "$GITHUB_PATH"
       - name: Install application dependencies
         run: npm ci
       - name: Install disposable browser runner

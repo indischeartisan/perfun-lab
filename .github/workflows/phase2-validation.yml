@@ -46,8 +46,14 @@ jobs:
           set -Eeuo pipefail
           export GOBIN="$RUNNER_TEMP/supabase-cli-bin"
           export GOPROXY=https://proxy.golang.org
+          cli_source="$RUNNER_TEMP/supabase-cli-source"
           mkdir -p "$GOBIN"
-          go install github.com/supabase/cli/v2@v2.81.3
+          git init --quiet "$cli_source"
+          git -C "$cli_source" remote add origin https://github.com/supabase/cli.git
+          git -C "$cli_source" fetch --depth=1 origin bce705147ae90b9bddd6dfc24986744ced1d97d4
+          git -C "$cli_source" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$cli_source" rev-parse HEAD)" = bce705147ae90b9bddd6dfc24986744ced1d97d4
+          (cd "$cli_source" && go build -trimpath -o "$GOBIN/supabase" .)
           echo "$GOBIN" >> "$GITHUB_PATH"
 
       - name: Install dependencies
@@ -215,8 +221,14 @@ jobs:
           set -Eeuo pipefail
           export GOBIN="$RUNNER_TEMP/supabase-cli-bin"
           export GOPROXY=https://proxy.golang.org
+          cli_source="$RUNNER_TEMP/supabase-cli-source"
           mkdir -p "$GOBIN"
-          go install github.com/supabase/cli/v2@v2.81.3
+          git init --quiet "$cli_source"
+          git -C "$cli_source" remote add origin https://github.com/supabase/cli.git
+          git -C "$cli_source" fetch --depth=1 origin bce705147ae90b9bddd6dfc24986744ced1d97d4
+          git -C "$cli_source" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$cli_source" rev-parse HEAD)" = bce705147ae90b9bddd6dfc24986744ced1d97d4
+          (cd "$cli_source" && go build -trimpath -o "$GOBIN/supabase" .)
           echo "$GOBIN" >> "$GITHUB_PATH"
       - name: Install application dependencies
         run: npm ci

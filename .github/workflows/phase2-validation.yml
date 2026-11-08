@@ -35,10 +35,15 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
+      - name: Install dependencies
+        run: npm ci
+
       - name: Install Supabase CLI
-        # Install the pinned npm package rather than downloading a release
-        # binary through setup-cli, which returned repeated upstream 504s.
-        run: npm install --global supabase@2.81.3
+        # The CLI package deliberately rejects global installs. Install its
+        # pinned local binary after npm ci, avoiding setup-cli's release CDN.
+        run: |
+          npm install --no-save supabase@2.81.3
+          echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Verify local CI prerequisites
         shell: bash
@@ -46,9 +51,6 @@ jobs:
           set -Eeuo pipefail
           supabase --version
           docker info
-
-      - name: Install dependencies
-        run: npm ci
 
       - name: TypeScript check
         run: npm exec tsc -- -b
@@ -195,10 +197,12 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: package-lock.json
-      - name: Install Supabase CLI
-        run: npm install --global supabase@2.81.3
       - name: Install application dependencies
         run: npm ci
+      - name: Install Supabase CLI
+        run: |
+          npm install --no-save supabase@2.81.3
+          echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
       - name: Install disposable browser runner
         run: |
           npm install --no-save --ignore-scripts playwright@1.59.1

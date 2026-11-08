@@ -35,10 +35,10 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Set up Supabase CLI
-        uses: supabase/setup-cli@v1
-        with:
-          version: 2.81.3
+      - name: Install Supabase CLI
+        # Install the pinned npm package rather than downloading a release
+        # binary through setup-cli, which returned repeated upstream 504s.
+        run: npm install --global supabase@2.81.3
 
       - name: Verify local CI prerequisites
         shell: bash
@@ -195,9 +195,8 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: package-lock.json
-      - uses: supabase/setup-cli@v1
-        with:
-          version: 2.81.3
+      - name: Install Supabase CLI
+        run: npm install --global supabase@2.81.3
       - name: Install application dependencies
         run: npm ci
       - name: Install disposable browser runner

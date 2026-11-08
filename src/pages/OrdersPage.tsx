@@ -1,31 +1,40 @@
-import { useEffect, useState } from 'react'
-import { listOrders, type CustomerOrder } from '../lib/orders'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ArrowLeft, ChevronRight, Copy, Package, RefreshCw, Truck } from 'lucide-react'
+import { listOrders, type CustomerOrder, type OrderLine } from '../lib/orders'
 import { errorMessage } from '../lib/supabase'
-import { OrderLines, OrderTotals } from '../components/CheckoutScreens'
+import { formatPrice } from '../lib/currency'
 import { AddressText } from '../components/AddressBook'
 import { PaymentActions } from '../components/PaymentActions'
-import { ShipmentStatus } from '../components/ShipmentStatus'
+import { reviewedShippingBreakdown } from '../lib/shippingCheckoutReview'
+
+type Filter = 'all' | 'unpaid' | 'processing' | 'shipping' | 'complete'
+type Status = { label: string; detail: string; tone: 'amber' | 'lime' | 'blue' | 'green' | 'gray' }
+const filters: Array<[Filter, string]> = [['all', 'Semua'], ['unpaid', 'Belum Bayar'], ['processing', 'Diproses'], ['shipping', 'Dikirim'], ['complete', 'Selesai']]
+export function orderStatus(order: CustomerOrder): Status {
+  if (order.payment_status === 'pending') return { label: 'Belum dibayar', detail: 'Selesaikan pembayaran untuk memulai peracikan.', tone: 'amber' }
+  if (order.payment_status === 'failed') return { label: 'Pembayaran gagal', detail: 'Coba pembayaran lagi saat Anda siap.', tone: 'amber' }
+  if (order.payment_status === 'expired') return { label: 'Pembayaran kedaluwarsa', detail: 'Pesanan ini tidak dapat diproses.', tone: 'gray' }
+  if (order.payment_status === 'refunded') return { label: 'Pembayaran dikembalikan', detail: 'Pesanan ini tidak diproses lebih lanjut.', tone: 'gray' }
+  if (order.shipment?.status === 'delivered') return { label: 'Selesai', detail: 'Pesanan telah sampai.', tone: 'green' }
+  if (order.shipment?.status === 'shipped') return { label: 'Dalam pengiriman', detail: 'Pesanan sedang menuju alamat Anda.', tone: 'blue' }
+  if (order.shipment?.status === 'ready_to_ship') return { label: 'Siap dikirim', detail: 'Pesanan segera diserahkan ke kurir.', tone: 'lime' }
+  if (['in_production', 'blending', 'processing'].includes(order.status)) return { label: 'Sedang diracik', detail: 'Parfum sedang dibuat oleh perfumer kami.', tone: 'lime' }
+  return { label: 'Menunggu diracik', detail: 'Pembayaran telah diterima; pesanan segera masuk antrean.', tone: 'lime' }
+}
+function matches(order: CustomerOrder, filter: Filter) { const label = orderStatus(order).label; return filter === 'all' || filter === 'unpaid' && label.includes('dibayar') || filter === 'processing' && ['Menunggu diracik', 'Sedang diracik', 'Siap dikirim'].includes(label) || filter === 'shipping' && label === 'Dalam pengiriman' || filter === 'complete' && label === 'Selesai' }
+function short(value: string) { return value.length > 17 ? `${value.slice(0, 12)}…${value.slice(-5)}` : value }
+function date(value: string) { return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
+function notes(item: OrderLine) { return item.creations_snapshot.flatMap(x => x.notes.map(n => `${n.phase}: ${n.note.name}`)).join(' · ') }
 
 export function OrdersPage({ userId, onLogin, onBuild }: { userId?: string; onLogin: () => void; onBuild: () => void }) {
-  const [orders, setOrders] = useState<CustomerOrder[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [attempt, setAttempt] = useState(0)
-  useEffect(() => {
-    if (!userId) return
-    let active = true
-    let pending = true
-    const refresh = () => listOrders().then(rows => { if (active) { setOrders(rows); setError(''); pending = rows.some(order => order.payment_status === 'pending' || (order.payment_status === 'paid' && order.shipment?.status !== 'delivered')) } }).catch(error => { if (active) { setError(errorMessage(error)); pending = false } }).finally(() => { if (active) setLoading(false) })
-    void refresh()
-    const focus = () => { void refresh() }
-    window.addEventListener('focus', focus)
-    const timer = window.setInterval(() => { if (pending && !document.hidden) void refresh() }, 15000)
-    return () => { active = false; clearInterval(timer); window.removeEventListener('focus', focus) }
-  }, [userId, attempt])
-  return <section className="app-screen"><header className="screen-title"><span>YOUR ORDERS</span><h1>Orders</h1><p>Your fragrances and delivery details, saved with each order.</p></header>
-    {!userId ? <div className="screen-empty"><h2>Sign in to see your orders</h2><button onClick={onLogin}>Continue with email</button></div> : <>
-      {error ? <p role="alert">{error} <button onClick={() => { setError(''); setLoading(true); setAttempt(n => n + 1) }}>Retry</button></p> : null}
-      {loading ? <p role="status">Loading orders…</p> : !orders.length && !error ? <div className="screen-empty"><h2>No orders yet</h2><button onClick={onBuild}>Choose a creation</button></div> : <div className="order-list">{orders.map(order => <article className="customer-order" key={order.id}><header><strong>{order.order_number}</strong><time>{new Date(order.created_at).toLocaleString()}</time><b className="order-status">{order.status.replaceAll('_', ' ')}</b></header><PaymentActions order={order} onRefresh={() => setAttempt(n => n + 1)}/><ShipmentStatus shipment={order.shipment}/><OrderLines items={order.order_items}/><div className="checkout-summary"><OrderTotals totals={order}/></div><details><summary>Delivery address</summary><AddressText address={order.address_snapshot}/></details></article>)}</div>}
-    </>}
-  </section>
+  const [orders, setOrders] = useState<CustomerOrder[]>([]), [loading, setLoading] = useState(Boolean(userId)), [error, setError] = useState(''), [filter, setFilter] = useState<Filter>('all'), [selected, setSelected] = useState<CustomerOrder | null>(null)
+  const inflight = useRef<Promise<void> | null>(null)
+  const refresh = useCallback(() => { if (!userId || inflight.current) return inflight.current ?? Promise.resolve(); setLoading(true); const request = listOrders().then(rows => { setOrders(rows); setError('') }).catch(cause => setError(errorMessage(cause))).finally(() => { setLoading(false); inflight.current = null }); inflight.current = request; return request }, [userId])
+  useEffect(() => { setOrders([]); setSelected(null); setError(''); if (userId) void refresh() }, [userId, refresh])
+  if (!userId) return <section className="app-screen"><div className="screen-empty"><h2>Masuk untuk melihat pesanan</h2><button onClick={onLogin}>Masuk</button></div></section>
+  if (selected) return <OrderDetail order={selected} onBack={() => setSelected(null)} onRefresh={() => void refresh()}/>
+  const visible = orders.filter(order => matches(order, filter))
+  return <section className="app-screen orders-page"><header className="orders-heading"><span>AKUN SAYA</span><div><h1>Pesanan Saya.</h1><button className="orders-refresh" disabled={loading} onClick={() => void refresh()}><RefreshCw/> {loading ? 'Memuat' : 'Perbarui'}</button></div><p>Lihat dan kelola semua pesanan parfum­mu di sini.</p></header><nav className="order-filters" aria-label="Filter pesanan">{filters.map(([id, label]) => <button key={id} className={filter === id ? 'active' : ''} onClick={() => setFilter(id)}>{label}</button>)}</nav>{error ? <p className="cloud-message" role="alert">{error} <button onClick={() => void refresh()}>Coba lagi</button></p> : null}{loading && !orders.length ? <p role="status">Menyiapkan pesananmu…</p> : null}{!loading && !orders.length ? <div className="screen-empty"><h2>Belum ada pesanan</h2><button onClick={onBuild}>Racik parfum</button></div> : null}<div className="order-list compact">{visible.map(order => <OrderCard key={order.id} order={order} onOpen={() => setSelected(order)}/>)}</div>{!loading && orders.length && !visible.length ? <p className="orders-no-match">Tidak ada pesanan dalam filter ini.</p> : null}</section>
 }
+function OrderCard({ order, onOpen }: { order: CustomerOrder; onOpen: () => void }) { const status = orderStatus(order), item = order.order_items[0]; return <article className="order-card" onClick={onOpen}><header><div><strong title={order.order_number}>{short(order.order_number)}</strong><time>{date(order.created_at)}</time></div><span className={`customer-status ${status.tone}`}>{status.label}</span></header><div className="order-card-body"><div className="order-bottle"><Package/></div><div><h2>{item?.creations_snapshot[0]?.name ?? item?.product_snapshot.label ?? 'Parfum'}{order.order_items.length > 1 ? ` +${order.order_items.length - 1}` : ''}</h2><p>{item ? `${item.product_snapshot.volume_ml} ml · ${item.quantity} botol` : ''}</p><small>{item ? notes(item) : ''}</small><strong className="order-total">{formatPrice(order.grand_total)}</strong></div><ChevronRight/></div></article> }
+function OrderDetail({ order, onBack, onRefresh }: { order: CustomerOrder; onBack: () => void; onRefresh: () => void }) { const status = orderStatus(order), [copied, setCopied] = useState(false), shipping = order.shipping_quote_snapshot ? reviewedShippingBreakdown({ shipping: order.shipping, shipping_quote_snapshot: order.shipping_quote_snapshot }) : null; return <section className="app-screen order-detail"><header className="order-detail-title"><button aria-label="Kembali" onClick={onBack}><ArrowLeft/></button><h1>Detail Pesanan</h1></header><article className="order-detail-card"><header><div><strong title={order.order_number}>{short(order.order_number)}</strong><time>{date(order.created_at)}</time></div><span className={`customer-status ${status.tone}`}>{status.label}</span></header><p className="order-status-copy">{status.detail}</p>{order.order_items.map((item, index) => <article className="order-detail-item" key={index}><div className="order-bottle"><Package/></div><div><h2>{item.creations_snapshot.map(x => x.name).join(', ') || item.product_snapshot.label}</h2><p>{item.product_snapshot.volume_ml} ml · {item.quantity} botol</p><small>{notes(item)}</small></div></article>)}</article><h2>Rincian Pembayaran</h2><section className="order-payment-detail"><dl><div><dt>Subtotal produk</dt><dd>{formatPrice(order.subtotal)}</dd></div><div><dt>Diskon peluncuran</dt><dd>−{formatPrice(order.discount)}</dd></div><div><dt>Ongkir setelah voucher</dt><dd>{formatPrice(shipping?.customer_shipping_total ?? order.shipping)}</dd></div><div className="total"><dt>Total pembayaran</dt><dd>{formatPrice(order.grand_total)}</dd></div></dl></section><h2>Pengiriman</h2><section className="order-shipping"><Truck/><div><strong>{order.shipment ? `${order.shipment.courier} · ${order.shipment.service}` : 'Menunggu pengiriman'}</strong><p>{order.shipment?.tracking_number ? `Resi: ${order.shipment.tracking_number}` : status.label}</p></div></section><h2>Alamat Pengiriman</h2><section className="order-address"><AddressText address={order.address_snapshot}/></section>{order.payment_status === 'pending' ? <PaymentActions order={order} onRefresh={onRefresh}/> : null}<button className="order-copy" onClick={() => navigator.clipboard.writeText(order.order_number).then(() => setCopied(true)).catch(() => setCopied(false))}><Copy/> {copied ? 'Nomor tersalin' : 'Salin nomor pesanan lengkap'}</button></section> }

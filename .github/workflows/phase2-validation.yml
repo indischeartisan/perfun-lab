@@ -47,7 +47,7 @@ jobs:
           export GOBIN="$RUNNER_TEMP/supabase-cli-bin"
           export GOPROXY=https://proxy.golang.org
           mkdir -p "$GOBIN"
-          go install github.com/supabase/cli@v2.81.3
+          go install github.com/supabase/cli/v2@v2.81.3
           echo "$GOBIN" >> "$GITHUB_PATH"
 
       - name: Install dependencies
@@ -216,7 +216,7 @@ jobs:
           export GOBIN="$RUNNER_TEMP/supabase-cli-bin"
           export GOPROXY=https://proxy.golang.org
           mkdir -p "$GOBIN"
-          go install github.com/supabase/cli@v2.81.3
+          go install github.com/supabase/cli/v2@v2.81.3
           echo "$GOBIN" >> "$GITHUB_PATH"
       - name: Install application dependencies
         run: npm ci

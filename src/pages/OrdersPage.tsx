@@ -10,7 +10,7 @@ import { reviewedShippingBreakdown } from '../lib/shippingCheckoutReview'
 type Filter = 'all' | 'unpaid' | 'processing' | 'shipping' | 'complete'
 type Status = { label: string; detail: string; tone: 'amber' | 'lime' | 'blue' | 'green' | 'gray' }
 const filters: Array<[Filter, string]> = [['all', 'Semua'], ['unpaid', 'Belum Bayar'], ['processing', 'Diproses'], ['shipping', 'Dikirim'], ['complete', 'Selesai']]
-export function orderStatus(order: CustomerOrder): Status {
+function orderStatus(order: CustomerOrder): Status {
   if (order.payment_status === 'pending') return { label: 'Belum dibayar', detail: 'Selesaikan pembayaran untuk memulai peracikan.', tone: 'amber' }
   if (order.payment_status === 'failed') return { label: 'Pembayaran gagal', detail: 'Coba pembayaran lagi saat Anda siap.', tone: 'amber' }
   if (order.payment_status === 'expired') return { label: 'Pembayaran kedaluwarsa', detail: 'Pesanan ini tidak dapat diproses.', tone: 'gray' }
@@ -30,7 +30,7 @@ export function OrdersPage({ userId, onLogin, onBuild }: { userId?: string; onLo
   const [orders, setOrders] = useState<CustomerOrder[]>([]), [loading, setLoading] = useState(Boolean(userId)), [error, setError] = useState(''), [filter, setFilter] = useState<Filter>('all'), [selected, setSelected] = useState<CustomerOrder | null>(null)
   const inflight = useRef<Promise<void> | null>(null)
   const refresh = useCallback(() => { if (!userId || inflight.current) return inflight.current ?? Promise.resolve(); setLoading(true); const request = listOrders().then(rows => { setOrders(rows); setError('') }).catch(cause => setError(errorMessage(cause))).finally(() => { setLoading(false); inflight.current = null }); inflight.current = request; return request }, [userId])
-  useEffect(() => { setOrders([]); setSelected(null); setError(''); if (userId) void refresh() }, [userId, refresh])
+  useEffect(() => { if (userId) void refresh() }, [userId, refresh])
   if (!userId) return <section className="app-screen"><div className="screen-empty"><h2>Masuk untuk melihat pesanan</h2><button onClick={onLogin}>Masuk</button></div></section>
   if (selected) return <OrderDetail order={selected} onBack={() => setSelected(null)} onRefresh={() => void refresh()}/>
   const visible = orders.filter(order => matches(order, filter))

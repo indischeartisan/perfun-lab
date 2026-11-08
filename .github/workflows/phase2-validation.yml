@@ -63,7 +63,9 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          supabase --version
+          # The source build does not carry the release-time --version ldflag.
+          # Its immutable tag commit was checked before compilation above.
+          supabase --help >/dev/null
           docker info
 
       - name: TypeScript check

@@ -12,6 +12,7 @@ type Filter = 'all' | 'unpaid' | 'processing' | 'shipping' | 'complete'
 type Status = { label: string; detail: string; tone: 'amber' | 'lime' | 'blue' | 'green' | 'gray' }
 type SnapshotNote = OrderLine['creations_snapshot'][number]['notes'][number]
 type ProductSummary = { name: string; volumeMl: number; quantity: number; notes: SnapshotNote[] }
+type CardSummary = { title: string; detail: string }
 
 const filters: Array<[Filter, string]> = [['all', 'Semua'], ['unpaid', 'Belum Bayar'], ['processing', 'Diproses'], ['shipping', 'Dikirim'], ['complete', 'Selesai']]
 const phases = ['top', 'middle', 'base'] as const
@@ -44,6 +45,16 @@ function products(order: CustomerOrder): ProductSummary[] {
   })
 }
 
+function cardSummary(order: CustomerOrder, first: ProductSummary | undefined, productCount: number): CardSummary {
+  if (!first) return { title: 'Parfum', detail: '' }
+  const item = order.order_items[0]
+  const snapshotLabel = item?.product_snapshot.label?.trim() ?? ''
+  const isThreePieceBundle = productCount === 3 && /^(paket|play set)\b/i.test(snapshotLabel)
+  if (isThreePieceBundle) return { title: snapshotLabel, detail: `Preview ${first.name} · ${first.volumeMl} ml` }
+  if (productCount === 3) return { title: `3 parfum · ${first.volumeMl} ml masing-masing`, detail: `Preview ${first.name}` }
+  return { title: first.name, detail: `${first.volumeMl} ml · ${first.quantity} botol` }
+}
+
 function NoteTrio({ notes, compact = false }: { notes: SnapshotNote[]; compact?: boolean }) {
   return <div className={`customer-order-note-trio${compact ? ' compact' : ''}`} aria-label="Komposisi notes parfum">
     {phases.map(phase => {
@@ -73,6 +84,10 @@ export function OrdersPage({ userId, onLogin, onBuild }: { userId?: string; onLo
     return request
   }, [userId])
   useEffect(() => { if (userId) void refresh() }, [userId, refresh])
+  const openOrder = useCallback((order: CustomerOrder) => {
+    setSelected(order)
+    window.scrollTo({ top: 0, behavior: 'instant' })
+  }, [])
   if (!userId) return <section className="app-screen"><div className="screen-empty"><h2>Masuk untuk melihat pesanan</h2><button onClick={onLogin}>Masuk</button></div></section>
   if (selected) return <CustomerOrderDetail order={selected} onBack={() => setSelected(null)} onRefresh={() => void refresh()} />
   const visible = orders.filter(order => matches(order, filter))
@@ -82,16 +97,16 @@ export function OrdersPage({ userId, onLogin, onBuild }: { userId?: string; onLo
     {error ? <p className="cloud-message" role="alert">{error} <button onClick={() => void refresh()}>Coba lagi</button></p> : null}
     {loading && !orders.length ? <p role="status">Menyiapkan pesananmu…</p> : null}
     {!loading && !orders.length ? <div className="screen-empty"><h2>Belum ada pesanan</h2><button onClick={onBuild}>Racik parfum</button></div> : null}
-    <div className="customer-order-list">{visible.map(order => <CustomerOrderCard key={order.id} order={order} onOpen={() => setSelected(order)} />)}</div>
+    <div className="customer-order-list">{visible.map(order => <CustomerOrderCard key={order.id} order={order} onOpen={() => openOrder(order)} />)}</div>
     {!loading && orders.length && !visible.length ? <p className="customer-orders-no-match">Tidak ada pesanan dalam filter ini.</p> : null}
   </section>
 }
 
 export function CustomerOrderCard({ order, onOpen }: { order: CustomerOrder; onOpen: () => void }) {
-  const status = orderStatus(order), orderProducts = products(order), first = orderProducts[0], additional = Math.max(0, orderProducts.length - 1)
+  const status = orderStatus(order), orderProducts = products(order), first = orderProducts[0], additional = Math.max(0, orderProducts.length - 1), summary = cardSummary(order, first, orderProducts.length)
   return <article className="customer-order-card"><button className="customer-order-card-link" type="button" onClick={onOpen} aria-label={`Lihat detail pesanan ${order.order_number}`}>
     <header className="customer-order-card-header"><div><time>{date(order.created_at)}</time><strong title={order.order_number}>{short(order.order_number)}</strong></div><span className={`customer-order-status ${status.tone}`}>{status.label}</span></header>
-    <div className="customer-order-card-body"><div className="customer-order-card-product"><div><h2>{first?.name ?? 'Parfum'}</h2><p>{first ? `${first.volumeMl} ml · ${first.quantity} botol` : ''}</p></div>{first ? <NoteTrio notes={first.notes} compact /> : null}{additional ? <small className="customer-order-more-items">+{additional} parfum lainnya</small> : null}</div><div className="customer-order-card-action"><strong className="customer-order-total">{formatPrice(order.grand_total)}</strong><span>Lihat detail <ChevronRight aria-hidden="true" /></span></div></div>
+    <div className="customer-order-card-body"><div className="customer-order-card-product"><div><h2>{summary.title}</h2><p>{summary.detail}</p></div>{first ? <NoteTrio notes={first.notes} compact /> : null}{additional ? <small className="customer-order-more-items">+{additional} parfum lainnya</small> : null}</div><div className="customer-order-card-action"><strong className="customer-order-total">{formatPrice(order.grand_total)}</strong><span>Lihat detail <ChevronRight aria-hidden="true" /></span></div></div>
   </button></article>
 }
 

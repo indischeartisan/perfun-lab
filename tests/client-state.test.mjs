@@ -116,5 +116,7 @@ test('shipping workspace fixture remains local and represents the existing shipm
   assert.match(fixture, /shipped/)
   assert.match(fixture, /Paket 3 × 10 ml/)
   assert.match(fixture, /Tandai sedang dikirim/)
+  assert.match(fixture, /navigator\.clipboard\.writeText/)
+  assert.match(fixture, /window\.print\(\)/)
   assert.doesNotMatch(fixture, /listShipments|requireSupabase|from\('\w+/)
 })

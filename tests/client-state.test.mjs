@@ -108,3 +108,13 @@ test('orders visual fixture is local-only and avoids the legacy Orders selectors
   assert.match(fixture, /id: 'blend-8'/)
   assert.doesNotMatch(fixture, /listOrders|requireSupabase|from\('\w+/)
 })
+
+test('shipping workspace fixture remains local and represents the existing shipment states', () => {
+  const fixture = readFileSync(new URL('../src/fixtures/shippingWorkspacePreview.tsx', import.meta.url), 'utf8')
+
+  assert.match(fixture, /ready_to_ship/)
+  assert.match(fixture, /shipped/)
+  assert.match(fixture, /Paket 3 × 10 ml/)
+  assert.match(fixture, /Tandai sedang dikirim/)
+  assert.doesNotMatch(fixture, /listShipments|requireSupabase|from\('\w+/)
+})

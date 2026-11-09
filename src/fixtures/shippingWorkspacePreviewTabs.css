@@ -1,0 +1,10 @@
+.shipping-preview-screen .operations-tabs { display: flex; gap: 8px; margin: 0 0 16px; }
+.shipping-preview-screen .operations-tabs button { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 13px; border: 1px solid #e0dbd0; border-radius: 999px; background: #fffdf8; color: #454940; font: 800 12px Manrope; }
+.shipping-preview-screen .operations-tabs button[aria-pressed="true"] { border-color: #b8d462; background: #eaf8b1; color: #3a5713; }
+.shipping-preview-screen .operations-tabs b { display: grid; place-items: center; min-width: 18px; height: 18px; border-radius: 99px; background: #f0eee8; font-size: 10px; }
+.shipping-preview-screen .operations-tabs button[aria-pressed="true"] b { background: #d8ef87; }
+
+@media (min-width: 768px) {
+  .shipping-preview-card > .shipping-preview-product { grid-column: 1 / -1; }
+  .shipping-preview-card .shipping-preview-product { grid-template-columns: 1fr; }
+}

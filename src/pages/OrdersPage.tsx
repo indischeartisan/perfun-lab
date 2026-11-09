@@ -12,6 +12,7 @@ type Filter = 'all' | 'unpaid' | 'processing' | 'shipping' | 'complete'
 type Status = { label: string; detail: string; tone: 'amber' | 'lime' | 'blue' | 'green' | 'gray' }
 type SnapshotNote = OrderLine['creations_snapshot'][number]['notes'][number]
 type ProductSummary = { name: string; volumeMl: number; quantity: number; notes: SnapshotNote[] }
+type CardSummary = { title: string; detail: string }
 
 const filters: Array<[Filter, string]> = [['all', 'Semua'], ['unpaid', 'Belum Bayar'], ['processing', 'Diproses'], ['shipping', 'Dikirim'], ['complete', 'Selesai']]
 const phases = ['top', 'middle', 'base'] as const
@@ -24,7 +25,7 @@ function orderStatus(order: CustomerOrder): Status {
   if (order.shipment?.status === 'delivered') return { label: 'Selesai', detail: 'Pesanan telah sampai.', tone: 'green' }
   if (order.shipment?.status === 'shipped') return { label: 'Dalam pengiriman', detail: 'Pesanan sedang menuju alamat Anda.', tone: 'blue' }
   if (order.shipment?.status === 'ready_to_ship') return { label: 'Siap dikirim', detail: 'Pesanan segera diserahkan ke kurir.', tone: 'lime' }
-  if (['in_production', 'blending', 'processing'].includes(order.status)) return { label: 'Sedang diracik', detail: 'Parfum sedang dibuat oleh perfumer kami.', tone: 'lime' }
+  if (['in_production', 'blending', 'processing'].includes(order.status)) return { label: 'Sedang diracik', detail: 'Parfum sedang diracik. Pengiriman disiapkan setelah proses ini selesai.', tone: 'lime' }
   return { label: 'Menunggu diracik', detail: 'Pembayaran telah diterima; pesanan segera masuk antrean.', tone: 'lime' }
 }
 
@@ -44,12 +45,22 @@ function products(order: CustomerOrder): ProductSummary[] {
   })
 }
 
+function cardSummary(order: CustomerOrder, first: ProductSummary | undefined, productCount: number): CardSummary {
+  if (!first) return { title: 'Parfum', detail: '' }
+  const item = order.order_items[0]
+  const snapshotLabel = item?.product_snapshot.label?.trim() ?? ''
+  const isThreePieceBundle = productCount === 3 && /^(paket|play set)\b/i.test(snapshotLabel)
+  if (isThreePieceBundle) return { title: snapshotLabel, detail: `Preview ${first.name} · ${first.volumeMl} ml` }
+  if (productCount === 3) return { title: `3 parfum · ${first.volumeMl} ml masing-masing`, detail: `Preview ${first.name}` }
+  return { title: first.name, detail: `${first.volumeMl} ml · ${first.quantity} botol` }
+}
+
 function NoteTrio({ notes, compact = false }: { notes: SnapshotNote[]; compact?: boolean }) {
-  return <div className={`order-note-trio${compact ? ' compact' : ''}`} aria-label="Komposisi notes parfum">
+  return <div className={`customer-order-note-trio${compact ? ' compact' : ''}`} aria-label="Komposisi notes parfum">
     {phases.map(phase => {
       const item = notes.find(note => normalizedPhase(note.phase) === phase)
       const asset = item ? getNoteStickerAsset(item.note) : null
-      return <div className="order-note" key={phase}>
+      return <div className="customer-order-note" key={phase}>
         <span>{phase}</span>
         {asset ? <img src={asset} alt="" loading="lazy" /> : <i aria-hidden="true" />}
         <strong>{item?.note.name ?? 'Belum tersedia'}</strong>
@@ -73,35 +84,39 @@ export function OrdersPage({ userId, onLogin, onBuild }: { userId?: string; onLo
     return request
   }, [userId])
   useEffect(() => { if (userId) void refresh() }, [userId, refresh])
+  const openOrder = useCallback((order: CustomerOrder) => {
+    setSelected(order)
+    window.scrollTo({ top: 0, behavior: 'instant' })
+  }, [])
   if (!userId) return <section className="app-screen"><div className="screen-empty"><h2>Masuk untuk melihat pesanan</h2><button onClick={onLogin}>Masuk</button></div></section>
-  if (selected) return <OrderDetail order={selected} onBack={() => setSelected(null)} onRefresh={() => void refresh()} />
+  if (selected) return <CustomerOrderDetail order={selected} onBack={() => setSelected(null)} onRefresh={() => void refresh()} />
   const visible = orders.filter(order => matches(order, filter))
-  return <section className="app-screen orders-page">
-    <header className="orders-heading"><span>AKUN SAYA</span><div><h1>Pesanan Saya.</h1><button className="orders-refresh" disabled={loading} onClick={() => void refresh()}><RefreshCw /> {loading ? 'Memuat' : 'Perbarui'}</button></div><p>Lihat dan kelola semua pesanan parfummu di sini.</p></header>
-    <nav className="order-filters" aria-label="Filter pesanan">{filters.map(([id, label]) => <button key={id} className={filter === id ? 'active' : ''} onClick={() => setFilter(id)}>{label}</button>)}</nav>
+  return <section className="app-screen customer-orders-page">
+    <header className="customer-orders-heading"><span>AKUN SAYA</span><div><h1>Pesanan Saya.</h1><button className="customer-orders-refresh" disabled={loading} onClick={() => void refresh()}><RefreshCw /> {loading ? 'Memuat' : 'Perbarui'}</button></div><p>Lihat dan kelola semua pesanan parfummu di sini.</p></header>
+    <nav className="customer-order-filters" aria-label="Filter pesanan">{filters.map(([id, label]) => <button key={id} className={filter === id ? 'active' : ''} onClick={() => setFilter(id)}>{label}</button>)}</nav>
     {error ? <p className="cloud-message" role="alert">{error} <button onClick={() => void refresh()}>Coba lagi</button></p> : null}
     {loading && !orders.length ? <p role="status">Menyiapkan pesananmu…</p> : null}
     {!loading && !orders.length ? <div className="screen-empty"><h2>Belum ada pesanan</h2><button onClick={onBuild}>Racik parfum</button></div> : null}
-    <div className="order-list compact">{visible.map(order => <OrderCard key={order.id} order={order} onOpen={() => setSelected(order)} />)}</div>
-    {!loading && orders.length && !visible.length ? <p className="orders-no-match">Tidak ada pesanan dalam filter ini.</p> : null}
+    <div className="customer-order-list">{visible.map(order => <CustomerOrderCard key={order.id} order={order} onOpen={() => openOrder(order)} />)}</div>
+    {!loading && orders.length && !visible.length ? <p className="customer-orders-no-match">Tidak ada pesanan dalam filter ini.</p> : null}
   </section>
 }
 
-function OrderCard({ order, onOpen }: { order: CustomerOrder; onOpen: () => void }) {
-  const status = orderStatus(order), orderProducts = products(order), first = orderProducts[0], additional = Math.max(0, orderProducts.length - 1)
-  return <article className="order-card"><button className="order-card-link" type="button" onClick={onOpen} aria-label={`Lihat detail pesanan ${order.order_number}`}>
-    <header className="order-card-header"><div><time>{date(order.created_at)}</time><strong title={order.order_number}>{short(order.order_number)}</strong></div><span className={`customer-status ${status.tone}`}>{status.label}</span></header>
-    <div className="order-card-body"><div className="order-card-product"><div><h2>{first?.name ?? 'Parfum'}</h2><p>{first ? `${first.volumeMl} ml · ${first.quantity} botol` : ''}</p></div>{first ? <NoteTrio notes={first.notes} compact /> : null}{additional ? <small className="order-more-items">+{additional} parfum lainnya</small> : null}</div><footer><strong className="order-total">{formatPrice(order.grand_total)}</strong><span>Lihat detail <ChevronRight aria-hidden="true" /></span></footer></div>
+export function CustomerOrderCard({ order, onOpen }: { order: CustomerOrder; onOpen: () => void }) {
+  const status = orderStatus(order), orderProducts = products(order), first = orderProducts[0], additional = Math.max(0, orderProducts.length - 1), summary = cardSummary(order, first, orderProducts.length)
+  return <article className="customer-order-card"><button className="customer-order-card-link" type="button" onClick={onOpen} aria-label={`Lihat detail pesanan ${order.order_number}`}>
+    <header className="customer-order-card-header"><div><time>{date(order.created_at)}</time><strong title={order.order_number}>{short(order.order_number)}</strong></div><span className={`customer-order-status ${status.tone}`}>{status.label}</span></header>
+    <div className="customer-order-card-body"><div className="customer-order-card-product"><div><h2>{summary.title}</h2><p>{summary.detail}</p></div>{first ? <NoteTrio notes={first.notes} compact /> : null}{additional ? <small className="customer-order-more-items">+{additional} parfum lainnya</small> : null}</div><div className="customer-order-card-action"><strong className="customer-order-total">{formatPrice(order.grand_total)}</strong><span>Lihat detail <ChevronRight aria-hidden="true" /></span></div></div>
   </button></article>
 }
 
-function OrderDetail({ order, onBack, onRefresh }: { order: CustomerOrder; onBack: () => void; onRefresh: () => void }) {
+export function CustomerOrderDetail({ order, onBack, onRefresh }: { order: CustomerOrder; onBack: () => void; onRefresh: () => void }) {
   const status = orderStatus(order), [copied, setCopied] = useState(false), shipping = order.shipping_quote_snapshot ? reviewedShippingBreakdown({ shipping: order.shipping, shipping_quote_snapshot: order.shipping_quote_snapshot }) : null, orderProducts = products(order)
-  return <section className="app-screen order-detail">
-    <header className="order-detail-title"><button aria-label="Kembali" onClick={onBack}><ArrowLeft /></button><h1>Detail Pesanan</h1></header>
-    <article className="order-detail-card"><header className="order-card-header"><div><time>{date(order.created_at)}</time><strong title={order.order_number}>{short(order.order_number)}</strong></div><span className={`customer-status ${status.tone}`}>{status.label}</span></header><p className="order-status-copy">{status.detail}</p><div className="order-detail-products">{orderProducts.map((item, index) => <article className="order-detail-item" key={`${item.name}-${index}`}><div className="order-detail-product-copy"><h2>{item.name}</h2><p>{item.volumeMl} ml · {item.quantity} botol</p></div><NoteTrio notes={item.notes} /></article>)}</div></article>
-    <h2>Rincian Pembayaran</h2><section className="order-payment-detail"><dl><div><dt>Subtotal produk</dt><dd>{formatPrice(order.subtotal)}</dd></div><div><dt>Diskon peluncuran</dt><dd>−{formatPrice(order.discount)}</dd></div><div><dt>Ongkir setelah voucher</dt><dd>{formatPrice(shipping?.customer_shipping_total ?? order.shipping)}</dd></div><div className="total"><dt>Total pembayaran</dt><dd>{formatPrice(order.grand_total)}</dd></div></dl></section>
-    <h2>Pengiriman</h2><section className="order-shipping"><Truck /><div><strong>{order.shipment ? `${order.shipment.courier} · ${order.shipment.service}` : 'Menunggu pengiriman'}</strong><p>{order.shipment?.tracking_number ? `Resi: ${order.shipment.tracking_number}` : status.label}</p></div></section>
-    <h2>Alamat Pengiriman</h2><section className="order-address"><AddressText address={order.address_snapshot} /></section>{order.payment_status === 'pending' ? <PaymentActions order={order} onRefresh={onRefresh} /> : null}<button className="order-copy" onClick={() => navigator.clipboard.writeText(order.order_number).then(() => setCopied(true)).catch(() => setCopied(false))}><Copy /> {copied ? 'Nomor tersalin' : 'Salin nomor pesanan lengkap'}</button>
+  return <section className="app-screen customer-order-detail">
+    <header className="customer-order-detail-title"><button aria-label="Kembali" onClick={onBack}><ArrowLeft /></button><h1>Detail Pesanan</h1></header>
+    <article className="customer-order-detail-card"><header className="customer-order-card-header"><div><time>{date(order.created_at)}</time><strong title={order.order_number}>{short(order.order_number)}</strong></div><span className={`customer-order-status ${status.tone}`}>{status.label}</span></header><p className="customer-order-status-copy">{status.detail}</p><div className="customer-order-detail-products">{orderProducts.map((item, index) => <article className="customer-order-detail-item" key={`${item.name}-${index}`}><div className="customer-order-detail-product-copy"><h2>{item.name}</h2><p>{item.volumeMl} ml · {item.quantity} botol</p></div><NoteTrio notes={item.notes} /></article>)}</div></article>
+    <h2>Rincian Pembayaran</h2><section className="customer-order-payment-detail"><dl><div><dt>Subtotal produk</dt><dd>{formatPrice(order.subtotal)}</dd></div>{order.discount > 0 ? <div><dt>Diskon peluncuran</dt><dd>−{formatPrice(order.discount)}</dd></div> : null}<div><dt>Ongkir setelah voucher</dt><dd>{formatPrice(shipping?.customer_shipping_total ?? order.shipping)}</dd></div><div className="total"><dt>Total pembayaran</dt><dd>{formatPrice(order.grand_total)}</dd></div></dl></section>
+    <h2>Pengiriman</h2><section className="customer-order-shipping"><Truck /><div><strong>{order.shipment ? `${order.shipment.courier} · ${order.shipment.service}` : 'Pengiriman belum dijadwalkan'}</strong><p>{order.shipment?.tracking_number ? `Resi: ${order.shipment.tracking_number}` : status.label === 'Sedang diracik' ? 'Pengiriman akan disiapkan setelah parfum selesai diracik.' : status.label}</p></div></section>
+    <h2>Alamat Pengiriman</h2><section className="customer-order-address"><AddressText address={order.address_snapshot} /></section>{order.payment_status === 'pending' ? <PaymentActions order={order} onRefresh={onRefresh} /> : null}<button className="customer-order-copy" onClick={() => navigator.clipboard.writeText(order.order_number).then(() => setCopied(true)).catch(() => setCopied(false))}><Copy /> {copied ? 'Nomor tersalin' : 'Salin nomor pesanan lengkap'}</button>
   </section>
 }

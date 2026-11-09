@@ -86,8 +86,25 @@ test('orders filters and detail remain local while note art uses canonical stati
 
   assert.match(source, /orders\.filter\(order => matches\(order, filter\)\)/)
   assert.match(source, /if \(!userId \|\| inflight\.current\) return inflight\.current/)
-  assert.match(source, /if \(selected\) return <OrderDetail order=\{selected\}/)
+  assert.match(source, /if \(selected\) return <CustomerOrderDetail order=\{selected\}/)
   assert.match(source, /getNoteStickerAsset\(item\.note\)/)
   assert.match(source, /item\?\.note\.name \?\? 'Belum tersedia'/)
   assert.doesNotMatch(source, /setInterval|visibilitychange|window\.focus|\.channel\(/)
+})
+
+test('orders visual fixture is local-only and avoids the legacy Orders selectors', () => {
+  const source = readFileSync(new URL('../src/pages/OrdersPage.tsx', import.meta.url), 'utf8')
+  const fixture = readFileSync(new URL('../src/fixtures/ordersPreview.tsx', import.meta.url), 'utf8')
+
+  assert.match(source, /customer-order-card/)
+  assert.doesNotMatch(source, /className="order-card"|<footer>/)
+  assert.match(source, /order\.discount > 0 \? <div><dt>Diskon peluncuran/)
+  assert.match(source, /Pengiriman akan disiapkan setelah parfum selesai diracik/)
+  assert.match(source, /window\.scrollTo\(\{ top: 0, behavior: 'instant' \}\)/)
+  assert.match(source, /title: `3 parfum · \$\{first\.volumeMl\} ml masing-masing`/)
+  assert.match(source, /Preview \$\{first\.name\}/)
+  assert.match(fixture, /CustomerOrderCard/)
+  assert.match(fixture, /Paket 3 × 10 ml/)
+  assert.match(fixture, /id: 'blend-8'/)
+  assert.doesNotMatch(fixture, /listOrders|requireSupabase|from\('\w+/)
 })

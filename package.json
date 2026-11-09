@@ -6,6 +6,7 @@
     "scripts":  {
                     "dev":  "vite",
                     "dev:fixtures": "vite --mode fixtures --open /fixtures.html",
+                    "dev:shipping-workspace-preview": "vite --host 127.0.0.1 --port 4317 --strictPort",
                     "dev:orders-preview": "vite --host 127.0.0.1 --port 4175 --strictPort",
                     "build":  "tsc -b \u0026\u0026 vite build",
                     "validate:staging-env": "node scripts/validate-staging-env.mjs",

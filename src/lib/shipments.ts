@@ -19,6 +19,7 @@ export interface Shipment extends ShipmentSummary {
   actual_shipping_cost: number | null; shipping_payer: ShippingPayer | null; actual_shipping_entered_at: string | null; actual_shipping_entered_by: string | null
   customer_shipping: { courier: string; service: string; amount: number; quote_id: string | null } | null
   shipping_override_history: Array<{ original_courier: string; original_service: string; new_courier: string; new_service: string; reason: string; overridden_at: string }>
+  formula_jobs?: ShipmentFormulaJob[]
 }
 export interface ShipmentFormulaJob {
   id: string; order_number: string; quantity: number

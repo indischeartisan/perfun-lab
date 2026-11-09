@@ -1,0 +1,16 @@
+.shipping-preview-address-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.shipping-preview-address-actions button { min-height: 38px; padding: 0 13px; border: 1px solid #a7bf63; border-radius: 10px; background: #fffdf8; color: #405b18; font: 800 12px Manrope; }
+.shipping-preview-address-actions button:last-child { background: #eaf8b1; }
+.shipping-preview-address small { min-height: 15px; color: #49671d; font-weight: 700; }
+.shipping-preview-print-label { display: none; }
+
+@media print {
+  @page { size: A6 portrait; margin: 8mm; }
+  body { background: #fff !important; }
+  body * { visibility: hidden !important; }
+  .shipping-preview-print-label, .shipping-preview-print-label * { display: block; visibility: visible !important; }
+  .shipping-preview-print-label { position: fixed; inset: 0; box-sizing: border-box; padding: 8mm; color: #161812; font-family: Arial, sans-serif; }
+  .shipping-preview-print-label p { margin: 0 0 5mm; font-size: 11pt; line-height: 1.4; }
+  .shipping-preview-print-label strong { display: block; margin-bottom: 8mm; font-size: 9pt; font-weight: 700; }
+  .shipping-preview-print-label h1 { margin: 0 0 3mm; font-size: 17pt; line-height: 1.2; }
+}

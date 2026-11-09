@@ -1,0 +1,22 @@
+.shipping-preview-screen .operations-tabs { display: flex; gap: 8px; margin: 0 0 16px; }
+.shipping-preview-screen .operations-tabs button { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 13px; border: 1px solid #e0dbd0; border-radius: 999px; background: #fffdf8; color: #454940; font: 800 12px Manrope; }
+.shipping-preview-screen .operations-tabs button[aria-pressed="true"] { border-color: #b8d462; background: #eaf8b1; color: #3a5713; }
+.shipping-preview-screen .operations-tabs b { display: grid; place-items: center; min-width: 18px; height: 18px; border-radius: 99px; background: #f0eee8; font-size: 10px; }
+.shipping-preview-screen .operations-tabs button[aria-pressed="true"] b { background: #d8ef87; }
+
+.shipping-preview-list { grid-template-columns: minmax(0, 1fr) !important; }
+.shipping-preview-card { max-width: 680px; width: 100%; margin-inline: auto; padding: 18px; }
+.shipping-preview-card-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 12px; }
+.shipping-preview-card-header time { grid-column: 1; color: #687066; font-size: 12px; }
+.shipping-preview-card-header strong { overflow: hidden; color: #252822; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.shipping-preview-card-header b { grid-column: 2; grid-row: 1 / span 2; align-self: center; padding: 7px 10px; border-radius: 99px; background: #edf8c9; color: #3d5a15; font-size: 11px; white-space: nowrap; }
+.shipping-preview-courier { justify-content: space-between; padding-top: 13px; }
+.shipping-preview-courier > span { display: inline-flex; align-items: center; min-width: 0; gap: 7px; color: #4f564d; }
+.shipping-preview-courier .shipping-preview-open { width: auto; flex: 0 0 auto; }
+.shipping-preview-card .shipping-preview-product { margin-top: 2px; }
+
+@media (min-width: 768px) {
+  .shipping-preview-card { grid-template-columns: 1fr; }
+  .shipping-preview-card > .shipping-preview-product { grid-column: 1; }
+  .shipping-preview-card .shipping-preview-product { grid-template-columns: minmax(180px, .55fr) minmax(0, 1fr); }
+}

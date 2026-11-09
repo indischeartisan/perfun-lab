@@ -1,6 +1,25 @@
 -- The vendor dispatch action continues to require: an assigned vendor (or admin),
 -- a ready shipment, the customer-selected courier/service, and a tracking number.
 -- Packing and actual-cost data stay historical/auditable, but are no longer gates.
+-- Keep the finality protection for historical packing/cost data after dispatch,
+-- while removing the former trigger-level requirement that those fields exist
+-- before a shipment may be dispatched.
+create or replace function private.enforce_packing_shipping_integrity()
+returns trigger language plpgsql set search_path='' as $$
+begin
+ if old.status in ('shipped','delivered') and (
+   new.packing_status is distinct from old.packing_status or
+   new.packing_checklist is distinct from old.packing_checklist or
+   new.packed_at is distinct from old.packed_at or
+   new.packed_by is distinct from old.packed_by or
+   new.actual_shipping_cost is distinct from old.actual_shipping_cost or
+   new.shipping_payer is distinct from old.shipping_payer or
+   new.actual_shipping_entered_at is distinct from old.actual_shipping_entered_at or
+   new.actual_shipping_entered_by is distinct from old.actual_shipping_entered_by
+ ) then raise exception 'Dispatched shipment packing and actual shipping are final' using errcode='23514'; end if;
+ return new;
+end $$;
+
 create or replace function private.fulfill_shipment(p_shipment_id uuid,p_action text,p_courier text,p_service text,p_tracking_number text)
 returns public.shipments language plpgsql security definer set search_path='' as $$
 declare actor uuid:=auth.uid(); actor_role public.app_role; parent_id uuid; shipment public.shipments; field text; selected_service jsonb;

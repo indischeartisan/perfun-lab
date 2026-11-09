@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { errorWithCause } from '../src/lib/errors.ts'
 import { loadValue } from '../src/hooks/useLocalStorage.ts'
 import { isCheckoutDraft, isCheckoutPending, readPendingCheckout } from '../src/lib/storageValidation.ts'
@@ -78,4 +79,15 @@ test('authentication errors retain the original error as their cause', () => {
   const wrapped = errorWithCause('Unable to sign in.', original)
   assert.equal(wrapped.message, 'Unable to sign in.')
   assert.equal(wrapped.cause, original)
+})
+
+test('orders filters and detail remain local while note art uses canonical static assets', () => {
+  const source = readFileSync(new URL('../src/pages/OrdersPage.tsx', import.meta.url), 'utf8')
+
+  assert.match(source, /orders\.filter\(order => matches\(order, filter\)\)/)
+  assert.match(source, /if \(!userId \|\| inflight\.current\) return inflight\.current/)
+  assert.match(source, /if \(selected\) return <OrderDetail order=\{selected\}/)
+  assert.match(source, /getNoteStickerAsset\(item\.note\)/)
+  assert.match(source, /item\?\.note\.name \?\? 'Belum tersedia'/)
+  assert.doesNotMatch(source, /setInterval|visibilitychange|window\.focus|\.channel\(/)
 })

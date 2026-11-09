@@ -98,6 +98,8 @@ test('orders visual fixture is local-only and avoids the legacy Orders selectors
 
   assert.match(source, /customer-order-card/)
   assert.doesNotMatch(source, /className="order-card"|<footer>/)
+  assert.match(source, /order\.discount > 0 \? <div><dt>Diskon peluncuran/)
+  assert.match(source, /Pengiriman akan disiapkan setelah parfum selesai diracik/)
   assert.match(fixture, /CustomerOrderCard/)
   assert.doesNotMatch(fixture, /listOrders|requireSupabase|from\('\w+/)
 })

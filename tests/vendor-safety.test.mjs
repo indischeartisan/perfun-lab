@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { collectPagedSnapshots } from '../src/lib/pagedSnapshots.ts'
 import { parseActualShippingCost, validateDispatchDetails } from '../src/lib/shippingValidation.ts'
 import { confirmedPackingChecklist } from '../src/lib/packingConfirmation.ts'
+import { readFileSync } from 'node:fs'
 
 test('formula snapshots span pages, even if the server caps each page', async () => {
   const rows = Array.from({ length: 27 }, (_, id) => ({ id: String(id) }))
@@ -35,4 +36,12 @@ test('shipping validation rejects whitespace, control characters and missing cos
 test('packing checklist is created only after an explicit affirmative confirmation', () => {
   assert.equal(confirmedPackingChecklist(false), null)
   assert.deepEqual(confirmedPackingChecklist(true), { bottles_checked: true, formula_stickers_checked: true, bottles_sealed: true, packaging_ready: true, recipient_label_checked: true })
+})
+
+test('vendor shipping view uses one shipment RPC payload and excludes commercial totals', () => {
+  const source = readFileSync(new URL('../src/pages/VendorShippingPage.tsx', import.meta.url), 'utf8')
+  assert.match(source, /listShipments\(status, 0\)/)
+  assert.match(source, /formula_jobs/)
+  assert.match(source, /Tandai Sedang Dikirim/)
+  assert.doesNotMatch(source, /formatPrice|saveShipmentPacking|saveActualShipping|listShipmentFormulaJobs/)
 })

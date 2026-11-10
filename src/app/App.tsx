@@ -394,7 +394,7 @@ function WorkspaceApp({ auth }: { auth: ReturnType<typeof useAuth> }) {
     <main className="app-main">
       <WorkspaceLoadBoundary key={view}><Suspense fallback={<WorkspaceLoading/>}>
       {role === 'admin' ? <AdminPage key={auth.user.id} userId={auth.user.id}/> : null}
-      {vendor && (view === 'production' || view === 'fulfillment') ? <VendorWorkPage key={`${auth.user.id}:${view}`} userId={auth.user.id} initialStage={view === 'fulfillment' ? 'shipping' : 'order'}/> : null}
+      {vendor && (view === 'production' || view === 'fulfillment') ? <VendorWorkPage key={`${auth.user.id}:${view}`} userId={auth.user.id} initialStage={view === 'fulfillment' ? 'ready_to_ship' : 'order'}/> : null}
       {view === 'production' && perfumer ? <ProductionPage key={`${auth.user.id}:${role}`} userId={auth.user.id} role="perfumer"/> : null}
       {view === 'payouts' && vendor ? <VendorPaymentsPage key={auth.user.id}/> : null}
       </Suspense></WorkspaceLoadBoundary>

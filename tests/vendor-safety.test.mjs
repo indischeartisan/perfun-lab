@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { collectPagedSnapshots } from '../src/lib/pagedSnapshots.ts'
-import { parseActualShippingCost, validateDispatchDetails } from '../src/lib/shippingValidation.ts'
+import { parseActualShippingCost, validateDispatchDetails, validateTrackingNumber } from '../src/lib/shippingValidation.ts'
 import { confirmedPackingChecklist } from '../src/lib/packingConfirmation.ts'
 import { readFileSync } from 'node:fs'
 
@@ -31,6 +31,9 @@ test('shipping validation rejects whitespace, control characters and missing cos
   assert.equal(parseActualShippingCost('-1'), null)
   assert.equal(parseActualShippingCost('1.5'), null)
   assert.equal(parseActualShippingCost('9007199254740992'), null)
+  assert.equal(validateTrackingNumber('TRACK-123'), null)
+  assert.match(validateTrackingNumber('   '), /wajib/)
+  assert.match(validateTrackingNumber('BAD\nTRACK'), /tidak valid/)
 })
 
 test('packing checklist is created only after an explicit affirmative confirmation', () => {
@@ -38,10 +41,32 @@ test('packing checklist is created only after an explicit affirmative confirmati
   assert.deepEqual(confirmedPackingChecklist(true), { bottles_checked: true, formula_stickers_checked: true, bottles_sealed: true, packaging_ready: true, recipient_label_checked: true })
 })
 
-test('vendor shipping view uses one shipment RPC payload and excludes commercial totals', () => {
+test('vendor shipping view uses one shipment RPC payload, separated stages, and excludes commercial totals', () => {
   const source = readFileSync(new URL('../src/pages/VendorShippingPage.tsx', import.meta.url), 'utf8')
+  const workspace = readFileSync(new URL('../src/pages/VendorWorkPage.tsx', import.meta.url), 'utf8')
   assert.match(source, /listShipments\(status, 0\)/)
   assert.match(source, /formula_jobs/)
   assert.match(source, /Tandai Sedang Dikirim/)
+  assert.match(source, /Edit Nomor Resi/)
+  assert.match(source, /correctShipmentTracking/)
+  assert.doesNotMatch(source, /vendor-shipping-tabs/)
+  assert.match(workspace, /Siap dikirim/)
+  assert.match(workspace, /Sedang dikirim/)
+  assert.doesNotMatch(workspace, /id: 'shipping'/)
   assert.doesNotMatch(source, /formatPrice|saveShipmentPacking|saveActualShipping|listShipmentFormulaJobs/)
+})
+
+test('tracking correction stays behind an authenticated RPC with a private audit trail', () => {
+  const migration = readFileSync(new URL('../supabase/migrations/20261110063607_vendor_tracking_correction.sql', import.meta.url), 'utf8')
+  const workflow = readFileSync(new URL('../.github/workflows/phase2-validation.yml', import.meta.url), 'utf8')
+  assert.match(migration, /create table private\.shipment_tracking_corrections/)
+  assert.match(migration, /revoke all on private\.shipment_tracking_corrections from public,anon,authenticated/)
+  assert.match(migration, /create or replace function private\.prepare_shipment\(\)/)
+  assert.match(migration, /Dispatched shipment tracking requires the correction workflow/)
+  assert.match(migration, /c\.id::text=current_setting\('app\.tracking_correction_id',true\)/)
+  assert.match(migration, /create function private\.correct_shipment_tracking[\s\S]*security definer set search_path=''/)
+  assert.match(migration, /actor_role not in \('vendor','admin'\)/)
+  assert.match(migration, /shipment\.status<>'shipped'/)
+  assert.match(migration, /grant execute on function public\.correct_shipment_tracking\(uuid,text\) to authenticated/)
+  assert.match(workflow, /supabase\/tests\/shipment_tracking_correction\.sql/)
 })

@@ -11,6 +11,15 @@ export function validateDispatchDetails(details: ShippingDetails): string | null
   return null
 }
 
+export function validateTrackingNumber(value: string): string | null {
+  const tracking = value.trim()
+  if (!tracking) return 'Nomor resi wajib diisi.'
+  if (tracking.length > 150 || [...tracking].some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) {
+    return 'Nomor resi mengandung karakter tidak valid atau terlalu panjang.'
+  }
+  return null
+}
+
 export function parseActualShippingCost(input: string): number | null {
   if (!/^\d+$/.test(input)) return null
   const cost = Number(input)

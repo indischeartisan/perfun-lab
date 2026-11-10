@@ -123,6 +123,7 @@ jobs:
             supabase/tests/production.sql
             supabase/tests/shipping.sql
             supabase/tests/packing.sql
+            supabase/tests/shipment_tracking_correction.sql
             supabase/tests/payouts.sql
             supabase/tests/shipping_foundation.sql
             supabase/tests/shipping_checkout.sql

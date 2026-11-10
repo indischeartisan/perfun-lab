@@ -57,6 +57,13 @@ export async function fulfillShipment(id: string, action: 'save' | 'ship' | 'del
   if (error) throw error
   return data as Shipment
 }
+export async function correctShipmentTracking(id: string, trackingNumber: string) {
+  const { data, error } = await requireSupabase().rpc('correct_shipment_tracking', {
+    p_shipment_id: id, p_tracking_number: trackingNumber,
+  })
+  if (error) throw error
+  return data as Shipment
+}
 export async function saveShipmentPacking(id: string, checklist: PackingChecklist, complete: boolean) {
   const { data, error } = await requireSupabase().rpc('save_shipment_packing', { p_shipment_id: id, p_checklist: checklist, p_complete: complete })
   if (error) throw error

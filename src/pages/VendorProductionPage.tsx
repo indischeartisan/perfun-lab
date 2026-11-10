@@ -6,14 +6,14 @@ import { errorMessage } from '../lib/supabase'
 import { matchesProductionAction } from '../lib/operationReadiness'
 import { vendorProjectionError } from '../lib/vendorProjection'
 
-const labels: Record<ProductionStatus, string> = { queued: 'Queued', in_production: 'In Production', completed: 'Completed' }
+const labels: Record<ProductionStatus, string> = { queued: 'Menunggu diracik', in_production: 'Sedang diracik', completed: 'Racikan selesai' }
 
 export function VendorProductionPage({ userId, status, onStarted, onCompleted }: { userId: string; status: ProductionStatus; onStarted?: () => void; onCompleted?: (orderNumber: string) => void }) {
   const [cursors, setCursors] = useState<Array<VendorOrderCursor | null>>([null])
   const [page, setPage] = useState(0)
   const cursor = cursors[page]
   return <section className="app-screen production-screen">
-    <OperationsPageHeader title="Production Queue">Pesanan yang ditugaskan untuk workspace Anda.</OperationsPageHeader>
+    <OperationsPageHeader title={status === 'queued' ? 'Pesanan' : status === 'in_production' ? 'Produksi' : 'Racikan selesai'}>Pesanan yang ditugaskan untuk workspace Anda.</OperationsPageHeader>
     <VendorOrderList key={`${status}:${page}:${cursor?.ordered_at ?? ''}:${cursor?.order_number ?? ''}`} userId={userId} status={status} cursor={cursor} page={page}
       onPrevious={() => setPage(current => current - 1)}
       onReset={() => { setCursors([null]); setPage(0) }}
@@ -43,20 +43,17 @@ function VendorOrderList({ userId, status, cursor, page, onPrevious, onNext, onR
       finally { fetching = false; if (active) setLoading(false) }
     }
     void refresh()
-    const onFocus = () => { void refresh() }
-    const timer = window.setInterval(() => { if (!document.hidden) void refresh() }, 15000)
-    window.addEventListener('focus', onFocus)
-    return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', onFocus) }
+    return () => { active = false }
   }, [status, cursor, revision])
   return <>
-    <div className="production-toolbar"><p role="status">{loading ? 'Loading orders…' : error ? 'Antrean tidak tersedia.' : `${orders.length} orders on this page`}</p><button type="button" disabled={loading} onClick={() => { setLoading(true); setError(''); if (page === 0) setRevision(n => n + 1); else onReset() }}>{error ? 'Coba lagi' : 'Refresh from first page'}</button></div>
+    <div className="production-toolbar"><p role="status">{loading ? 'Memuat pesanan…' : error ? 'Antrean tidak tersedia.' : `${orders.length} pesanan di halaman ini`}</p><button type="button" disabled={loading} onClick={() => { setLoading(true); setError(''); if (page === 0) setRevision(n => n + 1); else onReset() }}>{error ? 'Coba lagi' : 'Perbarui'}</button></div>
     {error ? <p role="alert">{error}</p> : null}
-    {!loading && !error && !orders.length ? <div className="screen-empty"><h2>No orders on this page</h2><p>Assigned jobs appear when they reach this stage.</p></div> : null}
-    <div className="production-list">{orders.map(order => <OperationsOrderCard key={order.order_number} className="production-card">
-      <OperationsOrderHeader orderNumber={order.order_number} time={new Date(order.ordered_at).toLocaleString()}/>
+    {!loading && !error && !orders.length ? <div className="screen-empty"><h2>Belum ada pesanan</h2><p>Pesanan yang ditugaskan akan muncul saat mencapai tahap ini.</p></div> : null}
+    <div className="production-list">{orders.map(order => <OperationsOrderCard key={order.order_number} className="vendor-production-card production-card" isolated>
+      <OperationsOrderHeader orderNumber={order.order_number} time={new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(order.ordered_at))}/>
       {order.jobs.map(job => <VendorOrderJob key={job.id} job={job} userId={userId} canWork={status !== 'completed'} onChanged={action => { setRevision(n => n + 1); onChanged(action, order.order_number) }}/>) }
     </OperationsOrderCard>)}</div>
-    <div className="production-pagination"><button type="button" disabled={page === 0 || loading} onClick={onPrevious}>Previous</button><span>Page {page + 1}</span><button type="button" disabled={!next || loading} onClick={() => { if (next) onNext(next) }}>Next</button></div>
+    <div className="production-pagination"><button type="button" disabled={page === 0 || loading} onClick={onPrevious}>Sebelumnya</button><span>Halaman {page + 1}</span><button type="button" disabled={!next || loading} onClick={() => { if (next) onNext(next) }}>Berikutnya</button></div>
   </>
 }
 
@@ -71,7 +68,7 @@ function VendorOrderJob({ job, userId, canWork, onChanged }: { job: ProductionJo
     try {
       const result = await advanceProductionJob(job.id, action)
       if (!matchesProductionAction(action, result.status)) {
-        throw new Error('The job has already changed on the server. Refresh the order before continuing.')
+        throw new Error('Status pekerjaan sudah berubah di server. Perbarui pesanan sebelum melanjutkan.')
       }
       onChanged(action)
     }
@@ -80,11 +77,11 @@ function VendorOrderJob({ job, userId, canWork, onChanged }: { job: ProductionJo
   }
   return <section className="vendor-order-job" aria-label={`${job.product_snapshot.label}: ${labels[job.status]}`}>
     <h2>{job.product_snapshot.label}</h2><p><strong>{labels[job.status]}</strong></p>
-    <OperationsBottleSize volumeMl={job.product_snapshot.volume_ml} bottleCount={job.product_snapshot.bottle_count} detail/>
-    <p>Order quantity: {job.quantity}</p>
-    {job.formulas_snapshot.map((formula, index) => <OperationsFormulaRow key={index} formula={formula} label={`Bottle ${index + 1}${job.quantity > 1 ? ` · make ${job.quantity}` : ''}`}/>)}
-    {!job.production_allowed ? <p role="status">On hold - this job cannot proceed.</p> : null}
+    <OperationsBottleSize volumeMl={job.product_snapshot.volume_ml} bottleCount={job.product_snapshot.bottle_count} detail locale="id"/>
+    <p>Jumlah pesanan: {job.quantity}</p>
+    {job.formulas_snapshot.map((formula, index) => <OperationsFormulaRow key={index} formula={formula} label={`Botol ${index + 1}${job.quantity > 1 ? ` · racik ${job.quantity}` : ''}`} variant="vendor"/>)}
+    {!job.production_allowed ? <p role="status">Ditahan — pekerjaan ini belum dapat dilanjutkan.</p> : null}
     {error ? <p role="alert">{error}</p> : null}
-    {canWork && job.production_allowed && (job.status === 'queued' || (job.status === 'in_production' && mine)) ? <ProductionAction disabled={busy} onClick={() => void advance(job.status === 'queued' ? 'start' : 'complete')} label={busy ? 'Saving...' : job.status === 'queued' ? 'Start Production' : 'Complete Production'}/> : null}
+    {canWork && job.production_allowed && (job.status === 'queued' || (job.status === 'in_production' && mine)) ? <ProductionAction disabled={busy} onClick={() => void advance(job.status === 'queued' ? 'start' : 'complete')} label={busy ? 'Menyimpan…' : job.status === 'queued' ? 'Mulai racik' : 'Selesaikan racikan'}/> : null}
   </section>
 }

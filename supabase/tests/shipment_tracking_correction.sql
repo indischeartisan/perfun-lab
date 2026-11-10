@@ -34,7 +34,7 @@ do $$ declare job_id uuid; tracking_shipment_id uuid; before_tracking text; befo
  begin perform public.correct_shipment_tracking(tracking_shipment_id,E'BAD\nTRACK'); raise exception 'Control character tracking correction was accepted'; exception when check_violation then null; end;
  if (select tracking_number from public.shipments where id=tracking_shipment_id)<>before_tracking then raise exception 'Invalid correction changed tracking'; end if;
  perform public.correct_shipment_tracking(tracking_shipment_id,'TRACK-NEW');
- if (select tracking_number from public.shipments where id=tracking_shipment_id)<>'TRACK-NEW' or (select status from public.shipments where id=tracking_shipment_id)<>'shipped' or (select courier from public.shipments where id=tracking_shipment_id)<>'J&T' or (select service from public.shipments where id=tracking_shipment_id)<>'EZ' or (select shipped_at from public.shipments where id=tracking_shipment_id) is distinct from before_shipped_at or (select actual_shipping_cost from public.shipments where id=tracking_shipment_id) is not null then raise exception 'Tracking correction changed protected shipment fields'; end if;
+ if (select tracking_number from public.shipments where id=tracking_shipment_id)<>'TRACK-NEW' or (select status from public.shipments where id=tracking_shipment_id)<>'shipped' or (select courier from public.shipments where id=tracking_shipment_id)<>'J&T' or (select service from public.shipments where id=tracking_shipment_id)<>'EZ' or (select shipped_at from public.shipments where id=tracking_shipment_id) is distinct from before_shipped_at then raise exception 'Tracking correction changed vendor-visible protected shipment fields'; end if;
  perform public.correct_shipment_tracking(tracking_shipment_id,'TRACK-NEW');
  begin
   update public.shipments set tracking_number='DIRECT-UPDATE' where id=tracking_shipment_id;
@@ -51,6 +51,7 @@ reset role;
 do $$ declare tracking_shipment_id uuid:=current_setting('app.tracking_shipment_id')::uuid; begin
  if (select count(*) from private.shipment_tracking_corrections c where c.shipment_id=tracking_shipment_id)<>1 then raise exception 'Invalid correction or idempotent retry changed audit count'; end if;
  if not exists(select 1 from private.shipment_tracking_corrections c where c.shipment_id=tracking_shipment_id and previous_tracking_number='TRACK-OLD' and new_tracking_number='TRACK-NEW' and corrected_by='e1000000-0000-4000-8000-000000000003') then raise exception 'Vendor tracking audit payload is incomplete'; end if;
+ if (select actual_shipping_cost from public.shipments where id=tracking_shipment_id) is not null then raise exception 'Tracking correction changed protected actual shipping cost'; end if;
 end $$;
 
 -- A forged transaction setting cannot unlock a direct tracking update, and

@@ -86,11 +86,6 @@ export function OrdersPage({ userId, onLogin, onBuild }: { userId?: string; onLo
     inflight.current = request
     return request
   }, [userId])
-  useEffect(() => {
-    setSelectedOrderId(null)
-    setReturnVerification('idle')
-    returnVerificationLock.current = false
-  }, [userId])
   useEffect(() => { if (userId) void refresh() }, [userId, refresh])
   useEffect(() => {
     if (!userId || returnVerificationLock.current) return

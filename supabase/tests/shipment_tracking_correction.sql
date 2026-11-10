@@ -21,7 +21,7 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub','e1000000-0000-4000-8000-000000000003',true);
-do $$ declare job_id uuid; tracking_shipment_id uuid; before_count integer; before_tracking text; before_shipped_at timestamptz; affected integer; begin
+do $$ declare job_id uuid; tracking_shipment_id uuid; before_tracking text; before_shipped_at timestamptz; affected integer; begin
  select id into job_id from public.production_jobs where order_item_id='e3000000-0000-4000-8000-000000000001';
  perform public.advance_production_job(job_id,'start');
  perform public.advance_production_job(job_id,'complete');
@@ -30,16 +30,12 @@ do $$ declare job_id uuid; tracking_shipment_id uuid; before_count integer; befo
  perform public.fulfill_shipment(tracking_shipment_id,'ship','J&T','EZ','TRACK-OLD');
  select tracking_number into before_tracking from public.shipments where id=tracking_shipment_id;
  select shipped_at into before_shipped_at from public.shipments where id=tracking_shipment_id;
- select count(*) into before_count from private.shipment_tracking_corrections c where c.shipment_id=tracking_shipment_id;
  begin perform public.correct_shipment_tracking(tracking_shipment_id,''); raise exception 'Empty tracking correction was accepted'; exception when check_violation then null; end;
  begin perform public.correct_shipment_tracking(tracking_shipment_id,E'BAD\nTRACK'); raise exception 'Control character tracking correction was accepted'; exception when check_violation then null; end;
- if (select tracking_number from public.shipments where id=tracking_shipment_id)<>before_tracking or (select count(*) from private.shipment_tracking_corrections c where c.shipment_id=tracking_shipment_id)<>before_count then raise exception 'Invalid correction was not atomic'; end if;
+ if (select tracking_number from public.shipments where id=tracking_shipment_id)<>before_tracking then raise exception 'Invalid correction changed tracking'; end if;
  perform public.correct_shipment_tracking(tracking_shipment_id,'TRACK-NEW');
  if (select tracking_number from public.shipments where id=tracking_shipment_id)<>'TRACK-NEW' or (select status from public.shipments where id=tracking_shipment_id)<>'shipped' or (select courier from public.shipments where id=tracking_shipment_id)<>'J&T' or (select service from public.shipments where id=tracking_shipment_id)<>'EZ' or (select shipped_at from public.shipments where id=tracking_shipment_id) is distinct from before_shipped_at or (select actual_shipping_cost from public.shipments where id=tracking_shipment_id) is not null then raise exception 'Tracking correction changed protected shipment fields'; end if;
- if (select count(*) from private.shipment_tracking_corrections c where c.shipment_id=tracking_shipment_id)<>before_count+1 then raise exception 'Tracking audit was not written'; end if;
- if not exists(select 1 from private.shipment_tracking_corrections c where c.shipment_id=tracking_shipment_id and previous_tracking_number='TRACK-OLD' and new_tracking_number='TRACK-NEW' and corrected_by='e1000000-0000-4000-8000-000000000003') then raise exception 'Tracking audit payload is incomplete'; end if;
  perform public.correct_shipment_tracking(tracking_shipment_id,'TRACK-NEW');
- if (select count(*) from private.shipment_tracking_corrections c where c.shipment_id=tracking_shipment_id)<>before_count+1 then raise exception 'Idempotent tracking retry wrote duplicate audit'; end if;
  begin
   update public.shipments set tracking_number='DIRECT-UPDATE' where id=tracking_shipment_id;
   get diagnostics affected = row_count;
@@ -49,6 +45,13 @@ do $$ declare job_id uuid; tracking_shipment_id uuid; before_count integer; befo
  perform set_config('app.tracking_shipment_id',tracking_shipment_id::text,false);
 end $$;
 reset role;
+
+-- Audit assertions intentionally run as the local database test harness,
+-- not as the Vendor role used above.
+do $$ declare tracking_shipment_id uuid:=current_setting('app.tracking_shipment_id')::uuid; begin
+ if (select count(*) from private.shipment_tracking_corrections c where c.shipment_id=tracking_shipment_id)<>1 then raise exception 'Invalid correction or idempotent retry changed audit count'; end if;
+ if not exists(select 1 from private.shipment_tracking_corrections c where c.shipment_id=tracking_shipment_id and previous_tracking_number='TRACK-OLD' and new_tracking_number='TRACK-NEW' and corrected_by='e1000000-0000-4000-8000-000000000003') then raise exception 'Vendor tracking audit payload is incomplete'; end if;
+end $$;
 
 -- A forged transaction setting cannot unlock a direct tracking update, and
 -- other dispatch fields remain final even for a privileged SQL session.
@@ -78,6 +81,7 @@ end $$;
 select set_config('request.jwt.claim.sub','e1000000-0000-4000-8000-000000000001',true);
 do $$ begin
  begin perform public.correct_shipment_tracking(current_setting('app.tracking_shipment_id')::uuid,'TRACK-CUSTOMER'); raise exception 'Customer corrected tracking'; exception when insufficient_privilege then null; end;
+ begin perform 1 from private.shipment_tracking_corrections; raise exception 'Customer read private tracking audit'; exception when insufficient_privilege then null; end;
 end $$;
 select set_config('request.jwt.claim.sub','e1000000-0000-4000-8000-000000000002',true);
 do $$ declare shipment public.shipments; shipped_time timestamptz; begin
@@ -88,5 +92,9 @@ do $$ declare shipment public.shipments; shipped_time timestamptz; begin
  begin perform public.correct_shipment_tracking(shipment.id,'TRACK-DELIVERED'); raise exception 'Delivered shipment tracking was corrected'; exception when check_violation then null; end;
 end $$;
 reset role;
+do $$ declare tracking_shipment_id uuid:=current_setting('app.tracking_shipment_id')::uuid; begin
+ if (select count(*) from private.shipment_tracking_corrections c where c.shipment_id=tracking_shipment_id)<>2 then raise exception 'Admin correction did not write exactly one additional audit record'; end if;
+ if not exists(select 1 from private.shipment_tracking_corrections c where c.shipment_id=tracking_shipment_id and previous_tracking_number='TRACK-NEW' and new_tracking_number='TRACK-ADMIN' and corrected_by='e1000000-0000-4000-8000-000000000002') then raise exception 'Admin tracking audit payload is incomplete'; end if;
+end $$;
 select 'PASS: tracking correction authorization, validation, atomic audit, idempotency, and finality' as result;
 rollback;

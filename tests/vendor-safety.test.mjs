@@ -75,6 +75,13 @@ test('vendor workspace keeps refresh manual and formula notes responsive without
   assert.match(css, /grid-template-columns:1fr/)
 })
 
+test('vendor shipment footer overrides the global marketing footer height', () => {
+  const css = readFileSync(new URL('../src/pages/vendorShipping.css', import.meta.url), 'utf8')
+
+  assert.match(css, /\.vendor-shipping-card>footer\{height:auto;min-height:0;padding:8px 0 0;justify-content:flex-start\}/)
+  assert.match(css, /\.vendor-shipping-card>footer span\{min-width:0;margin:0\}/)
+})
+
 test('tracking correction stays behind an authenticated RPC with a private audit trail', () => {
   const migration = readFileSync(new URL('../supabase/migrations/20261110063607_vendor_tracking_correction.sql', import.meta.url), 'utf8')
   const workflow = readFileSync(new URL('../.github/workflows/phase2-validation.yml', import.meta.url), 'utf8')

@@ -50,6 +50,18 @@ do $$ declare job_id uuid; tracking_shipment_id uuid; before_count integer; befo
 end $$;
 reset role;
 
+-- A forged transaction setting cannot unlock a direct tracking update, and
+-- other dispatch fields remain final even for a privileged SQL session.
+select set_config('request.jwt.claim.sub','e1000000-0000-4000-8000-000000000003',true);
+select set_config('app.tracking_correction_id',gen_random_uuid()::text,true);
+do $$ begin
+ begin update public.shipments set tracking_number='FORGED-TRACK' where id=current_setting('app.tracking_shipment_id')::uuid; raise exception 'Forged tracking correction context was accepted'; exception when check_violation then null; end;
+ begin update public.shipments set courier='FORGED-COURIER' where id=current_setting('app.tracking_shipment_id')::uuid; raise exception 'Courier changed after dispatch'; exception when check_violation then null; end;
+ begin update public.shipments set service='FORGED-SERVICE' where id=current_setting('app.tracking_shipment_id')::uuid; raise exception 'Service changed after dispatch'; exception when check_violation then null; end;
+ begin update public.shipments set shipped_at=clock_timestamp() where id=current_setting('app.tracking_shipment_id')::uuid; raise exception 'Shipped timestamp changed after dispatch'; exception when check_violation then null; end;
+ begin update public.shipments set actual_shipping_cost=1 where id=current_setting('app.tracking_shipment_id')::uuid; raise exception 'Actual shipping cost changed after dispatch'; exception when check_violation then null; end;
+end $$;
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub','e1000000-0000-4000-8000-000000000004',true);
 do $$ begin

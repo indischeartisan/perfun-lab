@@ -52,8 +52,34 @@ test('vendor shipping view uses one shipment RPC payload, separated stages, and 
   assert.doesNotMatch(source, /vendor-shipping-tabs/)
   assert.match(workspace, /Siap dikirim/)
   assert.match(workspace, /Sedang dikirim/)
+  assert.match(workspace, /status=\{stage === 'done' \? 'delivered' : stage\}/)
   assert.doesNotMatch(workspace, /id: 'shipping'/)
   assert.doesNotMatch(source, /formatPrice|saveShipmentPacking|saveActualShipping|listShipmentFormulaJobs/)
+})
+
+test('vendor workspace keeps refresh manual and formula notes responsive without customer card selectors', () => {
+  const production = readFileSync(new URL('../src/pages/VendorProductionPage.tsx', import.meta.url), 'utf8')
+  const shipping = readFileSync(new URL('../src/pages/VendorShippingPage.tsx', import.meta.url), 'utf8')
+  const operations = readFileSync(new URL('../src/components/OperationsPresentation.tsx', import.meta.url), 'utf8')
+  const css = readFileSync(new URL('../src/admin.css', import.meta.url), 'utf8')
+
+  assert.doesNotMatch(production, /setInterval|addEventListener\('focus'/)
+  assert.match(production, /Memuat pesanan/)
+  assert.match(production, /Mulai racik/)
+  assert.match(production, /variant="vendor"/)
+  assert.match(production, /isolated/)
+  assert.match(shipping, /status: 'ready_to_ship' \| 'shipped' \| 'delivered'/)
+  assert.doesNotMatch(shipping, /customer-order vendor-shipping-card/)
+  assert.match(operations, /isolated = false/)
+  assert.match(css, /vendor-production-card \.production-formula--vendor/)
+  assert.match(css, /grid-template-columns:1fr/)
+})
+
+test('vendor shipment footer overrides the global marketing footer height', () => {
+  const css = readFileSync(new URL('../src/pages/vendorShipping.css', import.meta.url), 'utf8')
+
+  assert.match(css, /\.vendor-shipping-card>footer\{height:auto;min-height:0;padding:8px 0 0;justify-content:flex-start\}/)
+  assert.match(css, /\.vendor-shipping-card>footer span\{min-width:0;margin:0\}/)
 })
 
 test('tracking correction stays behind an authenticated RPC with a private audit trail', () => {

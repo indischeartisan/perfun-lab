@@ -3,7 +3,7 @@ import type { CustomerOrder } from '../lib/orders'
 import { paymentRequest } from '../lib/payments'
 import { paymentErrorMessage } from '../lib/paymentErrorMessage'
 
-export function PaymentActions({ order, onRefresh }: { order: CustomerOrder; onRefresh: () => void }) {
+export function PaymentActions({ order, onRefresh }: { order: CustomerOrder; onRefresh: () => void | Promise<void> }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const lock = useRef(false)
@@ -15,8 +15,9 @@ export function PaymentActions({ order, onRefresh }: { order: CustomerOrder; onR
       const data = await paymentRequest(pay ? 'payments-create' : 'payments-sync', order.id)
       if (pay) {
         if (!data.payment_url || new URL(data.payment_url).protocol !== 'https:') throw new Error('Tautan pembayaran belum tersedia. Muat ulang pesanan Anda.')
+        window.sessionStorage.setItem(`perfun:payment-return-order:${order.user_id}`, order.id)
         window.location.assign(data.payment_url)
-      } else onRefresh()
+      } else await onRefresh()
     } catch (cause) { setError(paymentErrorMessage(cause)) }
     finally { lock.current = false; setBusy(false) }
   }

@@ -86,10 +86,24 @@ test('orders filters and detail remain local while note art uses canonical stati
 
   assert.match(source, /orders\.filter\(order => matches\(order, filter\)\)/)
   assert.match(source, /if \(!userId \|\| inflight\.current\) return inflight\.current/)
-  assert.match(source, /if \(selected\) return <CustomerOrderDetail order=\{selected\}/)
+  assert.match(source, /const \[selectedOrderId, setSelectedOrderId\] = useState<string \| null>\(null\)/)
+  assert.match(source, /orders\.find\(order => order\.id === selectedOrderId\)/)
+  assert.match(source, /paymentRequest\('payments-sync', returnedOrderId\)/)
+  assert.match(source, /sessionStorage\.removeItem\(returnKey\)/)
   assert.match(source, /getNoteStickerAsset\(item\.note\)/)
   assert.match(source, /item\?\.note\.name \?\? 'Belum tersedia'/)
   assert.doesNotMatch(source, /setInterval|visibilitychange|window\.focus|\.channel\(/)
+})
+
+test('customer payment details only use an internally consistent server shipping snapshot', () => {
+  const source = readFileSync(new URL('../src/pages/OrdersPage.tsx', import.meta.url), 'utf8')
+
+  assert.match(source, /reviewedShippingBreakdown/)
+  assert.match(source, /Ongkir normal/)
+  assert.match(source, /Voucher ongkir/)
+  assert.match(source, /shipping\.shipping_discount > 0/)
+  assert.match(source, /Ongkir dibayar/)
+  assert.doesNotMatch(source, /shipping_quote\(|shipping-quote/)
 })
 
 test('orders visual fixture is local-only and avoids the legacy Orders selectors', () => {

@@ -85,14 +85,23 @@ do $$ declare shipment_a uuid; shipment_b uuid; shipment_admin uuid; begin
 end $$;
 reset role;
 
+-- IDs for cross-owner authorization probes are captured only by the local
+-- privileged harness. Application roles do not gain a shipment read path from
+-- these settings; the RPC must still reject an otherwise valid opaque ID.
+do $$ declare shipment_b uuid; shipment_ready uuid; begin
+ select id into shipment_b from public.shipments where order_id='d2000000-0000-4000-8000-000000000002';
+ select id into shipment_ready from public.shipments where order_id='d2000000-0000-4000-8000-000000000004';
+ if shipment_b is null or shipment_ready is null then raise exception 'Fixture shipment IDs are missing'; end if;
+ perform set_config('app.delivery_shipment_b',shipment_b::text,false);
+ perform set_config('app.delivery_shipment_ready',shipment_ready::text,false);
+end $$;
+
 -- Customer A can complete only their own shipped order. A repeated submit is
 -- safe and does not add a second audit event or rewrite protected fields.
 set local role authenticated;
 select set_config('request.jwt.claim.sub','d1000000-0000-4000-8000-000000000001',true);
-do $$ declare mine uuid; other_id uuid; ready_id uuid; before_courier text; before_service text; before_tracking text; before_shipped timestamptz; first_result public.shipments; second_result public.shipments; begin
+do $$ declare mine uuid; other_id uuid:=current_setting('app.delivery_shipment_b')::uuid; ready_id uuid:=current_setting('app.delivery_shipment_ready')::uuid; before_courier text; before_service text; before_tracking text; before_shipped timestamptz; first_result public.shipments; second_result public.shipments; begin
  select id into mine from public.shipments where order_id='d2000000-0000-4000-8000-000000000001';
- select id into other_id from public.shipments where order_id='d2000000-0000-4000-8000-000000000002';
- select id into ready_id from public.shipments where order_id='d2000000-0000-4000-8000-000000000004';
  select courier,service,tracking_number,shipped_at into before_courier,before_service,before_tracking,before_shipped from public.shipments where id=mine;
  begin perform public.confirm_shipment_received(other_id); raise exception 'Customer confirmed another customer shipment'; exception when insufficient_privilege then null; end;
  begin perform public.confirm_shipment_received(ready_id); raise exception 'Customer confirmed a shipment before dispatch'; exception when check_violation then null; end;
@@ -118,11 +127,11 @@ do $$ begin perform 1 from private.shipment_delivery_confirmations; raise except
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','d1000000-0000-4000-8000-000000000005',true);
-do $$ begin perform public.fulfill_shipment((select id from public.shipments where order_id='d2000000-0000-4000-8000-000000000002'),'deliver','','',''); raise exception 'Other vendor delivered shipment'; exception when insufficient_privilege then null; end $$;
+do $$ begin perform public.fulfill_shipment(current_setting('app.delivery_shipment_b')::uuid,'deliver','','',''); raise exception 'Other vendor delivered shipment'; exception when insufficient_privilege then null; end $$;
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','d1000000-0000-4000-8000-000000000006',true);
-do $$ begin perform public.fulfill_shipment((select id from public.shipments where order_id='d2000000-0000-4000-8000-000000000002'),'deliver','','',''); raise exception 'Perfumer delivered shipment'; exception when insufficient_privilege then null; end $$;
+do $$ begin perform public.fulfill_shipment(current_setting('app.delivery_shipment_b')::uuid,'deliver','','',''); raise exception 'Perfumer delivered shipment'; exception when insufficient_privilege then null; end $$;
 reset role;
 
 -- Admin confirmation follows the same atomic audited transition.

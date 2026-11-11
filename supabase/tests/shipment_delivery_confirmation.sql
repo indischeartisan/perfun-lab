@@ -34,20 +34,54 @@ select public.admin_assign_vendor('d2000000-0000-4000-8000-000000000003','d10000
 select public.admin_assign_vendor('d2000000-0000-4000-8000-000000000004','d1000000-0000-4000-8000-000000000004');
 reset role;
 
+-- The real admin assignment must project the assigned vendor to every job and
+-- shipment before that Vendor can begin production. Assert that projection in
+-- the privileged fixture setup; every authorization test below still runs as
+-- its real application role.
+do $$ declare job_a uuid; job_b uuid; job_admin uuid; job_unshipped uuid; begin
+ if exists(
+  select 1
+  from public.production_jobs j
+  join public.order_items i on i.id=j.order_item_id
+  where i.order_id in (
+   'd2000000-0000-4000-8000-000000000001',
+   'd2000000-0000-4000-8000-000000000002',
+   'd2000000-0000-4000-8000-000000000003',
+   'd2000000-0000-4000-8000-000000000004'
+  )
+    and j.vendor_id is distinct from 'd1000000-0000-4000-8000-000000000004'::uuid
+ ) then
+  raise exception 'Vendor assignment was not projected to production jobs';
+ end if;
+ select j.id into job_a from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id='d2000000-0000-4000-8000-000000000001';
+ select j.id into job_b from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id='d2000000-0000-4000-8000-000000000002';
+ select j.id into job_admin from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id='d2000000-0000-4000-8000-000000000003';
+ select j.id into job_unshipped from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id='d2000000-0000-4000-8000-000000000004';
+ if job_a is null or job_b is null or job_admin is null or job_unshipped is null then raise exception 'Fixture production jobs are missing'; end if;
+ perform set_config('app.delivery_job_a',job_a::text,false);
+ perform set_config('app.delivery_job_b',job_b::text,false);
+ perform set_config('app.delivery_job_admin',job_admin::text,false);
+ perform set_config('app.delivery_job_unshipped',job_unshipped::text,false);
+end $$;
+
 -- Assigned vendor prepares and dispatches three orders. The fourth becomes
--- ready-to-ship only, to prove a customer cannot confirm early.
+-- ready-to-ship only, to prove a customer cannot confirm early. Keep every
+-- order explicit so this fixture exercises the same assignment path as the
+-- shipping and tracking regressions, without loop-variable ambiguity.
 set local role authenticated;
 select set_config('request.jwt.claim.sub','d1000000-0000-4000-8000-000000000004',true);
-do $$ declare item_id uuid; shipment_id uuid; current_order_id uuid; begin
- foreach current_order_id in array array['d2000000-0000-4000-8000-000000000001'::uuid,'d2000000-0000-4000-8000-000000000002'::uuid,'d2000000-0000-4000-8000-000000000003'::uuid,'d2000000-0000-4000-8000-000000000004'::uuid] loop
-  select i.id into item_id from public.order_items i where i.order_id=current_order_id;
-  perform public.advance_production_job((select id from public.production_jobs where order_item_id=item_id),'start');
-  perform public.advance_production_job((select id from public.production_jobs where order_item_id=item_id),'complete');
- end loop;
- foreach current_order_id in array array['d2000000-0000-4000-8000-000000000001'::uuid,'d2000000-0000-4000-8000-000000000002'::uuid,'d2000000-0000-4000-8000-000000000003'::uuid] loop
-  select s.id into shipment_id from public.shipments s where s.order_id=current_order_id;
-  perform public.fulfill_shipment(shipment_id,'ship','J&T','EZ','DELIVERY-' || right(current_order_id::text,4));
- end loop;
+do $$ declare shipment_a uuid; shipment_b uuid; shipment_admin uuid; begin
+ perform public.advance_production_job(current_setting('app.delivery_job_a')::uuid,'start'); perform public.advance_production_job(current_setting('app.delivery_job_a')::uuid,'complete');
+ perform public.advance_production_job(current_setting('app.delivery_job_b')::uuid,'start'); perform public.advance_production_job(current_setting('app.delivery_job_b')::uuid,'complete');
+ perform public.advance_production_job(current_setting('app.delivery_job_admin')::uuid,'start'); perform public.advance_production_job(current_setting('app.delivery_job_admin')::uuid,'complete');
+ perform public.advance_production_job(current_setting('app.delivery_job_unshipped')::uuid,'start'); perform public.advance_production_job(current_setting('app.delivery_job_unshipped')::uuid,'complete');
+ select id into shipment_a from public.shipments where order_id='d2000000-0000-4000-8000-000000000001';
+ select id into shipment_b from public.shipments where order_id='d2000000-0000-4000-8000-000000000002';
+ select id into shipment_admin from public.shipments where order_id='d2000000-0000-4000-8000-000000000003';
+ if shipment_a is null or shipment_b is null or shipment_admin is null then raise exception 'Fixture shipments are missing'; end if;
+ perform public.fulfill_shipment(shipment_a,'ship','J&T','EZ','DELIVERY-A');
+ perform public.fulfill_shipment(shipment_b,'ship','J&T','EZ','DELIVERY-B');
+ perform public.fulfill_shipment(shipment_admin,'ship','J&T','EZ','DELIVERY-ADMIN');
 end $$;
 reset role;
 

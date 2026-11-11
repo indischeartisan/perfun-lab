@@ -63,7 +63,7 @@ do $$ declare sid uuid; begin
   or exists(select 1 from public.addresses)
   or exists(select 1 from public.profiles where id<>auth.uid()) then raise exception 'Vendor sees restricted customer data'; end if;
  begin perform public.fulfill_shipment(sid,'ship','JNE','REG','TEST123'); raise exception 'Early ship allowed'; exception when check_violation then null; end;
- begin perform public.fulfill_shipment(sid,'deliver'); raise exception 'Early delivery allowed'; exception when check_violation then null; end;
+ begin perform public.fulfill_shipment(sid,'deliver'); raise exception 'Vendor delivered shipment'; exception when insufficient_privilege then null; end;
  begin update public.shipments set courier='HACK' where id=sid; raise exception 'Direct update allowed'; exception when insufficient_privilege then null; end;
  begin delete from public.shipments where id=sid; raise exception 'Direct delete allowed'; exception when insufficient_privilege then null; end;
  begin insert into public.shipments(order_id) values('d2000000-0000-4000-8000-000000000001'); raise exception 'Direct insert allowed'; exception when insufficient_privilege then null; end;
@@ -147,6 +147,10 @@ select set_config('request.jwt.claim.sub','d1000000-0000-4000-8000-000000000001'
 do $$ begin
  if (select shipment.status from public.shipments shipment where order_number='SHIPPING-TEST')<>'shipped' or (select status from public.orders where order_number='SHIPPING-TEST')<>'shipped' then raise exception 'Customer does not see shipped'; end if;
  if (select tracking_number from public.shipments where order_number='SHIPPING-TEST')<>'TEST123' then raise exception 'Customer missing tracking'; end if;
+end $$;
+select set_config('request.jwt.claim.sub','d1000000-0000-4000-8000-000000000005',true);
+do $$ begin
+ begin perform public.fulfill_shipment((select id from public.shipments where order_number='SHIPPING-TEST'),'deliver'); raise exception 'Assigned vendor delivered shipment'; exception when insufficient_privilege then null; end;
 end $$;
 select set_config('request.jwt.claim.sub','d1000000-0000-4000-8000-000000000004',true);
 do $$ declare sid uuid; s public.shipments; again public.shipments; begin

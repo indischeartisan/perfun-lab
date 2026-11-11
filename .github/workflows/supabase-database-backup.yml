@@ -6,7 +6,7 @@ on:
       validate_only:
         description: Verify pinned tools and required db dump flags without any Production credentials
         required: false
-        default: false
+        default: true
         type: boolean
 
 # The workflow does not check out repository code, create commits, or call GitHub APIs.
@@ -163,8 +163,13 @@ jobs:
           restore_dir="$RUNNER_TEMP/perfun-db-restore-test"
           role_log="$RUNNER_TEMP/perfun-db-restore-roles.log"
           data_manifest="$RUNNER_TEMP/perfun-db-restore-data-counts"
+          template_connections_blocked=0
           mkdir -p "$restore_dir"
           cleanup() {
+            if (( template_connections_blocked )); then
+              docker exec "$container" psql --set ON_ERROR_STOP=1 -U postgres -d template1 \
+                --command 'ALTER DATABASE postgres WITH ALLOW_CONNECTIONS true;' >/dev/null 2>&1 || true
+            fi
             (cd "$restore_dir" && supabase stop --no-backup) >/dev/null 2>&1 || true
             rm -rf -- "$restore_dir" "$backup_dir" "$role_log" "$data_manifest"
           }
@@ -177,8 +182,18 @@ jobs:
 
           # The target clones the initialized local Supabase database, preserving its
           # managed schemas, extensions, and built-in roles while keeping application
-          # data isolated in a new database on the ephemeral runner.
-          docker exec "$container" createdb -U postgres -T postgres backup_restore_test
+          # data isolated in a new database on the ephemeral runner. PostgreSQL refuses
+          # a template with active sessions, so block new local-only connections and
+          # terminate current sessions before cloning from a separate maintenance DB.
+          docker exec "$container" psql --set ON_ERROR_STOP=1 -U postgres -d template1 \
+            --command 'ALTER DATABASE postgres WITH ALLOW_CONNECTIONS false;' >/dev/null
+          template_connections_blocked=1
+          docker exec "$container" psql --set ON_ERROR_STOP=1 -U postgres -d template1 \
+            --command "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'postgres' AND pid <> pg_backend_pid();" >/dev/null
+          docker exec "$container" createdb -U postgres --maintenance-db=template1 -T postgres backup_restore_test
+          docker exec "$container" psql --set ON_ERROR_STOP=1 -U postgres -d template1 \
+            --command 'ALTER DATABASE postgres WITH ALLOW_CONNECTIONS true;' >/dev/null
+          template_connections_blocked=0
 
           # Roles are cluster-wide. A new Supabase target already has platform roles,
           # so duplicate-role errors are accepted only for this local compatibility test.

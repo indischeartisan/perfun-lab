@@ -1,0 +1,280 @@
+name: Supabase Database Backup
+
+on:
+  workflow_dispatch:
+    inputs:
+      validate_only:
+        description: Verify pinned tools and required db dump flags without any Production credentials
+        required: false
+        default: true
+        type: boolean
+
+# The workflow does not check out repository code, create commits, or call GitHub APIs.
+# Artifact upload uses the runner's artifact runtime token, not GITHUB_TOKEN.
+permissions: {}
+
+concurrency:
+  group: supabase-production-manual-backup
+  cancel-in-progress: false
+
+jobs:
+  tooling-smoke-test:
+    name: Verify backup tooling without credentials
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Download pinned tools and verify required dump flags
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          tools="$RUNNER_TEMP/perfun-backup-tooling-smoke-test"
+          trap 'rm -rf -- "$tools"' EXIT
+          mkdir -p "$tools/path"
+
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "$tools/supabase.tar.gz" \
+            "https://github.com/supabase/cli/releases/download/v3.1.0/supabase_3.1.0_linux_amd64.tar.gz"
+          echo "dbe9fd66771337fc198727da86b9d3551302f87a7091cd8781be2a4cd0c8ac4d  $tools/supabase.tar.gz" | sha256sum --check --status
+          tar -xzf "$tools/supabase.tar.gz" -C "$tools"
+          install -m 0755 "$tools/supabase" "$tools/path/supabase"
+
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "$tools/age.tar.gz" \
+            "https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-amd64.tar.gz"
+          echo "cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10  $tools/age.tar.gz" | sha256sum --check --status
+          tar -xzf "$tools/age.tar.gz" -C "$tools"
+          install -m 0755 "$tools/age/age" "$tools/path/age"
+
+          "$tools/path/supabase" db dump --help > "$tools/db-dump-help.txt"
+          for flag in --remote --role-only --data-only --schema --use-copy --file; do
+            grep -Fq -- "$flag" "$tools/db-dump-help.txt" || { echo "::error::Supabase CLI lacks required db dump flag: $flag"; exit 1; }
+          done
+          "$tools/path/age" --version >/dev/null
+          echo "Pinned tools and required db dump flags verified without credentials."
+
+  backup:
+    name: Encrypted database backup
+    needs: tooling-smoke-test
+    if: inputs.validate_only == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+      NO_COLOR: "1"
+    steps:
+      - name: Validate required configuration
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "$SUPABASE_DB_URL" || -z "$BACKUP_AGE_RECIPIENT" ]]; then
+            echo "::error::Configure SUPABASE_DB_URL and BACKUP_AGE_RECIPIENT before dispatching this workflow."
+            exit 1
+          fi
+          if [[ ! "$SUPABASE_DB_URL" =~ ^postgres(ql)?:// ]]; then
+            echo "::error::SUPABASE_DB_URL must be a PostgreSQL URL."
+            exit 1
+          fi
+          if [[ ! "$BACKUP_AGE_RECIPIENT" =~ ^age1[ac-hj-np-z02-9]+$ ]]; then
+            echo "::error::BACKUP_AGE_RECIPIENT must be an age X25519 public recipient."
+            exit 1
+          fi
+          echo "Required configuration is present."
+
+      - name: Install pinned tools
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          tools="$RUNNER_TEMP/perfun-backup-tools"
+          mkdir -p "$tools"
+
+          supabase_version="3.1.0"
+          supabase_sha256="dbe9fd66771337fc198727da86b9d3551302f87a7091cd8781be2a4cd0c8ac4d"
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "$tools/supabase.tar.gz" \
+            "https://github.com/supabase/cli/releases/download/v${supabase_version}/supabase_${supabase_version}_linux_amd64.tar.gz"
+          echo "${supabase_sha256}  $tools/supabase.tar.gz" | sha256sum --check --status
+          tar -xzf "$tools/supabase.tar.gz" -C "$tools"
+          install -m 0755 "$tools/supabase" "$tools/supabase-bin"
+
+          age_version="1.3.2"
+          age_sha256="cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10"
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "$tools/age.tar.gz" \
+            "https://github.com/FiloSottile/age/releases/download/v${age_version}/age-v${age_version}-linux-amd64.tar.gz"
+          echo "${age_sha256}  $tools/age.tar.gz" | sha256sum --check --status
+          tar -xzf "$tools/age.tar.gz" -C "$tools"
+          install -m 0755 "$tools/age/age" "$tools/age-bin"
+
+          mkdir -p "$tools/path"
+          mv "$tools/supabase-bin" "$tools/path/supabase"
+          mv "$tools/age-bin" "$tools/path/age"
+          echo "$tools/path" >> "$GITHUB_PATH"
+          supabase --version
+          age --version
+
+      - name: Dump production database read-only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          backup_dir="$RUNNER_TEMP/perfun-db-backup"
+          dump_log="$RUNNER_TEMP/perfun-db-dump.log"
+          mkdir -p "$backup_dir"
+          cleanup_plaintext() {
+            rm -rf -- "$backup_dir" "$dump_log"
+          }
+          trap cleanup_plaintext EXIT
+
+          dump() {
+            # Do not expose a CLI diagnostic because it could include a remote target.
+            # The temporary diagnostic file is deleted by the EXIT trap.
+            if ! supabase db dump "$@" >"$dump_log" 2>&1; then
+              echo "::error::A database dump command failed; no diagnostic output is published."
+              return 1
+            fi
+          }
+
+          # db dump invokes pg_dump only. There is deliberately no db push, db reset,
+          # migration, SQL query, or other remote write command in this workflow.
+          dump --remote="$SUPABASE_DB_URL" --role-only --file "$backup_dir/roles.sql"
+          dump --remote="$SUPABASE_DB_URL" --file "$backup_dir/schema.sql"
+          dump --remote="$SUPABASE_DB_URL" --data-only --use-copy --file "$backup_dir/data.sql"
+          dump --remote="$SUPABASE_DB_URL" --schema supabase_migrations --file "$backup_dir/migration-schema.sql"
+          dump --remote="$SUPABASE_DB_URL" --schema supabase_migrations --data-only --use-copy --file "$backup_dir/migration-data.sql"
+
+          for dump in "$backup_dir"/*.sql; do
+            test -s "$dump" || { echo "::error::A required dump is empty."; exit 1; }
+          done
+          (cd "$backup_dir" && sha256sum -- *.sql > SHA256SUMS)
+          echo "Plaintext dump set completed and checksummed."
+
+          # Keep the folder for the next, isolated local restore-test step. Its EXIT trap
+          # ensures it is deleted if this step fails before encryption.
+          rm -f -- "$dump_log"
+          trap - EXIT
+
+      - name: Restore-test dump in an isolated local Supabase stack
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          backup_dir="$RUNNER_TEMP/perfun-db-backup"
+          restore_dir="$RUNNER_TEMP/perfun-db-restore-test"
+          role_log="$RUNNER_TEMP/perfun-db-restore-roles.log"
+          data_manifest="$RUNNER_TEMP/perfun-db-restore-data-counts"
+          template_connections_blocked=0
+          mkdir -p "$restore_dir"
+          cleanup() {
+            if (( template_connections_blocked )); then
+              docker exec "$container" psql --set ON_ERROR_STOP=1 -U postgres -d template1 \
+                --command 'ALTER DATABASE postgres WITH ALLOW_CONNECTIONS true;' >/dev/null 2>&1 || true
+            fi
+            (cd "$restore_dir" && supabase stop --no-backup) >/dev/null 2>&1 || true
+            rm -rf -- "$restore_dir" "$backup_dir" "$role_log" "$data_manifest"
+          }
+          trap cleanup EXIT
+
+          (cd "$backup_dir" && sha256sum --check --status SHA256SUMS)
+          (cd "$restore_dir" && supabase init >/dev/null && supabase start)
+          container="$(docker ps --format '{{.ID}} {{.Names}}' | awk '$2 ~ /^supabase_db_/ { print $1; exit }')"
+          test -n "$container" || { echo "::error::Local Supabase Postgres container was not found."; exit 1; }
+
+          # The target clones the initialized local Supabase database, preserving its
+          # managed schemas, extensions, and built-in roles while keeping application
+          # data isolated in a new database on the ephemeral runner. PostgreSQL refuses
+          # a template with active sessions, so block new local-only connections and
+          # terminate current sessions before cloning from a separate maintenance DB.
+          docker exec "$container" psql --set ON_ERROR_STOP=1 -U postgres -d template1 \
+            --command 'ALTER DATABASE postgres WITH ALLOW_CONNECTIONS false;' >/dev/null
+          template_connections_blocked=1
+          docker exec "$container" psql --set ON_ERROR_STOP=1 -U postgres -d template1 \
+            --command "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'postgres' AND pid <> pg_backend_pid();" >/dev/null
+          docker exec "$container" createdb -U postgres --maintenance-db=template1 -T postgres backup_restore_test
+          docker exec "$container" psql --set ON_ERROR_STOP=1 -U postgres -d template1 \
+            --command 'ALTER DATABASE postgres WITH ALLOW_CONNECTIONS true;' >/dev/null
+          template_connections_blocked=0
+
+          # Roles are cluster-wide. A new Supabase target already has platform roles,
+          # so duplicate-role errors are accepted only for this local compatibility test.
+          # Any other role error fails the workflow. The raw role dump remains unchanged
+          # in the encrypted artifact for an actual recovery procedure.
+          if ! docker exec -i "$container" psql -v ON_ERROR_STOP=0 -U postgres -d postgres < "$backup_dir/roles.sql" > "$role_log" 2>&1; then
+            echo "::error::Role restore command could not run."
+            exit 1
+          fi
+          if grep -E '^ERROR:' "$role_log" | grep -Ev 'role ".*" already exists' >/dev/null; then
+            echo "::error::Role restore has a non-duplicate-role error."
+            exit 1
+          fi
+          docker exec -i "$container" psql --single-transaction --set ON_ERROR_STOP=1 -U postgres -d backup_restore_test < "$backup_dir/schema.sql"
+          docker exec -i "$container" psql --single-transaction --set ON_ERROR_STOP=1 -U postgres -d backup_restore_test \
+            --command 'SET session_replication_role = replica' --file /dev/stdin < "$backup_dir/data.sql"
+          docker exec -i "$container" psql --single-transaction --set ON_ERROR_STOP=1 -U postgres -d backup_restore_test < "$backup_dir/migration-schema.sql"
+          docker exec -i "$container" psql --single-transaction --set ON_ERROR_STOP=1 -U postgres -d backup_restore_test < "$backup_dir/migration-data.sql"
+
+          # Prove migration history is rows, not an empty/comment-only dump.
+          grep -Eq '^COPY supabase_migrations\.schema_migrations ' "$backup_dir/migration-data.sql" || {
+            echo "::error::Migration history dump does not contain COPY data for schema_migrations."
+            exit 1
+          }
+          docker exec "$container" psql --set ON_ERROR_STOP=1 -U postgres -d backup_restore_test \
+            --command "DO \$\$ BEGIN IF (SELECT count(*) FROM supabase_migrations.schema_migrations) = 0 THEN RAISE EXCEPTION 'migration history is empty'; END IF; END \$\$;" >/dev/null
+
+          # Require the application's core orders table and compare every unquoted,
+          # non-empty COPY table's row count with the restored data.
+          docker exec "$container" psql --set ON_ERROR_STOP=1 -U postgres -d backup_restore_test \
+            --command "DO \$\$ BEGIN IF to_regclass('public.orders') IS NULL THEN RAISE EXCEPTION 'public.orders is absent'; END IF; END \$\$;" >/dev/null
+          awk '
+            /^COPY [A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]* / { table=$2; rows=0; copying=1; next }
+            copying && $0 == "\\." { if (rows > 0) print table, rows; copying=0; next }
+            copying { rows++ }
+          ' "$backup_dir/data.sql" > "$data_manifest"
+          while read -r table expected; do
+            actual="$(docker exec "$container" psql --tuples-only --no-align --set ON_ERROR_STOP=1 -U postgres -d backup_restore_test --command "SELECT count(*) FROM $table;")"
+            actual="${actual//[[:space:]]/}"
+            test "$actual" = "$expected" || { echo "::error::Restored row count does not match the data dump."; exit 1; }
+          done < "$data_manifest"
+          echo "Isolated restore test passed."
+
+          # Keep dumps only after the restore is validated; the next step encrypts them.
+          trap - EXIT
+
+      - name: Encrypt backup and record ciphertext checksum
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          backup_dir="$RUNNER_TEMP/perfun-db-backup"
+          archive="$RUNNER_TEMP/perfun-backup-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz.age"
+          cleanup() {
+            rm -rf -- "$backup_dir" "$RUNNER_TEMP/perfun-db-restore-test"
+          }
+          trap cleanup EXIT
+
+          (cd "$backup_dir" && sha256sum --check --status SHA256SUMS)
+          tar -C "$backup_dir" -czf - . | age --encrypt --recipient "$BACKUP_AGE_RECIPIENT" --output "$archive"
+          test -s "$archive"
+          sha256sum "$archive" > "${archive}.sha256"
+          echo "BACKUP_ARCHIVE=$archive" >> "$GITHUB_ENV"
+          echo "BACKUP_CHECKSUM=${archive}.sha256" >> "$GITHUB_ENV"
+          echo "Encrypted archive and ciphertext checksum created."
+
+      - name: Upload encrypted artifact only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: perfun-supabase-backup-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.BACKUP_ARCHIVE }}
+            ${{ env.BACKUP_CHECKSUM }}
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+      - name: Remove local backup material
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -rf -- "$RUNNER_TEMP/perfun-db-backup" "$RUNNER_TEMP/perfun-db-restore-test" "$RUNNER_TEMP/perfun-db-dump.log" "$RUNNER_TEMP/perfun-db-restore-roles.log" "$RUNNER_TEMP/perfun-db-restore-data-counts"
+          find "$RUNNER_TEMP" -maxdepth 1 -type f -name 'perfun-backup-*.tar.gz.age*' -delete

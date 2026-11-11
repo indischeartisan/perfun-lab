@@ -2,6 +2,8 @@
 
 `Supabase Database Backup` is deliberately manual-only. It creates a logical database backup with the Supabase CLI, restore-tests it in an ephemeral local Supabase stack on a GitHub-hosted runner, encrypts it with the owner's public `age` key, and uploads only the encrypted archive and its ciphertext checksum.
 
+Before adding any secret, dispatch the workflow with **Validate pinned tooling only** selected. That mode downloads the pinned binaries, verifies their SHA-256 values, and confirms that Supabase CLI supports every `db dump` flag this workflow uses. It does not read a secret or connect to Supabase.
+
 ## One-time repository configuration
 
 Create these repository-level GitHub Actions values before the first dispatch:
@@ -32,7 +34,7 @@ The database credential must be protected as a privileged credential. This workf
 
 ## Scope and recovery limitations
 
-The archive contains roles, schema, data, and explicit `supabase_migrations` schema/data dumps. The workflow requires an isolated restore test to pass before encryption and artifact upload.
+The archive contains roles, schema, data, and explicit `supabase_migrations` schema/data dumps. The workflow requires an isolated restore test to pass before encryption and artifact upload. Its target database is cloned from the initialized local Supabase template, so managed schemas and extensions are present but all application data remains isolated. The test rejects non-duplicate role errors, requires non-empty migration history, requires `public.orders`, and compares row counts for every non-empty, unquoted `COPY` data table.
 
 Supabase-managed schema customizations (`auth` and `storage`) require separate restore planning. Supabase Storage **objects** are not included by a database dump; only database metadata may be. Edge Function secrets, Auth dashboard settings/API keys, Realtime settings, Vault key material, and project configuration are not a complete part of this logical backup. This is not point-in-time recovery.
 

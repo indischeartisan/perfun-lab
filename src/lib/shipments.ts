@@ -7,7 +7,7 @@ export type ShippingPayer = 'vendor' | 'perfun' | 'customer'
 export interface PackingChecklist { bottles_checked: boolean; formula_stickers_checked: boolean; bottles_sealed: boolean; packaging_ready: boolean; recipient_label_checked: boolean }
 export const shipmentLabels: Record<ShipmentStatus, string> = { pending: 'Pending', ready_to_ship: 'Ready to Ship', shipped: 'Shipped', delivered: 'Delivered' }
 export interface ShipmentSummary {
-  status: ShipmentStatus; courier: string; service: string; tracking_number: string
+  id: string; status: ShipmentStatus; courier: string; service: string; tracking_number: string
   shipped_at: string | null; delivered_at: string | null
 }
 export interface Shipment extends ShipmentSummary {
@@ -61,6 +61,11 @@ export async function correctShipmentTracking(id: string, trackingNumber: string
   const { data, error } = await requireSupabase().rpc('correct_shipment_tracking', {
     p_shipment_id: id, p_tracking_number: trackingNumber,
   })
+  if (error) throw error
+  return data as Shipment
+}
+export async function confirmShipmentReceived(id: string) {
+  const { data, error } = await requireSupabase().rpc('confirm_shipment_received', { p_shipment_id: id })
   if (error) throw error
   return data as Shipment
 }

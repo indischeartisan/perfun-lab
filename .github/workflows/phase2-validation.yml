@@ -124,6 +124,7 @@ jobs:
             supabase/tests/shipping.sql
             supabase/tests/packing.sql
             supabase/tests/shipment_tracking_correction.sql
+            supabase/tests/shipment_delivery_confirmation.sql
             supabase/tests/payouts.sql
             supabase/tests/shipping_foundation.sql
             supabase/tests/shipping_checkout.sql

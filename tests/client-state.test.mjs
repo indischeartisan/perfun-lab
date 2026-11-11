@@ -95,6 +95,22 @@ test('orders filters and detail remain local while note art uses canonical stati
   assert.doesNotMatch(source, /setInterval|visibilitychange|window\.focus|\.channel\(/)
 })
 
+test('customer receipt confirmation is explicit, guarded, and has no optimistic delivery state', () => {
+  const orders = readFileSync(new URL('../src/pages/OrdersPage.tsx', import.meta.url), 'utf8')
+  const shipments = readFileSync(new URL('../src/lib/shipments.ts', import.meta.url), 'utf8')
+
+  assert.match(orders, /order\.shipment\?\.status === 'shipped' && order\.shipment\.id/)
+  assert.match(orders, />Sudah Diterima</)
+  assert.match(orders, /Pesanan Sudah Diterima\?/)
+  assert.match(orders, /Pastikan parfum pesananmu benar-benar sudah diterima sebelum melanjutkan\./)
+  assert.match(orders, /role="dialog" aria-modal="true"/)
+  assert.match(orders, /if \(lock\.current\) return/)
+  assert.match(orders, /await confirmShipmentReceived\(order\.shipment\.id\)/)
+  assert.match(orders, /await refresh\(\)/)
+  assert.doesNotMatch(orders, /setOrders\([^\n]*delivered/)
+  assert.match(shipments, /rpc\('confirm_shipment_received'/)
+})
+
 test('customer payment details only use an internally consistent server shipping snapshot', () => {
   const source = readFileSync(new URL('../src/pages/OrdersPage.tsx', import.meta.url), 'utf8')
 

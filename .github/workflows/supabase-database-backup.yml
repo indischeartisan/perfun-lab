@@ -8,6 +8,11 @@ on:
         required: false
         default: true
         type: boolean
+      fixture_restore_failure_test:
+        description: Run the no-credential fixture test that intentionally fails after uploading an encrypted artifact
+        required: false
+        default: false
+        type: boolean
 
 # The workflow does not check out repository code, create commits, or call GitHub APIs.
 # Artifact upload uses the runner's artifact runtime token, not GITHUB_TOKEN.
@@ -51,6 +56,91 @@ jobs:
           done
           "$tools/path/age" --version >/dev/null
           echo "Pinned tools and required db dump flags verified without credentials."
+
+  fixture-artifact-before-restore:
+    name: Prove encrypted fixture artifact survives a failed restore
+    needs: tooling-smoke-test
+    if: inputs.fixture_restore_failure_test == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Create encrypted dummy fixture without credentials
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          tools="$RUNNER_TEMP/perfun-fixture-tools"
+          fixture_dir="$RUNNER_TEMP/perfun-backup-fixture"
+          archive="$RUNNER_TEMP/perfun-backup-fixture-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz.age"
+          trap 'rm -rf -- "$tools" "$fixture_dir"' EXIT
+          mkdir -p "$tools" "$fixture_dir"
+
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "$tools/age.tar.gz" \
+            "https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-amd64.tar.gz"
+          echo "cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10  $tools/age.tar.gz" | sha256sum --check --status
+          tar -xzf "$tools/age.tar.gz" -C "$tools"
+
+          printf '%s\n' 'fixture-only-not-production-data' > "$fixture_dir/fixture.sql"
+          "$tools/age/age-keygen" -o "$fixture_dir/test-age-identity.txt" >/dev/null
+          recipient="$("$tools/age/age-keygen" -y "$fixture_dir/test-age-identity.txt")"
+          tar -C "$fixture_dir" -czf - fixture.sql | "$tools/age/age" --encrypt --recipient "$recipient" --output "$archive"
+          test -s "$archive"
+          echo "FIXTURE_ARCHIVE=$archive" >> "$GITHUB_ENV"
+          echo "Encrypted dummy fixture created without Production credentials."
+
+      - name: Upload encrypted fixture artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: perfun-backup-fixture-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.FIXTURE_ARCHIVE }}
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+      - name: Intentionally fail fixture restore after upload
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "::error::Fixture restore intentionally failed after encrypted artifact upload."
+          exit 1
+
+      - name: Remove local fixture material
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -rf -- "$RUNNER_TEMP/perfun-backup-fixture" "$RUNNER_TEMP/perfun-fixture-tools"
+          find "$RUNNER_TEMP" -maxdepth 1 -type f -name 'perfun-backup-fixture-*.tar.gz.age' -delete
+
+  verify-fixture-artifact-after-failure:
+    name: Verify encrypted fixture artifact is available after restore failure
+    needs: fixture-artifact-before-restore
+    if: always() && inputs.fixture_restore_failure_test == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Download encrypted fixture artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: perfun-backup-fixture-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/perfun-fixture-artifact-check
+
+      - name: Verify ciphertext is present without reading fixture contents
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          artifact_dir="$RUNNER_TEMP/perfun-fixture-artifact-check"
+          archive="$(find "$artifact_dir" -maxdepth 1 -type f -name '*.tar.gz.age' -print -quit)"
+          test -n "$archive"
+          test -s "$archive"
+          head -n 1 "$archive" | grep -Fxq 'age-encryption.org/v1'
+          echo "Encrypted fixture artifact remains available after the intentional restore failure."
+
+      - name: Remove downloaded ciphertext
+        if: always()
+        shell: bash
+        run: rm -rf -- "$RUNNER_TEMP/perfun-fixture-artifact-check"
 
   backup:
     name: Encrypted database backup
@@ -154,6 +244,48 @@ jobs:
           rm -f -- "$dump_log"
           trap - EXIT
 
+      - name: Encrypt backup and record ciphertext checksum
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          backup_dir="$RUNNER_TEMP/perfun-db-backup"
+          archive="$RUNNER_TEMP/perfun-backup-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz.age"
+          encryption_succeeded=0
+          cleanup_failed_encryption() {
+            if (( ! encryption_succeeded )); then
+              rm -rf -- "$backup_dir" "$archive" "${archive}.sha256"
+            fi
+          }
+          trap cleanup_failed_encryption EXIT
+
+          (cd "$backup_dir" && sha256sum --check --status SHA256SUMS)
+          tar -C "$backup_dir" -czf - . | age --encrypt --recipient "$BACKUP_AGE_RECIPIENT" --output "$archive"
+          test -s "$archive"
+          sha256sum "$archive" > "${archive}.sha256"
+          echo "BACKUP_ARCHIVE=$archive" >> "$GITHUB_ENV"
+          echo "BACKUP_CHECKSUM=${archive}.sha256" >> "$GITHUB_ENV"
+          encryption_succeeded=1
+          echo "Encrypted archive and ciphertext checksum created."
+
+      - name: Upload encrypted artifact only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: perfun-supabase-backup-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.BACKUP_ARCHIVE }}
+            ${{ env.BACKUP_CHECKSUM }}
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+      - name: Record encrypted artifact upload
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "BACKUP_ARTIFACT_UPLOADED=true" >> "$GITHUB_ENV"
+          echo "Encrypted backup artifact uploaded; isolated restore verification will now run."
+
       - name: Restore-test dump in an isolated local Supabase stack
         shell: bash
         run: |
@@ -168,6 +300,7 @@ jobs:
           role_parser_test_dir="$RUNNER_TEMP/perfun-db-role-parser-test"
           data_manifest="$RUNNER_TEMP/perfun-db-restore-data-counts"
           template_connections_blocked=0
+          restore_verified=0
           mkdir -p "$restore_dir"
           cleanup() {
             if (( template_connections_blocked )); then
@@ -176,6 +309,11 @@ jobs:
             fi
             (cd "$restore_dir" && supabase stop --no-backup) >/dev/null 2>&1 || true
             rm -rf -- "$restore_dir" "$backup_dir" "$restore_start_log" "$role_log" "$local_platform_roles" "$local_roles_log" "$role_parser_test_dir" "$data_manifest"
+            if (( restore_verified )); then
+              echo "Encrypted backup artifact uploaded; isolated restore verified."
+            else
+              echo "::error::Encrypted backup artifact uploaded; isolated restore has not been verified."
+            fi
           }
           trap cleanup EXIT
 
@@ -269,6 +407,19 @@ jobs:
             echo "::error::Role restore parser accepted a non-role duplicate object."
             exit 1
           fi
+          if ! docker exec "$container" psql -v ON_ERROR_STOP=0 -v VERBOSITY=verbose -U postgres -d postgres \
+            --command 'SET ROLE anon; CREATE ROLE fixture_privilege_probe;' > "$role_parser_test_dir/privilege.log" 2>&1; then
+            echo "::error::Could not run the local privilege diagnostic fixture."
+            exit 1
+          fi
+          grep -Eq '^ERROR:[[:space:]]+42501:' "$role_parser_test_dir/privilege.log" || {
+            echo "::error::Local privilege diagnostic fixture did not reproduce SQLSTATE 42501."
+            exit 1
+          }
+          if validate_role_restore_log "$role_parser_test_dir/privilege.log" "$role_parser_test_dir/expected-roles" > "$role_parser_test_dir/privilege.out" 2>&1; then
+            echo "::error::Role restore parser accepted a SQLSTATE 42501 privilege error."
+            exit 1
+          fi
           echo "Role restore parser synthetic tests passed."
 
           # Roles are cluster-wide. Accept only an exact duplicate-role diagnostic for
@@ -315,46 +466,13 @@ jobs:
             actual="${actual//[[:space:]]/}"
             test "$actual" = "$expected" || { echo "::error::Restored row count does not match the data dump."; exit 1; }
           done < "$data_manifest"
+          restore_verified=1
           echo "Isolated restore test passed."
-
-          # Keep dumps only after the restore is validated; the next step encrypts them.
-          trap - EXIT
-
-      - name: Encrypt backup and record ciphertext checksum
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          umask 077
-          backup_dir="$RUNNER_TEMP/perfun-db-backup"
-          archive="$RUNNER_TEMP/perfun-backup-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz.age"
-          cleanup() {
-            rm -rf -- "$backup_dir" "$RUNNER_TEMP/perfun-db-restore-test"
-          }
-          trap cleanup EXIT
-
-          (cd "$backup_dir" && sha256sum --check --status SHA256SUMS)
-          tar -C "$backup_dir" -czf - . | age --encrypt --recipient "$BACKUP_AGE_RECIPIENT" --output "$archive"
-          test -s "$archive"
-          sha256sum "$archive" > "${archive}.sha256"
-          echo "BACKUP_ARCHIVE=$archive" >> "$GITHUB_ENV"
-          echo "BACKUP_CHECKSUM=${archive}.sha256" >> "$GITHUB_ENV"
-          echo "Encrypted archive and ciphertext checksum created."
-
-      - name: Upload encrypted artifact only
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: perfun-supabase-backup-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ env.BACKUP_ARCHIVE }}
-            ${{ env.BACKUP_CHECKSUM }}
-          if-no-files-found: error
-          retention-days: 7
-          compression-level: 0
 
       - name: Remove local backup material
         if: always()
         shell: bash
         run: |
           set -Eeuo pipefail
-          rm -rf -- "$RUNNER_TEMP/perfun-db-backup" "$RUNNER_TEMP/perfun-db-restore-test" "$RUNNER_TEMP/perfun-db-dump.log" "$RUNNER_TEMP/perfun-db-restore-start.log" "$RUNNER_TEMP/perfun-db-restore-roles.log" "$RUNNER_TEMP/perfun-db-restore-data-counts"
+          rm -rf -- "$RUNNER_TEMP/perfun-db-backup" "$RUNNER_TEMP/perfun-db-restore-test" "$RUNNER_TEMP/perfun-db-dump.log" "$RUNNER_TEMP/perfun-db-restore-start.log" "$RUNNER_TEMP/perfun-db-restore-roles.log" "$RUNNER_TEMP/perfun-db-local-platform-roles" "$RUNNER_TEMP/perfun-db-local-platform-roles.log" "$RUNNER_TEMP/perfun-db-role-parser-test" "$RUNNER_TEMP/perfun-db-restore-data-counts"
           find "$RUNNER_TEMP" -maxdepth 1 -type f -name 'perfun-backup-*.tar.gz.age*' -delete

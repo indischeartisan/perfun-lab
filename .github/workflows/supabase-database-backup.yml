@@ -110,8 +110,8 @@ jobs:
           mv "$tools/supabase-bin" "$tools/path/supabase"
           mv "$tools/age-bin" "$tools/path/age"
           echo "$tools/path" >> "$GITHUB_PATH"
-          supabase --version
-          age --version
+          "$tools/path/supabase" --version
+          "$tools/path/age" --version
 
       - name: Dump production database read-only
         shell: bash

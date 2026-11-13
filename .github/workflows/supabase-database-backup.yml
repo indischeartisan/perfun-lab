@@ -181,7 +181,11 @@ jobs:
 
           if ! (cd "$restore_dir" && "$tools/supabase" init >/dev/null && "$tools/supabase" start \
             --exclude gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor) > "$start_log" 2>&1; then
-            echo "::error::Dummy local Supabase stack could not start."
+            if grep -qi 'toomanyrequests\|rate exceeded' "$start_log"; then
+              echo "::error::Dummy local stack category=container_registry_rate_limit sqlstate=unavailable"
+            else
+              echo "::error::Dummy local stack category=container_start_failed sqlstate=unavailable"
+            fi
             exit 1
           fi
           container="$(docker ps --format '{{.ID}} {{.Names}}' | awk '$2 ~ /^supabase_db_/ { print $1; exit }')"

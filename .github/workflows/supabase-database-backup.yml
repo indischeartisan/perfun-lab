@@ -161,22 +161,30 @@ jobs:
           umask 077
           backup_dir="$RUNNER_TEMP/perfun-db-backup"
           restore_dir="$RUNNER_TEMP/perfun-db-restore-test"
+          restore_start_log="$RUNNER_TEMP/perfun-db-restore-start.log"
           role_log="$RUNNER_TEMP/perfun-db-restore-roles.log"
           data_manifest="$RUNNER_TEMP/perfun-db-restore-data-counts"
           template_connections_blocked=0
           mkdir -p "$restore_dir"
           cleanup() {
             if (( template_connections_blocked )); then
-              docker exec "$container" psql --set ON_ERROR_STOP=1 -U postgres -d template1 \
+              docker exec "$container" psql --set ON_ERROR_STOP=1 -U supabase_admin -d template1 \
                 --command 'ALTER DATABASE postgres WITH ALLOW_CONNECTIONS true;' >/dev/null 2>&1 || true
             fi
             (cd "$restore_dir" && supabase stop --no-backup) >/dev/null 2>&1 || true
-            rm -rf -- "$restore_dir" "$backup_dir" "$role_log" "$data_manifest"
+            rm -rf -- "$restore_dir" "$backup_dir" "$restore_start_log" "$role_log" "$data_manifest"
           }
           trap cleanup EXIT
 
           (cd "$backup_dir" && sha256sum --check --status SHA256SUMS)
-          (cd "$restore_dir" && supabase init >/dev/null && supabase start)
+          # The database image contains the Supabase-managed schemas, extensions, and
+          # roles needed by the restore. The remaining local development services are
+          # not restore dependencies, so exclude them to avoid pulling a full stack.
+          if ! (cd "$restore_dir" && supabase init >/dev/null && supabase start \
+            --exclude gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor) > "$restore_start_log" 2>&1; then
+            echo "::error::The isolated Supabase database container could not start."
+            exit 1
+          fi
           container="$(docker ps --format '{{.ID}} {{.Names}}' | awk '$2 ~ /^supabase_db_/ { print $1; exit }')"
           test -n "$container" || { echo "::error::Local Supabase Postgres container was not found."; exit 1; }
 
@@ -185,13 +193,13 @@ jobs:
           # data isolated in a new database on the ephemeral runner. PostgreSQL refuses
           # a template with active sessions, so block new local-only connections and
           # terminate current sessions before cloning from a separate maintenance DB.
-          docker exec "$container" psql --set ON_ERROR_STOP=1 -U postgres -d template1 \
+          docker exec "$container" psql --set ON_ERROR_STOP=1 -U supabase_admin -d template1 \
             --command 'ALTER DATABASE postgres WITH ALLOW_CONNECTIONS false;' >/dev/null
           template_connections_blocked=1
-          docker exec "$container" psql --set ON_ERROR_STOP=1 -U postgres -d template1 \
+          docker exec "$container" psql --set ON_ERROR_STOP=1 -U supabase_admin -d template1 \
             --command "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'postgres' AND pid <> pg_backend_pid();" >/dev/null
-          docker exec "$container" createdb -U postgres --maintenance-db=template1 -T postgres backup_restore_test
-          docker exec "$container" psql --set ON_ERROR_STOP=1 -U postgres -d template1 \
+          docker exec "$container" createdb -U supabase_admin --maintenance-db=template1 -T postgres backup_restore_test
+          docker exec "$container" psql --set ON_ERROR_STOP=1 -U supabase_admin -d template1 \
             --command 'ALTER DATABASE postgres WITH ALLOW_CONNECTIONS true;' >/dev/null
           template_connections_blocked=0
 
@@ -276,5 +284,5 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          rm -rf -- "$RUNNER_TEMP/perfun-db-backup" "$RUNNER_TEMP/perfun-db-restore-test" "$RUNNER_TEMP/perfun-db-dump.log" "$RUNNER_TEMP/perfun-db-restore-roles.log" "$RUNNER_TEMP/perfun-db-restore-data-counts"
+          rm -rf -- "$RUNNER_TEMP/perfun-db-backup" "$RUNNER_TEMP/perfun-db-restore-test" "$RUNNER_TEMP/perfun-db-dump.log" "$RUNNER_TEMP/perfun-db-restore-start.log" "$RUNNER_TEMP/perfun-db-restore-roles.log" "$RUNNER_TEMP/perfun-db-restore-data-counts"
           find "$RUNNER_TEMP" -maxdepth 1 -type f -name 'perfun-backup-*.tar.gz.age*' -delete

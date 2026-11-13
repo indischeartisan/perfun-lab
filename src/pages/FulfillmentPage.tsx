@@ -119,6 +119,10 @@ function ShipmentCard({ shipment, role, onChanged, onShipped }: { shipment: Ship
   function fulfill(type: 'save' | 'ship' | 'deliver') {
     void run(() => fulfillShipment(shipment.id, type, details), result => { if (type === 'ship' && result.status === 'shipped') onShipped?.(); return `${shipment.order_number}: ${type === 'save' ? 'shipping details saved' : shipmentLabels[result.status]}.` })
   }
+  function confirmDelivery() {
+    if (!window.confirm('Pastikan Anda telah memverifikasi bukti penerimaan pengiriman sebelum menandai pesanan selesai.')) return
+    fulfill('deliver')
+  }
   function confirmPacking() {
     const confirmed = window.confirm(`Confirm that you personally checked all packing requirements for ${shipment.order_number}:\n\n${packingItems.map(([, label]) => `• ${label}`).join('\n')}\n\nOnly confirm after every check is complete.`)
     const completedChecklist = confirmedPackingChecklist(confirmed)
@@ -173,7 +177,7 @@ function ShipmentCard({ shipment, role, onChanged, onShipped }: { shipment: Ship
     {error ? <p role="alert">{error}</p> : null}
     {ready && packed && canEdit ? <form className="shipping-form" onSubmit={submit}>{shipment.customer_shipping ? <p className="admin-help">Courier and service are locked to the customer selection or Admin override.</p> : null}{(['courier', 'service', 'tracking_number'] as const).map(field => <label key={field} htmlFor={`${shipment.id}-${field}`}>{field === 'tracking_number' ? 'Tracking number' : field === 'courier' ? 'Courier' : 'Service'}<input id={`${shipment.id}-${field}`} name={field} value={details[field]} maxLength={field === 'tracking_number' ? 150 : 100} required disabled={busy} readOnly={Boolean(shipment.customer_shipping) && field !== 'tracking_number'} autoComplete="off" onChange={event => setDetails(current => ({ ...current, [field]: event.target.value }))}/></label>)}<div className="shipping-actions"><button type="submit" value="save" formNoValidate disabled={busy}>Save details</button><button type="submit" value="ship" className="orders-build" disabled={busy || shipment.actual_shipping_cost === null || !shipment.shipping_payer}>{busy ? 'Saving…' : 'Mark as Shipped'}</button></div></form> : null}
     {role === 'admin' && !['shipped', 'delivered'].includes(shipment.status) ? <section className="packing-card"><h2>Admin shipping override</h2><p>Requires a reason. Customer shipping paid and order total never change.</p><div className="shipping-cost-grid"><label>Courier<input value={details.courier} maxLength={100} disabled={busy} onChange={event => setDetails(current => ({ ...current, courier: event.target.value }))}/></label><label>Service<input value={details.service} maxLength={100} disabled={busy} onChange={event => setDetails(current => ({ ...current, service: event.target.value }))}/></label></div><label>Reason<textarea value={overrideReason} maxLength={1000} disabled={busy} onChange={event => setOverrideReason(event.target.value)}/></label><button type="button" disabled={busy || (details.courier === shipment.courier && details.service === shipment.service)} onClick={overrideService}>Record override</button></section> : null}
-    {shipment.status === 'shipped' && role === 'admin' ? <button className="orders-build" disabled={busy} onClick={() => fulfill('deliver')}>{busy ? 'Saving…' : 'Mark as Delivered'}</button> : null}
+    {shipment.status === 'shipped' && role === 'admin' ? <button className="orders-build" disabled={busy} onClick={confirmDelivery}>{busy ? 'Menyimpan…' : 'Tandai Sudah Diterima'}</button> : null}
     {shipment.status === 'pending' ? <p>Waiting for production completion and fulfillment clearance.</p> : null}
   </article>
 }

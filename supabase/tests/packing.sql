@@ -28,9 +28,10 @@ do $$ declare shipment_id uuid; partial jsonb:='{"bottles_checked":true,"formula
  s:=public.save_shipment_packing(shipment_id,partial,false);
  if s.packing_status<>'in_progress' then raise exception 'Partial checklist was not saved'; end if;
  begin perform public.fulfill_shipment(shipment_id,'ship','JNE','REG',''); raise exception 'Empty tracking number was accepted'; exception when check_violation then null; end;
- begin perform public.fulfill_shipment(shipment_id,'deliver','','',''); raise exception 'Shipment delivered before dispatch'; exception when check_violation then null; end;
+ begin perform public.fulfill_shipment(shipment_id,'deliver','','',''); raise exception 'Vendor delivered shipment'; exception when insufficient_privilege then null; end;
  s:=public.fulfill_shipment(shipment_id,'ship','JNE','REG','PACK-1');
  if s.status<>'shipped' or s.packing_status<>'in_progress' or s.actual_shipping_cost is not null or s.shipping_payer is not null or s.courier<>'JNE' or s.service<>'REG' then raise exception 'Vendor dispatch must not require packing or actual shipping cost'; end if;
+ begin perform public.fulfill_shipment(shipment_id,'deliver','','',''); raise exception 'Vendor delivered dispatched shipment'; exception when insufficient_privilege then null; end;
  perform set_config('app.test_shipment_id',shipment_id::text,false);
 end $$;
 -- Recreate a pre-feature dispatched row only in this disposable transaction.
@@ -65,6 +66,14 @@ do $$ declare shipment_id uuid; begin
  select id into shipment_id from public.shipments where order_id='f2000000-0000-4000-8000-000000000001';
  begin perform public.fulfill_shipment(shipment_id,'deliver','','',''); raise exception 'Customer can change shipment state'; exception when insufficient_privilege then null; end;
  begin perform actual_shipping_cost from public.shipments where order_id='f2000000-0000-4000-8000-000000000001'; raise exception 'Customer reads internal actual cost'; exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','f1000000-0000-4000-8000-000000000002',true);
+do $$ declare shipment_id uuid; delivered public.shipments; begin
+ select id into shipment_id from public.shipments where order_id='f2000000-0000-4000-8000-000000000001';
+ delivered:=public.fulfill_shipment(shipment_id,'deliver','','','');
+ if delivered.status<>'delivered' or delivered.delivered_at is null then raise exception 'Admin could not deliver dispatched shipment'; end if;
 end $$;
 reset role;
 select 'PASS: packing checklist, assignment isolation, actual shipping finality, and internal-cost column protection' as result;

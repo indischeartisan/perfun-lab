@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { ArrowLeft, ChevronRight, Copy, RefreshCw, Truck } from 'lucide-react'
 import { listOrders, type CustomerOrder, type OrderLine } from '../lib/orders'
 import { paymentRequest } from '../lib/payments'
@@ -8,6 +8,7 @@ import { AddressText } from '../components/AddressBook'
 import { PaymentActions } from '../components/PaymentActions'
 import { reviewedShippingBreakdown } from '../lib/shippingCheckoutReview'
 import { getNoteStickerAsset } from '../lib/noteAssets'
+import { confirmShipmentReceived } from '../lib/shipments'
 
 type Filter = 'all' | 'unpaid' | 'processing' | 'shipping' | 'complete'
 type Status = { label: string; detail: string; tone: 'amber' | 'lime' | 'blue' | 'green' | 'gray' }
@@ -76,6 +77,7 @@ export function OrdersPage({ userId, onLogin, onBuild }: { userId?: string; onLo
   const [error, setError] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
+  const [receiptOrderId, setReceiptOrderId] = useState<string | null>(null)
   const [returnVerification, setReturnVerification] = useState<'idle' | 'verifying' | 'unverified'>('idle')
   const inflight = useRef<Promise<void> | null>(null)
   const returnVerificationLock = useRef(false)
@@ -113,9 +115,16 @@ export function OrdersPage({ userId, onLogin, onBuild }: { userId?: string; onLo
     setSelectedOrderId(orderId)
     window.scrollTo({ top: 0, behavior: 'instant' })
   }, [])
+  const confirmReceipt = useCallback(async () => {
+    const order = orders.find(item => item.id === receiptOrderId)
+    if (!order?.shipment?.id) throw new Error('Pengiriman pesanan tidak tersedia.')
+    await confirmShipmentReceived(order.shipment.id)
+    await refresh()
+    setReceiptOrderId(null)
+  }, [orders, receiptOrderId, refresh])
   if (!userId) return <section className="app-screen"><div className="screen-empty"><h2>Masuk untuk melihat pesanan</h2><button onClick={onLogin}>Masuk</button></div></section>
   const selected = selectedOrderId ? orders.find(order => order.id === selectedOrderId) ?? null : null
-  if (selected) return <CustomerOrderDetail order={selected} onBack={() => setSelectedOrderId(null)} onRefresh={refresh} returnVerification={returnVerification} />
+  if (selected) return <><CustomerOrderDetail order={selected} onBack={() => setSelectedOrderId(null)} onRefresh={refresh} onConfirmReceipt={() => setReceiptOrderId(selected.id)} returnVerification={returnVerification} />{receiptOrderId ? <ReceiptConfirmationDialog onCancel={() => setReceiptOrderId(null)} onConfirm={confirmReceipt} /> : null}</>
   const visible = orders.filter(order => matches(order, filter))
   return <section className="app-screen customer-orders-page">
     <header className="customer-orders-heading"><span>AKUN SAYA</span><div><h1>Pesanan Saya.</h1><button className="customer-orders-refresh" disabled={loading} onClick={() => void refresh()}><RefreshCw /> {loading ? 'Memuat' : 'Perbarui'}</button></div><p>Lihat dan kelola semua pesanan parfummu di sini.</p></header>
@@ -125,26 +134,55 @@ export function OrdersPage({ userId, onLogin, onBuild }: { userId?: string; onLo
     {error ? <p className="cloud-message" role="alert">{error} <button onClick={() => void refresh()}>Coba lagi</button></p> : null}
     {loading && !orders.length ? <p role="status">Menyiapkan pesananmu…</p> : null}
     {!loading && !orders.length ? <div className="screen-empty"><h2>Belum ada pesanan</h2><button onClick={onBuild}>Racik parfum</button></div> : null}
-    <div className="customer-order-list">{visible.map(order => <CustomerOrderCard key={order.id} order={order} onOpen={() => openOrder(order.id)} />)}</div>
+    <div className="customer-order-list">{visible.map(order => <CustomerOrderCard key={order.id} order={order} onOpen={() => openOrder(order.id)} onConfirmReceipt={() => setReceiptOrderId(order.id)} />)}</div>
     {!loading && orders.length && !visible.length ? <p className="customer-orders-no-match">Tidak ada pesanan dalam filter ini.</p> : null}
+    {receiptOrderId ? <ReceiptConfirmationDialog onCancel={() => setReceiptOrderId(null)} onConfirm={confirmReceipt} /> : null}
   </section>
 }
 
-export function CustomerOrderCard({ order, onOpen }: { order: CustomerOrder; onOpen: () => void }) {
+export function CustomerOrderCard({ order, onOpen, onConfirmReceipt }: { order: CustomerOrder; onOpen: () => void; onConfirmReceipt?: () => void }) {
   const status = orderStatus(order), orderProducts = products(order), first = orderProducts[0], additional = Math.max(0, orderProducts.length - 1), summary = cardSummary(order, first, orderProducts.length)
   return <article className="customer-order-card"><button className="customer-order-card-link" type="button" onClick={onOpen} aria-label={`Lihat detail pesanan ${order.order_number}`}>
     <header className="customer-order-card-header"><div><time>{date(order.created_at)}</time><strong title={order.order_number}>{short(order.order_number)}</strong></div><span className={`customer-order-status ${status.tone}`}>{status.label}</span></header>
     <div className="customer-order-card-body"><div className="customer-order-card-product"><div><h2>{summary.title}</h2><p>{summary.detail}</p></div>{first ? <NoteTrio notes={first.notes} compact /> : null}{additional ? <small className="customer-order-more-items">+{additional} parfum lainnya</small> : null}</div><div className="customer-order-card-action"><strong className="customer-order-total">{formatPrice(order.grand_total)}</strong><span>Lihat detail <ChevronRight aria-hidden="true" /></span></div></div>
-  </button></article>
+  </button>{order.shipment?.status === 'shipped' && order.shipment.id && onConfirmReceipt ? <button className="customer-order-receipt" type="button" onClick={onConfirmReceipt}>Sudah Diterima</button> : null}</article>
 }
 
-export function CustomerOrderDetail({ order, onBack, onRefresh, returnVerification = 'idle' }: { order: CustomerOrder; onBack: () => void; onRefresh: () => void | Promise<void>; returnVerification?: 'idle' | 'verifying' | 'unverified' }) {
+export function CustomerOrderDetail({ order, onBack, onRefresh, onConfirmReceipt, returnVerification = 'idle' }: { order: CustomerOrder; onBack: () => void; onRefresh: () => void | Promise<void>; onConfirmReceipt?: () => void; returnVerification?: 'idle' | 'verifying' | 'unverified' }) {
   const status = orderStatus(order), [copied, setCopied] = useState(false), shipping = order.shipping_quote_snapshot ? reviewedShippingBreakdown({ shipping: order.shipping, shipping_quote_snapshot: order.shipping_quote_snapshot }) : null, orderProducts = products(order)
   return <section className="app-screen customer-order-detail">
     <header className="customer-order-detail-title"><button aria-label="Kembali" onClick={onBack}><ArrowLeft /></button><h1>Detail Pesanan</h1></header>
     <article className="customer-order-detail-card"><header className="customer-order-card-header"><div><time>{date(order.created_at)}</time><strong title={order.order_number}>{short(order.order_number)}</strong></div><span className={`customer-order-status ${status.tone}`}>{status.label}</span></header><p className="customer-order-status-copy">{status.detail}</p><div className="customer-order-detail-products">{orderProducts.map((item, index) => <article className="customer-order-detail-item" key={`${item.name}-${index}`}><div className="customer-order-detail-product-copy"><h2>{item.name}</h2><p>{item.volumeMl} ml · {item.quantity} botol</p></div><NoteTrio notes={item.notes} /></article>)}</div></article>
     <h2>Rincian Pembayaran</h2><section className="customer-order-payment-detail"><dl><div><dt>Subtotal produk</dt><dd>{formatPrice(order.subtotal)}</dd></div>{order.discount > 0 ? <div><dt>Diskon peluncuran</dt><dd>−{formatPrice(order.discount)}</dd></div> : null}{shipping ? <><div><dt>Ongkir normal</dt><dd>{formatPrice(shipping.original_shipping_amount)}</dd></div>{shipping.shipping_discount > 0 ? <div><dt>Voucher ongkir</dt><dd>−{formatPrice(shipping.shipping_discount)}</dd></div> : null}</> : null}<div><dt>Ongkir dibayar</dt><dd>{formatPrice(shipping?.customer_shipping_total ?? order.shipping)}</dd></div><div className="total"><dt>Total pembayaran</dt><dd>{formatPrice(order.grand_total)}</dd></div></dl></section>
     <h2>Pengiriman</h2><section className="customer-order-shipping"><Truck /><div><strong>{order.shipment ? `${order.shipment.courier} · ${order.shipment.service}` : 'Pengiriman belum dijadwalkan'}</strong><p>{order.shipment?.tracking_number ? `Resi: ${order.shipment.tracking_number}` : status.label === 'Sedang diracik' ? 'Pengiriman akan disiapkan setelah parfum selesai diracik.' : status.label}</p></div></section>
-    <h2>Alamat Pengiriman</h2><section className="customer-order-address"><AddressText address={order.address_snapshot} /></section>{returnVerification === 'verifying' ? <p role="status">Menunggu konfirmasi pembayaran.</p> : null}{returnVerification === 'unverified' ? <p className="cloud-message" role="alert">Pembayaran belum dapat dikonfirmasi. Coba lagi dari detail pesanan.</p> : null}{order.payment_status === 'pending' ? <PaymentActions order={order} onRefresh={onRefresh} /> : null}<button className="customer-order-copy" onClick={() => navigator.clipboard.writeText(order.order_number).then(() => setCopied(true)).catch(() => setCopied(false))}><Copy /> {copied ? 'Nomor tersalin' : 'Salin nomor pesanan lengkap'}</button>
+    <h2>Alamat Pengiriman</h2><section className="customer-order-address"><AddressText address={order.address_snapshot} /></section>{order.shipment?.status === 'shipped' && order.shipment.id && onConfirmReceipt ? <button className="customer-order-receipt" type="button" onClick={onConfirmReceipt}>Sudah Diterima</button> : null}{returnVerification === 'verifying' ? <p role="status">Menunggu konfirmasi pembayaran.</p> : null}{returnVerification === 'unverified' ? <p className="cloud-message" role="alert">Pembayaran belum dapat dikonfirmasi. Coba lagi dari detail pesanan.</p> : null}{order.payment_status === 'pending' ? <PaymentActions order={order} onRefresh={onRefresh} /> : null}<button className="customer-order-copy" onClick={() => navigator.clipboard.writeText(order.order_number).then(() => setCopied(true)).catch(() => setCopied(false))}><Copy /> {copied ? 'Nomor tersalin' : 'Salin nomor pesanan lengkap'}</button>
   </section>
+}
+
+function ReceiptConfirmationDialog({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => Promise<void> }) {
+  const cancelRef = useRef<HTMLButtonElement>(null), dialogRef = useRef<HTMLElement>(null), restoreFocus = useRef<HTMLElement | null>(null)
+  const lock = useRef(false)
+  const [busy, setBusy] = useState(false), [error, setError] = useState('')
+  useEffect(() => {
+    restoreFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const overflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.requestAnimationFrame(() => cancelRef.current?.focus())
+    return () => { document.body.style.overflow = overflow; restoreFocus.current?.focus() }
+  }, [])
+  function trapFocus(event: KeyboardEvent<HTMLElement>) {
+    if (event.key === 'Escape' && !busy) { event.preventDefault(); onCancel(); return }
+    if (event.key !== 'Tab') return
+    const nodes = dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled])')
+    if (!nodes?.length) return
+    const first = nodes[0], last = nodes[nodes.length - 1]
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+  }
+  async function submit() {
+    if (lock.current) return
+    lock.current = true; setBusy(true); setError('')
+    try { await onConfirm() } catch (cause) { setError(errorMessage(cause)); lock.current = false; setBusy(false) }
+  }
+  return <div className="customer-receipt-dialog-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !busy) onCancel() }}><section className="customer-receipt-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="receipt-dialog-title" aria-describedby="receipt-dialog-description" onKeyDown={trapFocus}><h2 id="receipt-dialog-title">Pesanan Sudah Diterima?</h2><p id="receipt-dialog-description">Pastikan parfum pesananmu benar-benar sudah diterima sebelum melanjutkan.</p>{error ? <p className="cloud-message" role="alert">{error}</p> : null}<div><button ref={cancelRef} type="button" disabled={busy} onClick={onCancel}>Batal</button><button className="customer-order-receipt" type="button" disabled={busy} onClick={() => void submit()}>{busy ? 'Menyimpan…' : 'Ya, Sudah Diterima'}</button></div></section></div>
 }

@@ -55,12 +55,12 @@ export async function placeOrder(addressId: string, items: OrderIntent[], shippi
   return data.order_id as string
 }
 export async function getOrder(id: string): Promise<CustomerOrder> {
-  const { data, error } = await requireSupabase().from('orders').select('*,order_items(*),payments(id,provider,status,amount,paid_at),shipment:shipments(status,courier,service,tracking_number,shipped_at,delivered_at)').eq('id', id).order('position', { referencedTable: 'order_items' }).single()
+  const { data, error } = await requireSupabase().from('orders').select('*,order_items(*),payments(id,provider,status,amount,paid_at),shipment:shipments(id,status,courier,service,tracking_number,shipped_at,delivered_at)').eq('id', id).order('position', { referencedTable: 'order_items' }).single()
   if (error) throw error
   return data as CustomerOrder
 }
 export async function listOrders(): Promise<CustomerOrder[]> {
-  const { data, error } = await requireSupabase().from('orders').select('*,order_items(*),payments(id,provider,status,amount,paid_at),shipment:shipments(status,courier,service,tracking_number,shipped_at,delivered_at)').order('created_at', { ascending: false }).order('position', { referencedTable: 'order_items' })
+  const { data, error } = await requireSupabase().from('orders').select('*,order_items(*),payments(id,provider,status,amount,paid_at),shipment:shipments(id,status,courier,service,tracking_number,shipped_at,delivered_at)').order('created_at', { ascending: false }).order('position', { referencedTable: 'order_items' })
   if (error) throw error
   return data as CustomerOrder[]
 }

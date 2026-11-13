@@ -163,6 +163,9 @@ jobs:
           restore_dir="$RUNNER_TEMP/perfun-db-restore-test"
           restore_start_log="$RUNNER_TEMP/perfun-db-restore-start.log"
           role_log="$RUNNER_TEMP/perfun-db-restore-roles.log"
+          local_platform_roles="$RUNNER_TEMP/perfun-db-local-platform-roles"
+          local_roles_log="$RUNNER_TEMP/perfun-db-local-platform-roles.log"
+          role_parser_test_dir="$RUNNER_TEMP/perfun-db-role-parser-test"
           data_manifest="$RUNNER_TEMP/perfun-db-restore-data-counts"
           template_connections_blocked=0
           mkdir -p "$restore_dir"
@@ -172,9 +175,53 @@ jobs:
                 --command 'ALTER DATABASE postgres WITH ALLOW_CONNECTIONS true;' >/dev/null 2>&1 || true
             fi
             (cd "$restore_dir" && supabase stop --no-backup) >/dev/null 2>&1 || true
-            rm -rf -- "$restore_dir" "$backup_dir" "$restore_start_log" "$role_log" "$data_manifest"
+            rm -rf -- "$restore_dir" "$backup_dir" "$restore_start_log" "$role_log" "$local_platform_roles" "$local_roles_log" "$role_parser_test_dir" "$data_manifest"
           }
           trap cleanup EXIT
+
+          validate_role_restore_log() {
+            local log_file="$1"
+            local expected_roles_file="$2"
+            local line sqlstate role category
+            local validation_failed=0
+
+            while IFS= read -r line || [[ -n "$line" ]]; do
+              [[ "$line" == ERROR:* ]] || continue
+
+              # A duplicate is tolerated only when its exact diagnostic identifies a
+              # platform role that the fresh local Supabase target already contains.
+              # Do not print the raw line or the role name: either may be sensitive.
+              if [[ "$line" =~ ^ERROR:[[:space:]]+42710:[[:space:]]+role[[:space:]]+\"([^\"]+)\"[[:space:]]+already[[:space:]]+exists$ ]]; then
+                role="${BASH_REMATCH[1]}"
+                if grep -Fxq -- "$role" "$expected_roles_file"; then
+                  echo "Role restore accepted category=expected_platform_role_duplicate sqlstate=42710"
+                  continue
+                fi
+                echo "::error::Role restore category=unexpected_duplicate_object sqlstate=42710"
+                validation_failed=1
+                continue
+              fi
+
+              if [[ "$line" =~ ^ERROR:[[:space:]]+([0-9A-Z]{5}): ]]; then
+                sqlstate="${BASH_REMATCH[1]}"
+                case "$sqlstate" in
+                  42501) category=insufficient_privilege ;;
+                  0LP01) category=invalid_grantor ;;
+                  42704) category=undefined_object ;;
+                  22023) category=invalid_parameter_value ;;
+                  42809) category=wrong_object_type ;;
+                  42710) category=unexpected_duplicate_object ;;
+                  *) category=incompatible_role_statement ;;
+                esac
+                echo "::error::Role restore category=$category sqlstate=$sqlstate"
+              else
+                echo "::error::Role restore category=unclassified sqlstate=unavailable"
+              fi
+              validation_failed=1
+            done < "$log_file"
+
+            (( validation_failed == 0 ))
+          }
 
           (cd "$backup_dir" && sha256sum --check --status SHA256SUMS)
           # The database image contains the Supabase-managed schemas, extensions, and
@@ -203,37 +250,41 @@ jobs:
             --command 'ALTER DATABASE postgres WITH ALLOW_CONNECTIONS true;' >/dev/null
           template_connections_blocked=0
 
-          # Roles are cluster-wide. A new Supabase target already has platform roles,
-          # so duplicate-role errors are accepted only for this local compatibility test.
-          # Any other role error fails the workflow. The raw role dump remains unchanged
-          # in the encrypted artifact for an actual recovery procedure.
+          # Prove the strict parser before applying a real role dump. Test output is
+          # private to the runner and is removed by cleanup.
+          mkdir -p "$role_parser_test_dir"
+          printf '%s\n' postgres > "$role_parser_test_dir/expected-roles"
+          printf '%s\n' 'ERROR:  42710: role "postgres" already exists' > "$role_parser_test_dir/expected-duplicate.log"
+          validate_role_restore_log "$role_parser_test_dir/expected-duplicate.log" "$role_parser_test_dir/expected-roles" > "$role_parser_test_dir/expected-duplicate.out" 2>&1 || {
+            echo "::error::Role restore parser rejected an expected platform role duplicate."
+            exit 1
+          }
+          printf '%s\n' 'ERROR:  42710: role "postgres" already exists' 'ERROR: diagnostic without SQLSTATE' > "$role_parser_test_dir/mixed-unclassified.log"
+          if validate_role_restore_log "$role_parser_test_dir/mixed-unclassified.log" "$role_parser_test_dir/expected-roles" > "$role_parser_test_dir/mixed-unclassified.out" 2>&1; then
+            echo "::error::Role restore parser accepted a mixed log with an unclassified error."
+            exit 1
+          fi
+          printf '%s\n' 'ERROR:  42710: extension "uuid-ossp" already exists' > "$role_parser_test_dir/non-role-duplicate.log"
+          if validate_role_restore_log "$role_parser_test_dir/non-role-duplicate.log" "$role_parser_test_dir/expected-roles" > "$role_parser_test_dir/non-role-duplicate.out" 2>&1; then
+            echo "::error::Role restore parser accepted a non-role duplicate object."
+            exit 1
+          fi
+          echo "Role restore parser synthetic tests passed."
+
+          # Roles are cluster-wide. Accept only an exact duplicate-role diagnostic for
+          # a known platform role that exists in the fresh local Supabase target. Any
+          # other error fails. The raw role dump remains unchanged in the encrypted
+          # artifact for an actual recovery procedure.
+          if ! docker exec "$container" psql -At --set ON_ERROR_STOP=1 -U postgres -d postgres \
+            --command "SELECT rolname FROM pg_roles WHERE rolname = ANY (ARRAY['anon', 'authenticated', 'authenticator', 'dashboard_user', 'pgbouncer', 'postgres', 'service_role', 'supabase_admin', 'supabase_auth_admin', 'supabase_functions_admin', 'supabase_net_admin', 'supabase_read_only_user', 'supabase_realtime_admin', 'supabase_replication_admin', 'supabase_storage_admin']) ORDER BY rolname;" > "$local_platform_roles" 2> "$local_roles_log"; then
+            echo "::error::Could not inventory local Supabase platform roles."
+            exit 1
+          fi
           if ! docker exec -i "$container" psql -v ON_ERROR_STOP=0 -v VERBOSITY=verbose -U postgres -d postgres < "$backup_dir/roles.sql" > "$role_log" 2>&1; then
             echo "::error::Role restore command could not run."
             exit 1
           fi
-          role_restore_failed=0
-          role_error_count=0
-          role_error_lines=$(grep -Ec '^ERROR:' "$role_log" || true)
-          while IFS= read -r sqlstate; do
-            ((role_error_count += 1))
-            case "$sqlstate" in
-              42710) category=duplicate_object ;;
-              42501) category=insufficient_privilege; role_restore_failed=1 ;;
-              0LP01) category=invalid_grantor; role_restore_failed=1 ;;
-              42704) category=undefined_object; role_restore_failed=1 ;;
-              22023) category=invalid_parameter_value; role_restore_failed=1 ;;
-              42809) category=wrong_object_type; role_restore_failed=1 ;;
-              *) category=incompatible_role_statement; role_restore_failed=1 ;;
-            esac
-            # Never print psql's diagnostic text: role names, password hashes, and
-            # SQL statements remain in the temporary log and are deleted by cleanup.
-            echo "::error::Role restore category=$category sqlstate=$sqlstate"
-          done < <(sed -nE 's/^ERROR:[[:space:]]+([0-9A-Z]{5}):.*/\1/p' "$role_log" | sort -u)
-          if (( role_error_lines > 0 && role_error_count == 0 )); then
-            echo "::error::Role restore category=unclassified sqlstate=unavailable"
-            exit 1
-          fi
-          if (( role_restore_failed )); then
+          if ! validate_role_restore_log "$role_log" "$local_platform_roles"; then
             exit 1
           fi
           docker exec -i "$container" psql --single-transaction --set ON_ERROR_STOP=1 -U postgres -d backup_restore_test < "$backup_dir/schema.sql"

@@ -207,12 +207,33 @@ jobs:
           # so duplicate-role errors are accepted only for this local compatibility test.
           # Any other role error fails the workflow. The raw role dump remains unchanged
           # in the encrypted artifact for an actual recovery procedure.
-          if ! docker exec -i "$container" psql -v ON_ERROR_STOP=0 -U postgres -d postgres < "$backup_dir/roles.sql" > "$role_log" 2>&1; then
+          if ! docker exec -i "$container" psql -v ON_ERROR_STOP=0 -v VERBOSITY=verbose -U postgres -d postgres < "$backup_dir/roles.sql" > "$role_log" 2>&1; then
             echo "::error::Role restore command could not run."
             exit 1
           fi
-          if grep -E '^ERROR:' "$role_log" | grep -Ev 'role ".*" already exists' >/dev/null; then
-            echo "::error::Role restore has a non-duplicate-role error."
+          role_restore_failed=0
+          role_error_count=0
+          role_error_lines=$(grep -Ec '^ERROR:' "$role_log" || true)
+          while IFS= read -r sqlstate; do
+            ((role_error_count += 1))
+            case "$sqlstate" in
+              42710) category=duplicate_object ;;
+              42501) category=insufficient_privilege; role_restore_failed=1 ;;
+              0LP01) category=invalid_grantor; role_restore_failed=1 ;;
+              42704) category=undefined_object; role_restore_failed=1 ;;
+              22023) category=invalid_parameter_value; role_restore_failed=1 ;;
+              42809) category=wrong_object_type; role_restore_failed=1 ;;
+              *) category=incompatible_role_statement; role_restore_failed=1 ;;
+            esac
+            # Never print psql's diagnostic text: role names, password hashes, and
+            # SQL statements remain in the temporary log and are deleted by cleanup.
+            echo "::error::Role restore category=$category sqlstate=$sqlstate"
+          done < <(sed -nE 's/^ERROR:[[:space:]]+([0-9A-Z]{5}):.*/\1/p' "$role_log" | sort -u)
+          if (( role_error_lines > 0 && role_error_count == 0 )); then
+            echo "::error::Role restore category=unclassified sqlstate=unavailable"
+            exit 1
+          fi
+          if (( role_restore_failed )); then
             exit 1
           fi
           docker exec -i "$container" psql --single-transaction --set ON_ERROR_STOP=1 -U postgres -d backup_restore_test < "$backup_dir/schema.sql"

@@ -12,14 +12,11 @@ export interface ExploreArticleDetail {
 }
 
 const articleLoaders = {
-  'quick-what-is-a-top-note': () => import('./explore-details/quickWhatIsATopNote'),
-  'study-why-citrus-smells-fresh': () => import('./explore-details/studyWhyCitrusSmellsFresh'),
+  'journal-welcome-to-perfun-lab': () => import('./explore-details/journalWelcomeToPerfunLab'),
+  'experiment-growing-combinations': () => import('./explore-details/experimentGrowingCombinations'),
+  'quick-fresh-is-not-always-citrus': () => import('./explore-details/quickFreshIsNotAlwaysCitrus'),
   'study-top-middle-base-notes': () => import('./explore-details/studyTopMiddleBaseNotes'),
-  'study-top-notes': () => import('./explore-details/studyTopNotes'),
-  'study-middle-notes': () => import('./explore-details/studyMiddleNotes'),
-  'study-base-notes': () => import('./explore-details/studyBaseNotes'),
-  'experiment-three-layers': () => import('./explore-details/experimentThreeLayers'),
-  'journal-curious-noses': () => import('./explore-details/journalCuriousNoses')
+  'study-fragrance-family': () => import('./explore-details/studyFragranceFamily')
 } as const
 
 export type ExploreArticleId = keyof typeof articleLoaders

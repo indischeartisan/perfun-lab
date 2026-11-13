@@ -61,7 +61,7 @@ function directArticleOrigin(articleId: string | null): ArticleOrigin {
 }
 
 function articleBackLabel(origin: ArticleOrigin) {
-  return origin === 'fresh' ? 'Back to Fresh From the Lab' : origin === 'study' ? 'Back to Lab Study' : 'Back to Explore'
+  return origin === 'fresh' ? 'Kembali ke Fresh From the Lab' : origin === 'study' ? 'Kembali ke Lab Study' : 'Kembali ke Explore'
 }
 
 function isComplete(selection: Selection): selection is CompleteSelection {
@@ -354,7 +354,7 @@ function WorkspaceLoading() {
 }
 
 function ExploreArticleLoading() {
-  return <div className="explore-article-loading" aria-busy="true"><p role="status">Opening the article…</p></div>
+  return <div className="explore-article-loading" aria-busy="true"><p role="status">Membuka artikel…</p></div>
 }
 
 function CustomerRouteLoading() {

@@ -8,19 +8,22 @@ import { FulfillmentPage } from './FulfillmentPage'
 import { AdminVendorWorkspacePanel } from '../components/AdminVendorWorkspacePanel'
 import { AdminVendorPaymentsPanel } from '../components/AdminVendorPaymentsPanel'
 import { AdminMoreMenu, AdminWorkspaceNavigation, type AdminWorkspaceTab } from '../components/WorkspaceNavigation'
-import { OperationsBottleSize, OperationsOrderCard, OperationsOrderHeader, OperationsStatusTabs } from '../components/OperationsPresentation'
+import { OperationsStatusTabs } from '../components/OperationsPresentation'
 import { TestRunsPanel } from '../components/TestRunsPanel'
+import { AdminOrderCard } from '../components/AdminOrderCard'
 
 const label = (value: string) => value.replaceAll('_', ' ')
 export function AdminPage({ userId }: { userId: string }) {
   const [tab, setTab] = useState<AdminWorkspaceTab>('Overview')
+  const [ordersStatus, setOrdersStatus] = useState<AdminOrdersTab>('all')
   const [operation, setOperation] = useState<'production' | 'fulfillment' | 'assignment'>('production')
+  const openOrders = (status: AdminOrdersTab = 'all') => { setOrdersStatus(status); setTab('Orders') }
   return <section className="app-screen admin-dashboard">
-    <header className="screen-title workspace-title"><span>PERFUN LAB OPERATIONS</span><h1>Good morning, Lab.</h1><p>A calm view of orders, production, and the work that needs you.</p></header>
+    <header className="screen-title workspace-title"><span>PERFUN LAB OPERATIONS</span><h1>Dashboard</h1><p>Pantau pesanan, produksi, dan pengiriman.</p></header>
     <AdminWorkspaceNavigation active={tab} onNavigate={setTab}/>
     <div className="admin-content" key={tab}>
-      {tab === 'Overview' || tab === 'Revenue' ? <Overview revenueOnly={tab === 'Revenue'} onOrders={() => setTab('Orders')}/> : null}
-      {tab === 'Orders' ? <><TestRunsPanel role="admin"/><AdminOrders/></> : null}
+      {tab === 'Overview' || tab === 'Revenue' ? <Overview revenueOnly={tab === 'Revenue'} onOrders={status => openOrders(status)}/> : null}
+      {tab === 'Orders' ? <><TestRunsPanel role="admin"/><AdminOrders initialStatus={ordersStatus}/></> : null}
       {tab === 'More' ? <AdminMoreMenu onNavigate={setTab}/> : null}
       {tab === 'Vendor Payments' ? <AdminVendorPaymentsPanel/> : null}
       {tab === 'Customers' ? <AdminCustomers/> : null}
@@ -41,56 +44,105 @@ function AdminOperations({ userId, operation, onOperation }: { userId: string; o
   ]}/>{operation === 'production' ? <ProductionPage userId={userId} role="admin"/> : operation === 'fulfillment' ? <FulfillmentPage role="admin"/> : <AdminVendorWorkspacePanel/>}</>
 }
 
-function Overview({ revenueOnly, onOrders }: { revenueOnly: boolean; onOrders: () => void }) {
+function Overview({ revenueOnly, onOrders }: { revenueOnly: boolean; onOrders: (status: AdminOrdersTab) => void }) {
   const { data, error, reload } = useAdminData(getAdminOverview, true)
-  const operations: Array<[keyof AdminOverview, string]> = [['orders_today', 'Orders today · WIB'], ['pending_payment', 'Pending payment'], ['paid_orders', 'Paid orders'], ['production_queued', 'Production jobs queued'], ['production_in_progress', 'Production jobs in progress'], ['ready_to_ship', 'Ready to ship'], ['shipped', 'Shipped'], ['delivered', 'Delivered']]
+  const [recentFilter, setRecentFilter] = useState<DashboardOrderFilter>('all')
+  const [dashboardRevision, setDashboardRevision] = useState(0)
+  const refreshDashboard = () => { setDashboardRevision(value => value + 1); reload() }
+  const operations: Array<[keyof AdminOverview, string]> = [['orders_today', 'Pesanan hari ini · WIB'], ['pending_payment', 'Pending payment'], ['paid_orders', 'Pesanan lunas · status saat ini'], ['production_queued', 'Production jobs queued'], ['production_in_progress', 'Production jobs in progress'], ['ready_to_ship', 'Ready to ship'], ['shipped', 'Sedang dikirim · status saat ini'], ['delivered', 'Selesai · status saat ini']]
   const revenue: Array<[keyof AdminOverview, string]> = [['paid_gross_sales', 'Paid gross sales'], ['discounts', 'Discounts'], ['shipping_collected', 'Shipping collected'], ['net_transaction_total', 'Net transaction total']]
   return <><AdminLoad error={error} loading={!data && !error} reload={reload}/>
     {data ? <>
-      {!revenueOnly ? <><section className="overview-section"><span className="admin-kicker">Needs attention</span><h2>Keep the queue moving</h2><div className="admin-metrics attention-metrics">{([operations[1], operations[3], operations[4], operations[5]]).map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</div></section><section className="overview-section"><span className="admin-kicker">Today at the Lab</span><h2>What is happening now</h2><div className="admin-metrics">{[operations[0], operations[2], ...operations.slice(6)].map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</div></section><RecentOrders onOrders={onOrders}/></> : null}
-      <h2>Revenue</h2><p className="admin-help">All-time orders currently Paid. Gross − discounts + shipping = net transaction total. Refunded orders are excluded; payment fees are not deducted.</p>
-      <div className="admin-metrics">{revenue.map(([key, title]) => <article key={key}><span>{title}</span><strong>{formatPrice(Number(data[key]))}</strong></article>)}</div>
+      {!revenueOnly ? <><section className="overview-section admin-needs-attention"><div className="operations-section-heading"><div><span className="admin-kicker">Needs Attention</span><h2>Pesanan yang perlu dipantau</h2></div><button type="button" className="admin-refresh-button" onClick={refreshDashboard}>Perbarui</button></div><div className="admin-attention-grid"><button type="button" className="admin-attention-card production" onClick={() => setRecentFilter('queue')}><span>Antrean produksi</span><strong>{data.production_queued}</strong><small>pesanan</small><b aria-hidden="true">→</b></button><button type="button" className="admin-attention-card ready" onClick={() => setRecentFilter('ready')}><span>Siap dikirim</span><strong>{data.ready_to_ship}</strong><small>pesanan</small><b aria-hidden="true">→</b></button><button type="button" className="admin-attention-card payment" onClick={() => setRecentFilter('unpaid')}><span>Menunggu pembayaran</span><strong>{data.pending_payment}</strong><small>pesanan</small><b aria-hidden="true">→</b></button></div></section><section className="overview-section admin-lower-metrics"><span className="admin-kicker">METRICS</span><h2>Today at the Lab</h2><div className="admin-metrics">{[operations[0], operations[2], ...operations.slice(6)].map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</div></section><section className="overview-section admin-revenue"><h2>Revenue</h2><p className="admin-help">All-time orders currently Paid. Gross − discounts + shipping = net transaction total. Refunded orders are excluded; payment fees are not deducted.</p><div className="admin-metrics">{revenue.map(([key, title]) => <article key={key}><span>{title}</span><strong>{formatPrice(Number(data[key]))}</strong></article>)}</div></section><RecentOrders key={`${recentFilter}:${dashboardRevision}`} filter={recentFilter} onFilter={setRecentFilter} onOrders={() => onOrders(recentFilter === 'queue' ? 'production' : recentFilter)}/></> : null}
+      {revenueOnly ? <section className="overview-section admin-revenue"><h2>Revenue</h2><p className="admin-help">All-time orders currently Paid. Gross − discounts + shipping = net transaction total. Refunded orders are excluded; payment fees are not deducted.</p><div className="admin-metrics">{revenue.map(([key, title]) => <article key={key}><span>{title}</span><strong>{formatPrice(Number(data[key]))}</strong></article>)}</div></section> : null}
       <p className="admin-help">Today follows Asia/Jakarta. Other counts show current status. Updated {new Date(data.as_of).toLocaleString()}.</p>
     </> : null}
   </>
 }
 
-const recentFilter: AdminOrderFilters = { search: '', payment: '', production: '', shipment: '', page: 0 }
-function RecentOrders({ onOrders }: { onOrders: () => void }) {
-  const load = useCallback(() => getAdminOrders(recentFilter), [])
+type DashboardOrderFilter = 'all' | 'unpaid' | 'queue' | 'production' | 'ready' | 'shipping' | 'complete'
+const dashboardTabs: Array<[DashboardOrderFilter, string]> = [['all', 'Semua'], ['unpaid', 'Belum bayar'], ['production', 'Produksi'], ['ready', 'Siap dikirim'], ['shipping', 'Sedang dikirim'], ['complete', 'Selesai']]
+const emptyAdminFilter: AdminOrderFilters = { search: '', payment: '', production: '', shipment: '', page: 0 }
+async function loadDashboardOrders(filter: DashboardOrderFilter) {
+  if (filter === 'queue') { const result = await getAdminOrders({ ...emptyAdminFilter, production: 'queued' }); return { ...result, rows: result.rows.slice(0, 5) } }
+  if (filter === 'production') {
+    const [queued, active] = await Promise.all([getAdminOrders({ ...emptyAdminFilter, production: 'queued' }), getAdminOrders({ ...emptyAdminFilter, production: 'in_production' })])
+    const rows = [...queued.rows, ...active.rows].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    return { rows: rows.slice(0, 5), count: queued.count + active.count }
+  }
+  const filters: Record<DashboardOrderFilter, AdminOrderFilters> = {
+    all: emptyAdminFilter,
+    unpaid: { ...emptyAdminFilter, payment: 'pending' },
+    ready: { ...emptyAdminFilter, shipment: 'ready_to_ship' },
+    shipping: { ...emptyAdminFilter, shipment: 'shipped' },
+    complete: { ...emptyAdminFilter, shipment: 'delivered' },
+    queue: { ...emptyAdminFilter, production: 'queued' },
+    production: emptyAdminFilter,
+  }
+  const result = await getAdminOrders(filters[filter])
+  return { ...result, rows: result.rows.slice(0, 5) }
+}
+function RecentOrders({ filter, onFilter, onOrders }: { filter: DashboardOrderFilter; onFilter: (filter: DashboardOrderFilter) => void; onOrders: () => void }) {
+  const load = useCallback(() => loadDashboardOrders(filter), [filter])
   const { data, error, reload } = useAdminData(load, true)
-  return <section className="overview-section"><div className="operations-section-heading"><h2>Recent Orders</h2><button type="button" onClick={onOrders}>View all</button></div><AdminLoad error={error} loading={!data && !error} reload={reload}/>{data?.rows.length === 0 ? <p>No orders yet.</p> : null}<div className="production-list admin-order-list">{data?.rows.slice(0, 3).map(order => <OperationsOrderCard key={order.id}><OperationsOrderHeader orderNumber={order.order_number} status={label(order.payment_status)} time={new Date(order.created_at).toLocaleString()}/><p><strong>{order.customer.name || 'Customer'}</strong></p><div className="workspace-item-sizes">{order.products.map((product, index) => <div key={index}><OperationsBottleSize volumeMl={product.volume_ml} bottleCount={product.bottle_count}/><span>Quantity: {product.quantity}</span></div>)}</div><strong>{formatPrice(order.grand_total)}</strong></OperationsOrderCard>)}</div></section>
+  return <section className="overview-section admin-recent-orders"><div className="operations-section-heading"><h2>Recent Orders</h2><button type="button" onClick={onOrders}>Lihat semua →</button></div><nav className="admin-order-tabs" aria-label="Filter pesanan terbaru">{dashboardTabs.map(([id, title]) => { const active = filter === id || id === 'production' && filter === 'queue'; return <button type="button" key={id} className={active ? 'active' : ''} aria-pressed={active} onClick={() => onFilter(id)}>{title}</button> })}</nav><AdminLoad error={error} loading={!data && !error} reload={reload} showRefresh={false}/>{data?.rows.length === 0 ? <p>Tidak ada pesanan dalam tahap ini.</p> : null}<div className="production-list admin-order-list">{data?.rows.map(order => <AdminOrderCard key={order.id} order={order} onDetail={onOrders}/>)}</div></section>
 }
 
-export function AdminLoad({ error, loading, reload }: { error: string; loading: boolean; reload: () => void }) {
-  return <div className="production-toolbar"><div>{error ? <p role="alert">{error}</p> : loading ? <p role="status">Loading…</p> : null}</div><button onClick={reload}>Refresh</button></div>
+export function AdminLoad({ error, loading, reload, showRefresh = true }: { error: string; loading: boolean; reload: () => void; showRefresh?: boolean }) {
+  return <div className="production-toolbar"><div>{error ? <p role="alert">{error}</p> : loading ? <p role="status">Loading…</p> : null}</div>{showRefresh ? <button onClick={reload}>Refresh</button> : null}</div>
 }
 export function AdminPagination({ count, page, onPage }: { count: number; page: number; onPage: (page: number) => void }) {
-  return <div className="production-pagination"><button disabled={page === 0} onClick={() => onPage(page - 1)}>Previous</button><span>{count} results · Page {page + 1}</span><button disabled={(page + 1) * 25 >= count} onClick={() => onPage(page + 1)}>Next</button></div>
+  return <div className="production-pagination"><button disabled={page === 0} onClick={() => onPage(page - 1)}>Sebelumnya</button><span>{count} results · Page {page + 1}</span><button disabled={(page + 1) * 5 >= count} onClick={() => onPage(page + 1)}>Berikutnya</button></div>
 }
-function AdminOrders() {
+function AdminOrders({ initialStatus = 'all' }: { initialStatus?: AdminOrdersTab }) {
   const initial: AdminOrderFilters = { search: '', payment: '', production: '', shipment: '', page: 0 }
   const [draft, setDraft] = useState(initial)
   const [filter, setFilter] = useState(initial)
-  return <><form className="admin-filters calm-order-toolbar" onSubmit={event => { event.preventDefault(); setFilter({ ...draft, page: 0 }) }}>
+  const [statusTab, setStatusTab] = useState<AdminOrdersTab>(initialStatus)
+  function selectStatus(next: AdminOrdersTab) {
+    setStatusTab(next)
+    setFilter({ ...draft, payment: '', production: '', shipment: '', page: 0 })
+  }
+  return <><nav className="admin-order-tabs admin-orders-status-tabs" aria-label="Filter status pesanan">{adminOrdersTabs.map(([id, title]) => <button type="button" key={id} className={statusTab === id ? 'active' : ''} aria-pressed={statusTab === id} onClick={() => selectStatus(id)}>{title}</button>)}</nav><form className="admin-filters calm-order-toolbar" onSubmit={event => { event.preventDefault(); setFilter({ ...draft, page: 0 }) }}>
     <label>Search orders or customer<input maxLength={100} value={draft.search} onChange={event => setDraft({ ...draft, search: event.target.value })}/></label>
     <details className="operations-filter-details"><summary>Status filters</summary>{([['payment', ['pending', 'paid', 'failed', 'expired', 'refunded']], ['production', ['not_started', 'queued', 'in_production', 'completed']], ['shipment', ['not_created', 'pending', 'ready_to_ship', 'shipped', 'delivered']]] as const).map(([key, options]) => <label key={key}>{label(key)} status<select value={draft[key]} onChange={event => setDraft({ ...draft, [key]: event.target.value })}><option value="">All</option>{options.map(value => <option key={value} value={value}>{label(value)}</option>)}</select></label>)}</details>
     <button type="submit">Apply filters</button>
-  </form><OrderResults key={JSON.stringify(filter)} filter={filter} onPage={page => setFilter(current => ({ ...current, page }))}/></>
+  </form><OrderResults key={`${JSON.stringify(filter)}:${statusTab}`} filter={filter} statusTab={statusTab} onPage={page => setFilter(current => ({ ...current, page }))}/></>
 }
-function OrderResults({ filter, onPage }: { filter: AdminOrderFilters; onPage: (page: number) => void }) {
-  const load = useCallback(() => getAdminOrders(filter), [filter])
+type AdminOrdersTab = 'all' | 'unpaid' | 'production' | 'ready' | 'shipping' | 'complete'
+const adminOrdersTabs: Array<[AdminOrdersTab, string]> = [['all', 'Semua'], ['unpaid', 'Belum bayar'], ['production', 'Produksi'], ['ready', 'Siap dikirim'], ['shipping', 'Sedang dikirim'], ['complete', 'Selesai']]
+async function loadAdminOrdersTab(tab: AdminOrdersTab, filter: AdminOrderFilters) {
+  const sourcePage = Math.floor(filter.page / 5)
+  const pageFilter = { ...filter, page: sourcePage }
+  if (tab === 'production') {
+    const [queued, active] = await Promise.all([
+      getAdminOrders({ ...pageFilter, payment: '', production: 'queued', shipment: '' }),
+      getAdminOrders({ ...pageFilter, payment: '', production: 'in_production', shipment: '' }),
+    ])
+    const rows = [...queued.rows, ...active.rows].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    return { rows: rows.slice((filter.page % 5) * 5, (filter.page % 5 + 1) * 5), count: queued.count + active.count }
+  }
+  const status: Record<Exclude<AdminOrdersTab, 'production'>, Partial<AdminOrderFilters>> = {
+    all: {},
+    unpaid: { payment: 'pending', production: '', shipment: '' },
+    ready: { payment: '', production: '', shipment: 'ready_to_ship' },
+    shipping: { payment: '', production: '', shipment: 'shipped' },
+    complete: { payment: '', production: '', shipment: 'delivered' },
+  }
+  const result = await getAdminOrders({ ...pageFilter, ...status[tab] })
+  return { ...result, rows: result.rows.slice((filter.page % 5) * 5, (filter.page % 5 + 1) * 5) }
+}
+function OrderResults({ filter, statusTab, onPage }: { filter: AdminOrderFilters; statusTab: AdminOrdersTab; onPage: (page: number) => void }) {
+  const load = useCallback(() => loadAdminOrdersTab(statusTab, filter), [filter, statusTab])
   const { data, error, reload } = useAdminData(load, true)
   return <><AdminLoad error={error} loading={!data && !error} reload={reload}/>
     {data?.rows.length === 0 ? <p>No matching orders.</p> : null}
-    <div className="production-list admin-order-list">{data?.rows.map(order => <OperationsOrderCard className="admin-order-card" key={order.id}>
-      <OperationsOrderHeader orderNumber={order.order_number} time={new Date(order.created_at).toLocaleString()} status={label(order.payment_status)}/>
-      <p><strong>{order.customer.name || 'Customer'}</strong> · {order.customer.email}</p>
-      <div className="workspace-item-sizes" aria-label="Bottle sizes">{order.products.map((product, index) => <div key={index}><strong>{product.label}</strong><OperationsBottleSize volumeMl={product.volume_ml} bottleCount={product.bottle_count}/><span>Order quantity: {product.quantity}</span></div>)}</div>
-      <dl className="admin-order-details"><div><dt>Grand total</dt><dd>{formatPrice(order.grand_total)}</dd></div><div><dt>Payment</dt><dd>{label(order.payment_status)}</dd></div><div><dt>Production</dt><dd>{label(order.production_status)} · {order.completed}/{order.item_count} jobs completed</dd></div><div><dt>Shipment</dt><dd>{label(order.shipment_status)}</dd></div></dl>
-    </OperationsOrderCard>)}</div>
+    <div className="production-list admin-order-list admin-orders-results-list">{data?.rows.map(order => <AdminOrdersResultCard key={order.id} order={order}/>)}</div>
     {data ? <AdminPagination count={data.count} page={filter.page} onPage={onPage}/> : null}
   </>
+}
+function AdminOrdersResultCard({ order }: { order: import('../lib/admin').AdminOrder }) {
+  return <AdminOrderCard order={order}/>
 }
 function AdminCustomers() {
   const [search, setSearch] = useState('')

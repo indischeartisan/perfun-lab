@@ -132,6 +132,7 @@ jobs:
             supabase/tests/shipping_address_consistency.sql
             supabase/tests/checkout_shipping_readiness.sql
             supabase/tests/admin.sql
+            supabase/tests/admin_order_recipe_snapshot.sql
             supabase/tests/vendor_assignment.sql
             supabase/tests/vendor_order_projection.sql
             supabase/tests/admin_testing_preflight.sql

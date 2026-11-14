@@ -10,7 +10,7 @@ import { AdminVendorPaymentsPanel } from '../components/AdminVendorPaymentsPanel
 import { AdminMoreMenu, AdminWorkspaceNavigation, type AdminWorkspaceTab } from '../components/WorkspaceNavigation'
 import { OperationsStatusTabs } from '../components/OperationsPresentation'
 import { TestRunsPanel } from '../components/TestRunsPanel'
-import { getNoteStickerAsset } from '../lib/noteAssets'
+import { AdminOrderCard } from '../components/AdminOrderCard'
 
 const label = (value: string) => value.replaceAll('_', ' ')
 export function AdminPage({ userId }: { userId: string }) {
@@ -86,34 +86,8 @@ async function loadDashboardOrders(filter: DashboardOrderFilter) {
 function RecentOrders({ filter, onFilter, onOrders }: { filter: DashboardOrderFilter; onFilter: (filter: DashboardOrderFilter) => void; onOrders: () => void }) {
   const load = useCallback(() => loadDashboardOrders(filter), [filter])
   const { data, error, reload } = useAdminData(load, true)
-  return <section className="overview-section admin-recent-orders"><div className="operations-section-heading"><h2>Recent Orders</h2><button type="button" onClick={onOrders}>Lihat semua →</button></div><nav className="admin-order-tabs" aria-label="Filter pesanan terbaru">{dashboardTabs.map(([id, title]) => { const active = filter === id || id === 'production' && filter === 'queue'; return <button type="button" key={id} className={active ? 'active' : ''} aria-pressed={active} onClick={() => onFilter(id)}>{title}</button> })}</nav><AdminLoad error={error} loading={!data && !error} reload={reload} showRefresh={false}/>{data?.rows.length === 0 ? <p>Tidak ada pesanan dalam tahap ini.</p> : null}<div className="production-list admin-order-list">{data?.rows.map(order => <AdminDashboardOrderCard key={order.id} order={order} onOrders={onOrders}/>)}</div></section>
+  return <section className="overview-section admin-recent-orders"><div className="operations-section-heading"><h2>Recent Orders</h2><button type="button" onClick={onOrders}>Lihat semua →</button></div><nav className="admin-order-tabs" aria-label="Filter pesanan terbaru">{dashboardTabs.map(([id, title]) => { const active = filter === id || id === 'production' && filter === 'queue'; return <button type="button" key={id} className={active ? 'active' : ''} aria-pressed={active} onClick={() => onFilter(id)}>{title}</button> })}</nav><AdminLoad error={error} loading={!data && !error} reload={reload} showRefresh={false}/>{data?.rows.length === 0 ? <p>Tidak ada pesanan dalam tahap ini.</p> : null}<div className="production-list admin-order-list">{data?.rows.map(order => <AdminOrderCard key={order.id} order={order} onDetail={onOrders}/>)}</div></section>
 }
-
-function adminProcessStatus(order: import('../lib/admin').AdminOrder) {
-  if (order.payment_status === 'pending') return 'Menunggu pembayaran'
-  if (order.shipment_status === 'delivered') return 'Selesai'
-  if (order.shipment_status === 'shipped') return 'Sedang dikirim'
-  if (order.shipment_status === 'ready_to_ship') return 'Siap dikirim'
-  if (order.production_status === 'in_production') return 'Sedang diracik'
-  if (order.production_status === 'queued') return 'Antrean produksi'
-  return 'Menunggu diracik'
-}
-function AdminDashboardOrderCard({ order, onOrders }: { order: import('../lib/admin').AdminOrder; onOrders: () => void }) {
-  const status = adminProcessStatus(order)
-  return <article className="admin-dashboard-order-card"><header><div><strong title={order.order_number}>{shortAdminOrderNumber(order.order_number)}</strong>{order.customer.name ? <span className="admin-dashboard-customer">Pemesan: {order.customer.name}</span> : null}<time>{new Date(order.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</time></div><b className={`admin-process-status ${order.shipment_status === 'delivered' ? 'complete' : order.production_status === 'in_production' ? 'production' : 'default'}`}>{status}</b></header><div className="admin-dashboard-order-products">{order.products.map((product, index) => <AdminDashboardProduct key={`${product.label}-${index}`} product={product}/>)}</div><footer><span>Total <strong>{formatPrice(order.grand_total)}</strong></span><button type="button" onClick={onOrders}>Lihat detail →</button></footer></article>
-}
-function AdminDashboardProduct({ product }: { product: import('../lib/admin').AdminOrder['products'][number] }) {
-  const title = product.bottle_count === 3 ? 'Play Set · Bundel 3 × 10 ml' : isUsableBlendLabel(product.label) ? product.label : null
-  const blends = product.blends?.length ? product.blends : [{ label: title, notes: product.notes }]
-  return <section className="admin-dashboard-product">{blends.length > 1 ? blends.map((blend, index) => <div className="admin-dashboard-blend" key={`${blend.label ?? title ?? 'parfum'}-${index}`}><strong className="admin-dashboard-blend-label">Parfum {index + 1}</strong><div className="admin-dashboard-product-heading"><strong>{blend.label ?? 'Racikan parfum'}</strong><span>{product.volume_ml} ml · Jumlah {product.quantity}</span></div><AdminDashboardNotes notes={blend.notes}/></div>) : <><div className="admin-dashboard-product-heading"><strong>{title ?? 'Racikan parfum'}</strong><span>{product.volume_ml} ml · Jumlah {product.quantity}</span></div><AdminDashboardNotes notes={product.notes}/></>}</section>
-}
-function AdminDashboardNotes({ notes }: { notes?: Array<{ phase: string; id?: string; name: string }> }) {
-  if (!notes?.length) return <p className="admin-dashboard-detail-missing">Detail racikan belum tersedia</p>
-  return <div className="admin-dashboard-notes">{(['top', 'middle', 'base'] as const).map(phase => { const note = notes.find(item => item.phase.toLowerCase() === phase); const asset = note?.id ? getNoteStickerAsset({ id: note.id }) : null; return <div key={phase}>{asset ? <img src={asset} alt=""/> : null}<strong>{note?.name ?? 'Detail racikan belum tersedia'}</strong></div> })}</div>
-}
-function shortAdminOrderNumber(value: string) { return value.length > 17 ? `${value.slice(0, 8)}…${value.slice(-5)}` : value }
-function paymentLabel(value: string) { return value === 'pending' ? 'Menunggu pembayaran' : value === 'paid' ? 'Lunas' : label(value) }
-function isUsableBlendLabel(value: string) { return Boolean(value.trim()) && !/^\d+\s*ml$/i.test(value.trim()) }
 
 export function AdminLoad({ error, loading, reload, showRefresh = true }: { error: string; loading: boolean; reload: () => void; showRefresh?: boolean }) {
   return <div className="production-toolbar"><div>{error ? <p role="alert">{error}</p> : loading ? <p role="status">Loading…</p> : null}</div>{showRefresh ? <button onClick={reload}>Refresh</button> : null}</div>
@@ -169,8 +143,7 @@ function OrderResults({ filter, statusTab, onPage }: { filter: AdminOrderFilters
   </>
 }
 function AdminOrdersResultCard({ order }: { order: import('../lib/admin').AdminOrder }) {
-  const status = adminProcessStatus(order)
-  return <article className="admin-orders-result-card"><header><div><strong title={order.order_number}>{shortAdminOrderNumber(order.order_number)}</strong><span>{order.customer.name || order.customer.email || 'Pemesan belum tersedia'}</span><time>{new Date(order.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</time></div><b className={`admin-process-status ${order.shipment_status === 'delivered' ? 'complete' : order.production_status === 'in_production' ? 'production' : 'default'}`}>{status}</b></header><div className="admin-orders-result-products">{order.products.map((product, index) => <AdminDashboardProduct key={`${product.label}-${index}`} product={product}/>)}</div><footer className="admin-orders-result-footer"><span>Total <strong>{formatPrice(order.grand_total)}</strong></span><span className="admin-orders-result-payment">Pembayaran <strong>{paymentLabel(order.payment_status)}</strong></span></footer></article>
+  return <AdminOrderCard order={order}/>
 }
 function AdminCustomers() {
   const [search, setSearch] = useState('')

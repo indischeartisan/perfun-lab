@@ -60,6 +60,19 @@
 :where(.customer-app) .bag-screen .bag-summary .make-another{background:transparent;color:#607a00;border:1px solid #789600}
 @media(max-width:760px){:where(.customer-app) .bag-screen .bag-list .bag-item{padding:16px;border-radius:12px}:where(.customer-app) .bag-screen .bag-notes{gap:8px;padding-inline:0}:where(.customer-app) .bag-screen .bag-note{gap:6px}:where(.customer-app) .bag-screen .bag-note img,:where(.customer-app) .bag-screen .bag-note-fallback{width:62px;height:62px}:where(.customer-app) .bag-screen .bag-note strong{font-size:10px}:where(.customer-app) .bag-screen .bag-price{flex-wrap:wrap}:where(.customer-app) .bag-screen .quantity{margin-left:auto}}
 
+/* Keep Bag controls readable at every card width. */
+:where(.customer-app) .bag-screen .quantity{display:flex;align-items:center;justify-content:center;min-height:46px;overflow:hidden}
+:where(.customer-app) .bag-screen .quantity>small,
+:where(.customer-app) .bag-screen .quantity>button,
+:where(.customer-app) .bag-screen .quantity>span{height:44px;display:flex;align-items:center;justify-content:center;line-height:1}
+:where(.customer-app) .bag-screen .quantity>small{padding:0 8px}
+:where(.customer-app) .bag-screen .quantity>button{width:38px;min-width:38px;padding:0}
+:where(.customer-app) .bag-screen .quantity>span{width:28px;min-width:28px}
+@media(max-width:760px){
+  :where(.customer-app) .bag-screen .bag-summary{margin-top:16px}
+  :where(.customer-app) .bag-screen .bag-list{row-gap:16px}
+}
+
 :where(.customer-app) .checkout-screen{font-family:'Nunito Sans',sans-serif;padding-top:28px}
 :where(.customer-app) .checkout-screen .screen-title{margin-bottom:24px}
 :where(.customer-app) .checkout-unified-flow{max-width:100%;margin:0;display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px 28px;align-items:start}

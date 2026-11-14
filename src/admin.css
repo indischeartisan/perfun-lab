@@ -304,3 +304,8 @@
 .admin-orders-status-tabs{display:flex;gap:8px;margin:0 0 16px;overflow-x:auto;padding-bottom:3px;scrollbar-width:none}.admin-orders-status-tabs::-webkit-scrollbar{display:none}.admin-orders-status-tabs button{flex:0 0 auto;min-height:42px;padding:0 16px;border:1px solid #e1ddd4;border-radius:11px;background:#fffdf8;color:#30352b;font-weight:800;white-space:nowrap}.admin-orders-status-tabs button.active{border-color:#bfd66c;background:#eff7d7;color:#4e680e}
 .admin-orders-result-footer{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:12px 18px;border-top:1px solid #e8e3da;background:#faf8f2;color:#777970;font-size:11px}.admin-orders-result-footer strong{margin-left:4px;color:#30352b;font-size:13px}.admin-orders-result-footer .admin-orders-result-payment strong{padding:4px 8px;border-radius:999px;background:#eff5d8;color:#55751b;font-size:11px}
 @media(max-width:767px){.admin-orders-result-footer{display:grid;grid-template-columns:1fr auto;gap:9px;padding:12px 15px}}
+
+/* Keep order footers content-sized instead of stretching the card. */
+.admin-dashboard .admin-dashboard-order-card>footer{min-height:0;padding-block:10px}.admin-dashboard .admin-dashboard-order-card>footer button{min-height:34px}
+.admin-orders-result-footer{min-height:0;padding-block:10px}
+@media(max-width:767px){.admin-dashboard .admin-dashboard-order-card>footer{gap:7px;padding-block:9px}.admin-orders-result-footer{padding-block:9px}}

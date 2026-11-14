@@ -436,4 +436,5 @@ body{background:var(--paper)}
 .builder-core .bottle>.sticker-stack .bottle-sticker-asset.sticker-0 img{transform:translateX(0)}
 .builder-core .bottle>.sticker-stack .bottle-sticker-asset.sticker-1 img{transform:translateX(0)}
 .builder-core .bottle>.sticker-stack .bottle-sticker-asset.sticker-2 img{transform:translateX(0)}
-.more-page .more-list i{background:#eff5d8}
+.more-page .more-list i{background:#789600;color:#fff}
+.more-page .more-list i svg{color:#fff}

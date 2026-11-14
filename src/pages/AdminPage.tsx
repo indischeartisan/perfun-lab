@@ -122,14 +122,38 @@ function AdminOrders() {
   const initial: AdminOrderFilters = { search: '', payment: '', production: '', shipment: '', page: 0 }
   const [draft, setDraft] = useState(initial)
   const [filter, setFilter] = useState(initial)
-  return <><form className="admin-filters calm-order-toolbar" onSubmit={event => { event.preventDefault(); setFilter({ ...draft, page: 0 }) }}>
+  const [statusTab, setStatusTab] = useState<AdminOrdersTab>('all')
+  function selectStatus(next: AdminOrdersTab) {
+    setStatusTab(next)
+    setFilter({ ...draft, payment: '', production: '', shipment: '', page: 0 })
+  }
+  return <><nav className="admin-order-tabs admin-orders-status-tabs" aria-label="Filter status pesanan">{adminOrdersTabs.map(([id, title]) => <button type="button" key={id} className={statusTab === id ? 'active' : ''} aria-pressed={statusTab === id} onClick={() => selectStatus(id)}>{title}</button>)}</nav><form className="admin-filters calm-order-toolbar" onSubmit={event => { event.preventDefault(); setFilter({ ...draft, page: 0 }) }}>
     <label>Search orders or customer<input maxLength={100} value={draft.search} onChange={event => setDraft({ ...draft, search: event.target.value })}/></label>
     <details className="operations-filter-details"><summary>Status filters</summary>{([['payment', ['pending', 'paid', 'failed', 'expired', 'refunded']], ['production', ['not_started', 'queued', 'in_production', 'completed']], ['shipment', ['not_created', 'pending', 'ready_to_ship', 'shipped', 'delivered']]] as const).map(([key, options]) => <label key={key}>{label(key)} status<select value={draft[key]} onChange={event => setDraft({ ...draft, [key]: event.target.value })}><option value="">All</option>{options.map(value => <option key={value} value={value}>{label(value)}</option>)}</select></label>)}</details>
     <button type="submit">Apply filters</button>
-  </form><OrderResults key={JSON.stringify(filter)} filter={filter} onPage={page => setFilter(current => ({ ...current, page }))}/></>
+  </form><OrderResults key={`${JSON.stringify(filter)}:${statusTab}`} filter={filter} statusTab={statusTab} onPage={page => setFilter(current => ({ ...current, page }))}/></>
 }
-function OrderResults({ filter, onPage }: { filter: AdminOrderFilters; onPage: (page: number) => void }) {
-  const load = useCallback(() => getAdminOrders(filter), [filter])
+type AdminOrdersTab = 'all' | 'unpaid' | 'production' | 'ready' | 'shipping' | 'complete'
+const adminOrdersTabs: Array<[AdminOrdersTab, string]> = [['all', 'Semua'], ['unpaid', 'Belum bayar'], ['production', 'Produksi'], ['ready', 'Siap dikirim'], ['shipping', 'Sedang dikirim'], ['complete', 'Selesai']]
+async function loadAdminOrdersTab(tab: AdminOrdersTab, filter: AdminOrderFilters) {
+  if (tab === 'production') {
+    const [queued, active] = await Promise.all([
+      getAdminOrders({ ...filter, payment: '', production: 'queued', shipment: '' }),
+      getAdminOrders({ ...filter, payment: '', production: 'in_production', shipment: '' }),
+    ])
+    return { rows: [...queued.rows, ...active.rows].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()), count: queued.count + active.count }
+  }
+  const status: Record<Exclude<AdminOrdersTab, 'production'>, Partial<AdminOrderFilters>> = {
+    all: {},
+    unpaid: { payment: 'pending', production: '', shipment: '' },
+    ready: { payment: '', production: '', shipment: 'ready_to_ship' },
+    shipping: { payment: '', production: '', shipment: 'shipped' },
+    complete: { payment: '', production: '', shipment: 'delivered' },
+  }
+  return getAdminOrders({ ...filter, ...status[tab] })
+}
+function OrderResults({ filter, statusTab, onPage }: { filter: AdminOrderFilters; statusTab: AdminOrdersTab; onPage: (page: number) => void }) {
+  const load = useCallback(() => loadAdminOrdersTab(statusTab, filter), [filter, statusTab])
   const { data, error, reload } = useAdminData(load, true)
   return <><AdminLoad error={error} loading={!data && !error} reload={reload}/>
     {data?.rows.length === 0 ? <p>No matching orders.</p> : null}
@@ -139,7 +163,7 @@ function OrderResults({ filter, onPage }: { filter: AdminOrderFilters; onPage: (
 }
 function AdminOrdersResultCard({ order }: { order: import('../lib/admin').AdminOrder }) {
   const status = adminProcessStatus(order)
-  return <article className="admin-orders-result-card"><header><div><strong title={order.order_number}>{shortAdminOrderNumber(order.order_number)}</strong><span>{order.customer.name || order.customer.email || 'Pemesan belum tersedia'}</span><time>{new Date(order.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</time></div><b className={`admin-process-status ${order.shipment_status === 'delivered' ? 'complete' : order.production_status === 'in_production' ? 'production' : 'default'}`}>{status}</b></header><div className="admin-orders-result-products">{order.products.map((product, index) => <AdminDashboardProduct key={`${product.label}-${index}`} product={product}/>)}</div><dl className="admin-orders-result-summary"><div><dt>Total</dt><dd>{formatPrice(order.grand_total)}</dd></div><div><dt>Pembayaran</dt><dd>{paymentLabel(order.payment_status)}</dd></div><div><dt>Produksi</dt><dd>{label(order.production_status)} · {order.completed}/{order.item_count}</dd></div><div><dt>Pengiriman</dt><dd>{label(order.shipment_status)}</dd></div></dl></article>
+  return <article className="admin-orders-result-card"><header><div><strong title={order.order_number}>{shortAdminOrderNumber(order.order_number)}</strong><span>{order.customer.name || order.customer.email || 'Pemesan belum tersedia'}</span><time>{new Date(order.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</time></div><b className={`admin-process-status ${order.shipment_status === 'delivered' ? 'complete' : order.production_status === 'in_production' ? 'production' : 'default'}`}>{status}</b></header><div className="admin-orders-result-products">{order.products.map((product, index) => <AdminDashboardProduct key={`${product.label}-${index}`} product={product}/>)}</div><footer className="admin-orders-result-footer"><span>Total <strong>{formatPrice(order.grand_total)}</strong></span><span className="admin-orders-result-payment">Pembayaran <strong>{paymentLabel(order.payment_status)}</strong></span></footer></article>
 }
 function AdminCustomers() {
   const [search, setSearch] = useState('')

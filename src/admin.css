@@ -294,3 +294,4 @@
 @media (min-width:768px){.workspace-app .vendor-production-card{padding:16px}}
 
 .admin-dashboard .admin-dashboard-order-card>header strong{display:block;max-width:min(62vw,260px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.admin-dashboard .admin-dashboard-order-card>footer{background:#fffdf8}.admin-dashboard .admin-dashboard-blend+.admin-dashboard-blend{margin-top:10px;padding-top:10px;border-top:1px solid #e8e3da}.admin-dashboard .admin-dashboard-blend-label{display:inline-block;margin-bottom:6px;padding:4px 9px;border-radius:999px;background:#f4eee5;font-size:10px}.admin-dashboard .admin-dashboard-detail-missing{margin:12px 0 0;color:#777970;font-size:12px;font-style:italic}
+.admin-dashboard .admin-dashboard-customer{display:block;color:#30352b;font-size:12px;font-weight:700}

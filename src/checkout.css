@@ -75,6 +75,11 @@
   :where(.customer-app) .bag-screen .bag-list{row-gap:16px}
 }
 
+:where(.customer-app) .checkout-summary .shipping-before-voucher dd,
+:where(.customer-app) .checkout-summary .shipping-voucher dd{font-weight:600}
+:where(.customer-app) .checkout-summary .shipping-voucher dt,
+:where(.customer-app) .checkout-summary .shipping-voucher dd{color:#55751b}
+
 :where(.customer-app) .checkout-screen{font-family:'Nunito Sans',sans-serif;padding-top:28px}
 :where(.customer-app) .checkout-screen .screen-title{margin-bottom:24px}
 :where(.customer-app) .checkout-unified-flow{max-width:100%;margin:0;display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px 28px;align-items:start}

@@ -8,7 +8,7 @@ import { FulfillmentPage } from './FulfillmentPage'
 import { AdminVendorWorkspacePanel } from '../components/AdminVendorWorkspacePanel'
 import { AdminVendorPaymentsPanel } from '../components/AdminVendorPaymentsPanel'
 import { AdminMoreMenu, AdminWorkspaceNavigation, type AdminWorkspaceTab } from '../components/WorkspaceNavigation'
-import { OperationsBottleSize, OperationsOrderCard, OperationsOrderHeader, OperationsStatusTabs } from '../components/OperationsPresentation'
+import { OperationsStatusTabs } from '../components/OperationsPresentation'
 import { TestRunsPanel } from '../components/TestRunsPanel'
 import { getNoteStickerAsset } from '../lib/noteAssets'
 
@@ -133,14 +133,13 @@ function OrderResults({ filter, onPage }: { filter: AdminOrderFilters; onPage: (
   const { data, error, reload } = useAdminData(load, true)
   return <><AdminLoad error={error} loading={!data && !error} reload={reload}/>
     {data?.rows.length === 0 ? <p>No matching orders.</p> : null}
-    <div className="production-list admin-order-list">{data?.rows.map(order => <OperationsOrderCard className="admin-order-card" key={order.id}>
-      <OperationsOrderHeader orderNumber={order.order_number} time={new Date(order.created_at).toLocaleString()} status={label(order.payment_status)}/>
-      <p><strong>{order.customer.name || 'Customer'}</strong> · {order.customer.email}</p>
-      <div className="workspace-item-sizes" aria-label="Bottle sizes">{order.products.map((product, index) => <div key={index}><strong>{product.label}</strong><OperationsBottleSize volumeMl={product.volume_ml} bottleCount={product.bottle_count}/><span>Order quantity: {product.quantity}</span></div>)}</div>
-      <dl className="admin-order-details"><div><dt>Grand total</dt><dd>{formatPrice(order.grand_total)}</dd></div><div><dt>Payment</dt><dd>{label(order.payment_status)}</dd></div><div><dt>Production</dt><dd>{label(order.production_status)} · {order.completed}/{order.item_count} jobs completed</dd></div><div><dt>Shipment</dt><dd>{label(order.shipment_status)}</dd></div></dl>
-    </OperationsOrderCard>)}</div>
+    <div className="production-list admin-order-list admin-orders-results-list">{data?.rows.map(order => <AdminOrdersResultCard key={order.id} order={order}/>)}</div>
     {data ? <AdminPagination count={data.count} page={filter.page} onPage={onPage}/> : null}
   </>
+}
+function AdminOrdersResultCard({ order }: { order: import('../lib/admin').AdminOrder }) {
+  const status = adminProcessStatus(order)
+  return <article className="admin-orders-result-card"><header><div><strong title={order.order_number}>{shortAdminOrderNumber(order.order_number)}</strong><span>{order.customer.name || order.customer.email || 'Pemesan belum tersedia'}</span><time>{new Date(order.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</time></div><b className={`admin-process-status ${order.shipment_status === 'delivered' ? 'complete' : order.production_status === 'in_production' ? 'production' : 'default'}`}>{status}</b></header><div className="admin-orders-result-products">{order.products.map((product, index) => <AdminDashboardProduct key={`${product.label}-${index}`} product={product}/>)}</div><dl className="admin-orders-result-summary"><div><dt>Total</dt><dd>{formatPrice(order.grand_total)}</dd></div><div><dt>Pembayaran</dt><dd>{paymentLabel(order.payment_status)}</dd></div><div><dt>Produksi</dt><dd>{label(order.production_status)} · {order.completed}/{order.item_count}</dd></div><div><dt>Pengiriman</dt><dd>{label(order.shipment_status)}</dd></div></dl></article>
 }
 function AdminCustomers() {
   const [search, setSearch] = useState('')

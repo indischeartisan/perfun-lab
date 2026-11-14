@@ -58,6 +58,8 @@
 :where(.customer-app) .bag-screen .bag-summary>button{border-radius:8px;background:#789600;color:#fff;font-family:'Nunito Sans',sans-serif}
 :where(.customer-app) .bag-screen .bag-summary>button:disabled{background:#d7d9d2;color:#777a73}
 :where(.customer-app) .bag-screen .bag-summary .make-another{background:transparent;color:#607a00;border:1px solid #789600}
+:where(.customer-app) .bag-screen .screen-empty>i{background:#eff5d8}
+:where(.customer-app) .bag-screen .screen-empty>button{border:0;border-radius:8px;background:#789600;color:#fff;font:800 11px/1 'Nunito Sans',sans-serif;padding:15px 22px;cursor:pointer}
 @media(max-width:760px){:where(.customer-app) .bag-screen .bag-list .bag-item{padding:16px;border-radius:12px}:where(.customer-app) .bag-screen .bag-notes{gap:8px;padding-inline:0}:where(.customer-app) .bag-screen .bag-note{gap:6px}:where(.customer-app) .bag-screen .bag-note img,:where(.customer-app) .bag-screen .bag-note-fallback{width:62px;height:62px}:where(.customer-app) .bag-screen .bag-note strong{font-size:10px}:where(.customer-app) .bag-screen .bag-price{flex-wrap:wrap}:where(.customer-app) .bag-screen .quantity{margin-left:auto}}
 
 /* Keep Bag controls readable at every card width. */

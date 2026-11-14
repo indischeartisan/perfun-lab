@@ -16,3 +16,74 @@
 /* Order confirmation: keeps payment state intact while improving scanability. */
 .confirmation-screen{max-width:680px;padding-top:14px}.confirmation-intro{text-align:center}.confirmation-mark{width:64px;height:64px;margin:0 auto 20px}.confirmation-intro>span,.confirmation-card>div>span,.payment-actions-heading>span{display:block;font:700 9px Manrope;letter-spacing:.16em;color:#68714f}.confirmation-screen h1{font-size:clamp(44px,7vw,68px);line-height:.98;margin:12px 0}.confirmation-intro>p{max-width:410px;margin:0 auto;font:14px/1.6 Manrope;color:#656861}.confirmation-card{margin:30px auto 18px;border:1px solid var(--line);border-radius:20px;background:#fffdf7;padding:20px;display:grid;gap:20px}.confirmation-status{display:flex;justify-content:space-between;align-items:center;gap:14px;padding-bottom:16px;border-bottom:1px solid var(--line)}.confirmation-status>strong{font:700 11px Manrope;color:#58721c}.confirmation-total{display:grid;gap:7px;text-align:center}.confirmation-total>strong{font-size:clamp(29px,8vw,40px);letter-spacing:-.055em}.confirmation-number{display:grid;gap:8px;padding:14px;border-radius:13px;background:#f0ede5}.confirmation-number>div{display:flex;align-items:center;justify-content:space-between;gap:12px}.confirmation-number strong{min-width:0;font:700 13px/1.4 Manrope;overflow-wrap:anywhere}.confirmation-number button{flex:none;display:inline-flex;align-items:center;gap:5px;border:0;border-bottom:1px solid var(--ink);background:transparent;padding:4px 0;font:700 9px Manrope;cursor:pointer}.confirmation-number button svg{width:14px}.confirmation-number details{text-align:left;font:10px/1.5 Manrope;color:#656861}.confirmation-number summary{cursor:pointer}.confirmation-number code{display:block;overflow-wrap:anywhere;margin-top:6px;font:10px/1.5 Manrope}.payment-actions{margin:0 auto;padding:20px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.payment-actions-heading h2{margin:7px 0;font-size:22px}.payment-actions-heading p{margin:0;font:12px/1.5 Manrope;color:#656861}.payment-label{margin:17px 0 0;font:11px Manrope}.payment-label strong{text-transform:capitalize}.payment-actions>div:last-child{display:grid;gap:10px;margin-top:16px}.payment-actions .orders-build{width:100%;margin:0;padding:16px}.payment-actions button:not(.orders-build){border:1px solid var(--ink);border-radius:4px;background:transparent;padding:13px;font:700 9px Manrope;cursor:pointer}.payment-error{margin-top:16px;padding:13px;border-radius:12px;background:#fff0e8;color:#7e3320;text-align:left}.payment-error strong{font:700 12px Manrope}.payment-error p,.payment-error small{display:block;margin:5px 0 0;font:11px/1.45 Manrope}.payment-error small{color:#7c594d}.confirmation-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-top:22px}.confirmation-actions button{border:1px solid var(--ink);border-radius:4px;background:transparent;padding:14px 18px;font:700 9px Manrope;cursor:pointer}.confirmation-actions .confirmation-orders{background:var(--ink);color:white;border-bottom:3px solid var(--orange)}.confirmation-actions .confirmation-build{border:0;border-bottom:1px solid currentColor;padding-inline:4px;color:#656861}
 @media(max-width:760px){.confirmation-card{padding:17px}.confirmation-actions{display:grid;grid-template-columns:1fr}.confirmation-actions button{justify-content:center}.confirmation-actions .confirmation-build{justify-self:center}.payment-actions{padding:18px 0}}
+
+/* Finishing UI: Bag cards keep main's selectedIds/toggleSelection/selectAll contract. */
+:where(.customer-app) .bag-screen{font-family:'Nunito Sans',sans-serif}
+:where(.customer-app) .bag-screen .bag-list{display:grid;gap:16px}
+:where(.customer-app) .bag-screen .bag-select-all{display:flex;align-items:center;gap:9px;margin:0 4px;padding:16px 0 14px;border-bottom:1px solid #e2ded5;font:800 11px/1.2 'Nunito Sans',sans-serif;color:#607a00;cursor:pointer}
+:where(.customer-app) .bag-screen .bag-select-all small{margin-left:auto;font:400 10px/1.2 'Nunito Sans',sans-serif;color:#777970}
+:where(.customer-app) .bag-screen .bag-select-all input,
+:where(.customer-app) .bag-screen .bag-item-select input{appearance:none;width:18px;height:18px;min-width:18px;margin:0;border:1.5px solid #a8aaa2;border-radius:50%;background:transparent;cursor:pointer}
+:where(.customer-app) .bag-screen .bag-select-all input:checked,
+:where(.customer-app) .bag-screen .bag-item-select input:checked{border-color:#789600;background:radial-gradient(circle at center,#789600 0 5px,transparent 5.5px)}
+:where(.customer-app) .bag-screen .bag-item{display:block;padding:20px;border:1px solid #ded8cc;border-radius:14px;background:#fbf8f0}
+:where(.customer-app) .bag-screen .bag-item-selected{background:#fbfdf2;border-color:#cbd8a7}
+:where(.customer-app) .bag-screen .bag-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+:where(.customer-app) .bag-screen .bag-item-select{display:flex;align-items:center;gap:10px;min-width:0;cursor:pointer}
+:where(.customer-app) .bag-screen .bag-item-select input:focus-visible,
+:where(.customer-app) .bag-screen .bag-select-all input:focus-visible{outline:2px solid #9caf43;outline-offset:2px}
+:where(.customer-app) .bag-screen .bag-item-info h3{margin:0;font:800 20px/1.2 'Nunito Sans',sans-serif;color:var(--ink)}
+:where(.customer-app) .bag-screen .bag-remove-top{display:inline-flex;align-items:center;gap:4px;border:0;background:transparent;color:#777970;font:700 11px/1 'Nunito Sans',sans-serif;cursor:pointer;white-space:nowrap}
+:where(.customer-app) .bag-screen .bag-notes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;gap:18px;padding:4px 4px 18px}
+:where(.customer-app) .bag-screen .bag-note{display:flex;min-width:0;flex-direction:column;align-items:center;gap:8px;text-align:center}
+:where(.customer-app) .bag-screen .bag-note img,:where(.customer-app) .bag-screen .bag-note-fallback{display:block;width:74px;height:74px;object-fit:contain}
+:where(.customer-app) .bag-screen .bag-note strong{font:700 12px/1.2 'Nunito Sans',sans-serif;overflow-wrap:anywhere}
+:where(.customer-app) .bag-screen .bag-play-set-notes{display:grid;gap:8px;padding-bottom:18px}
+:where(.customer-app) .bag-screen .bag-play-set-group{padding:0 0 12px;border-bottom:1px solid #ded9cf}
+:where(.customer-app) .bag-screen .bag-play-set-group:last-child{padding-bottom:0;border-bottom:0}
+:where(.customer-app) .bag-screen .bag-play-set-label{display:block;margin:0 4px 7px;font:800 10px/1 'Nunito Sans',sans-serif;letter-spacing:.08em;color:#607a00}
+:where(.customer-app) .bag-screen .bag-controls{display:block;margin:0;padding-top:14px;border-top:1px solid #ded9cf}
+:where(.customer-app) .bag-screen .bag-meta{width:100%;display:flex;align-items:center}
+:where(.customer-app) .bag-screen .bag-size-control{display:grid;gap:7px;width:100%}
+:where(.customer-app) .bag-screen .bag-control-label{font:800 11px/1.2 'Nunito Sans',sans-serif;color:#555952}
+:where(.customer-app) .bag-screen .size-mini{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+:where(.customer-app) .bag-screen .size-mini button{min-height:46px;display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid #d4d1c7;border-radius:8px;background:#fffdf8;color:#555952;font:700 12px/1 'Nunito Sans',sans-serif}
+:where(.customer-app) .bag-screen .size-mini button.active{background:#eff5d8;border-color:#789600;color:#607a00}
+:where(.customer-app) .bag-screen .bag-price{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid #ded9cf}
+:where(.customer-app) .bag-screen .bag-price>strong{font:800 15px/1.2 'Nunito Sans',sans-serif}
+:where(.customer-app) .bag-screen .quantity{min-height:46px;border:1px solid #d4d1c7;border-radius:8px;background:#fffdf8}
+:where(.customer-app) .bag-screen .quantity>small{font:800 11px/1 'Nunito Sans',sans-serif;color:#555952}
+:where(.customer-app) .bag-screen .quantity button{min-width:38px;min-height:44px}
+:where(.customer-app) .bag-screen .bag-summary{margin-top:0;border:1px solid #d7d1c5;border-radius:14px;background:#ebe7de;box-shadow:none}
+:where(.customer-app) .bag-screen .bag-summary>button{border-radius:8px;background:#789600;color:#fff;font-family:'Nunito Sans',sans-serif}
+:where(.customer-app) .bag-screen .bag-summary>button:disabled{background:#d7d9d2;color:#777a73}
+:where(.customer-app) .bag-screen .bag-summary .make-another{background:transparent;color:#607a00;border:1px solid #789600}
+@media(max-width:760px){:where(.customer-app) .bag-screen .bag-list .bag-item{padding:16px;border-radius:12px}:where(.customer-app) .bag-screen .bag-notes{gap:8px;padding-inline:0}:where(.customer-app) .bag-screen .bag-note{gap:6px}:where(.customer-app) .bag-screen .bag-note img,:where(.customer-app) .bag-screen .bag-note-fallback{width:62px;height:62px}:where(.customer-app) .bag-screen .bag-note strong{font-size:10px}:where(.customer-app) .bag-screen .bag-price{flex-wrap:wrap}:where(.customer-app) .bag-screen .quantity{margin-left:auto}}
+
+:where(.customer-app) .checkout-screen{font-family:'Nunito Sans',sans-serif;padding-top:28px}
+:where(.customer-app) .checkout-screen .screen-title{margin-bottom:24px}
+:where(.customer-app) .checkout-unified-flow{max-width:100%;margin:0;display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px 28px;align-items:start}
+:where(.customer-app) .checkout-unified-flow .checkout-address-card,
+:where(.customer-app) .checkout-unified-flow .checkout-section,
+:where(.customer-app) .checkout-unified-flow .shipping-picker,
+:where(.customer-app) .checkout-unified-flow .checkout-summary{border:1px solid #ded8cc;border-radius:14px;background:#fbf8f0;box-shadow:none}
+:where(.customer-app) .checkout-unified-flow .checkout-address-card{grid-column:1;padding:20px}
+:where(.customer-app) .checkout-unified-flow .checkout-section{grid-column:1;padding:20px;border-top:1px solid #ded8cc}
+:where(.customer-app) .checkout-unified-flow .shipping-picker{grid-column:1;margin:0;padding:20px}
+:where(.customer-app) .checkout-unified-flow .checkout-summary{grid-column:2;grid-row:1 / span 4;position:sticky;top:92px;width:auto;padding:20px}
+:where(.customer-app) .checkout-unified-flow .checkout-section>span,
+:where(.customer-app) .checkout-unified-flow .checkout-summary>span{font:800 10px/1.2 'Nunito Sans',sans-serif;letter-spacing:.08em;color:#607a00}
+:where(.customer-app) .checkout-unified-flow .checkout-address-card h2{font:800 20px/1.2 'Nunito Sans',sans-serif;color:var(--ink)}
+:where(.customer-app) .checkout-unified-flow .checkout-address-card header button{border-color:#789600;border-radius:8px;color:#607a00;font-family:'Nunito Sans',sans-serif}
+:where(.customer-app) .checkout-unified-flow .checkout-section>p{font:400 11px/1.5 'Nunito Sans',sans-serif;color:#686b64}
+:where(.customer-app) .checkout-unified-flow .checkout-summary dl>div{font:400 11px/1.3 'Nunito Sans',sans-serif}
+:where(.customer-app) .checkout-unified-flow .checkout-summary dl .total{font:800 17px/1.2 'Nunito Sans',sans-serif}
+:where(.customer-app) .checkout-unified-flow .checkout-summary dl .total dd{font-size:21px}
+:where(.customer-app) .checkout-unified-flow .checkout-summary>button:not(.checkout-retry){min-height:48px;border:0;border-radius:8px;background:#789600;color:#fff;font:800 11px/1 'Nunito Sans',sans-serif}
+:where(.customer-app) .checkout-unified-flow .checkout-summary>small{font:400 10px/1.45 'Nunito Sans',sans-serif;color:#777970}
+:where(.customer-app) .checkout-sticker-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px}
+:where(.customer-app) .checkout-sticker-row>span{display:flex;min-width:0;flex-direction:column;align-items:center;gap:3px;text-align:center}
+:where(.customer-app) .checkout-sticker-art{display:grid;place-items:center;width:42px;height:42px}
+:where(.customer-app) .checkout-sticker-art img{display:block;width:100%;height:100%;object-fit:contain}
+:where(.customer-app) .checkout-sticker-row small{max-width:100%;font:400 9px/1.2 'Nunito Sans',sans-serif!important;overflow-wrap:anywhere;text-align:center}
+@media(max-width:760px){:where(.customer-app) .checkout-screen{padding-top:24px;padding-bottom:calc(152px + env(safe-area-inset-bottom))}:where(.customer-app) .checkout-unified-flow{display:grid;grid-template-columns:1fr;gap:16px}:where(.customer-app) .checkout-unified-flow .checkout-address-card,:where(.customer-app) .checkout-unified-flow .checkout-section,:where(.customer-app) .checkout-unified-flow .shipping-picker,:where(.customer-app) .checkout-unified-flow .checkout-summary{grid-column:1;grid-row:auto;border-radius:12px;padding:16px}:where(.customer-app) .checkout-unified-flow .checkout-summary{position:relative;top:auto}}

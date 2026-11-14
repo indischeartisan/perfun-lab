@@ -409,3 +409,32 @@ body{background:var(--paper)}
   .play-set-summary li{grid-template-columns:48px minmax(0,1fr) auto;padding:10px}
   .play-set-summary li>strong{font-size:12px}
 }
+
+/* Finishing CTA hierarchy and Help & Info grouping. */
+.builder-core .added-confirmation{margin-top:15px;padding:20px 24px;border:1px solid var(--builder-line);border-top:3px solid var(--acid);border-radius:12px;background:var(--builder-paper)}
+.builder-core .added-confirmation>strong{display:flex;align-items:center;gap:8px;font:700 14px/1.3 'Nunito Sans',sans-serif;color:var(--builder-ink)}
+.builder-core .added-confirmation>strong svg{width:18px;height:18px;flex:0 0 auto}
+.builder-core .added-confirmation>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:16px}
+.builder-core .added-confirmation>div>button,.builder-core .play-set-summary-actions>button{min-height:48px;padding:0 16px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:8px;box-sizing:border-box;font:700 11px/1 'Nunito Sans',sans-serif;letter-spacing:.03em;white-space:nowrap;cursor:pointer}
+.builder-core .added-confirmation .added-view-bag,.builder-core .play-set-get-now{border:0;background:#789600;color:#fff}
+.builder-core .added-confirmation .added-mix-again,.builder-core .play-set-add-bag{border:1px solid #789600;background:transparent;color:#607a00}
+.builder-core .added-confirmation>div>button svg,.builder-core .play-set-summary-actions>button svg{width:16px;height:16px;flex:0 0 auto;vertical-align:middle}
+.builder-core .play-set-summary-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+.more-groups{display:grid;gap:30px;margin-top:32px}.more-group h2{margin:0 0 10px;font:800 17px/1.2 'Nunito Sans',sans-serif;color:var(--ink)}.more-group .more-list{margin-top:0;border-top:1px solid var(--line)}.more-group .more-list button{padding-block:15px;border-radius:0}.more-group .more-list span strong,.more-group .more-list span small{font-family:'Nunito Sans',sans-serif}
+.help-dialog-backdrop{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:20px;background:rgba(23,23,23,.48);backdrop-filter:blur(3px)}.help-dialog{position:relative;width:min(620px,100%);max-height:min(82dvh,760px);overflow:auto;border:1px solid #ded8cc;border-radius:16px;background:#fbf8f0;padding:26px;color:var(--ink)}.help-dialog-close{position:absolute;top:18px;right:18px;display:grid;place-items:center;width:34px;height:34px;border:1px solid #d4d1c7;border-radius:50%;background:transparent;cursor:pointer}.help-dialog-close svg{width:17px}.help-dialog>span{font:800 9px/1 'Nunito Sans',sans-serif;letter-spacing:.12em;color:#607a00}.help-dialog h2{margin:10px 40px 18px 0;font:800 28px/1.1 'Nunito Sans',sans-serif}.help-dialog-copy{font:400 13px/1.6 'Nunito Sans',sans-serif;color:#5d625b}.help-dialog-copy h3{margin:18px 0 6px;font:800 15px/1.25 'Nunito Sans',sans-serif}.help-dialog-copy p{margin:8px 0}.help-dialog-copy ol{padding-left:20px}.help-dialog-copy li{margin:8px 0}.help-dialog-cta{display:inline-flex;margin-top:14px;min-height:44px;align-items:center;padding:0 16px;border-radius:8px;background:#789600;color:#fff;font:800 11px/1 'Nunito Sans',sans-serif;text-decoration:none}.help-dialog-blocker{padding:10px 12px;border-radius:8px;background:#f0ebe1;color:#695e4f}
+@media(max-width:700px){.builder-core .added-confirmation{padding:16px}.builder-core .added-confirmation>div,.builder-core .play-set-summary-actions{grid-template-columns:1fr}.more-groups{gap:24px;margin-top:24px}.help-dialog{max-height:88dvh;padding:20px}.help-dialog h2{font-size:24px}}
+
+/* Keep the existing logo below Base while the three note stickers stay centered. */
+.builder-core .bottle-wordmark{top:384px;width:100px}
+.builder-core .bottle>.sticker-stack .sticker-placeholder{left:50%;right:auto;transform:translateX(-50%)}
+.builder-core .bottle>.sticker-stack .sticker-0{top:135px}
+.builder-core .bottle>.sticker-stack .sticker-1{top:207px}
+.builder-core .bottle>.sticker-stack .sticker-2{top:278px}
+.builder-core .bottle>.sticker-stack .sticker-0,
+.builder-core .bottle>.sticker-stack .sticker-1,
+.builder-core .bottle>.sticker-stack .sticker-2{left:50%;right:auto;transform:translateX(-50%)}
+.builder-core .bottle>.sticker-stack .bottle-sticker-asset.sticker-0 img{transform:translateX(0)}
+.builder-core .bottle>.sticker-stack .bottle-sticker-asset.sticker-1 img{transform:translateX(0)}
+.builder-core .bottle>.sticker-stack .bottle-sticker-asset.sticker-2 img{transform:translateX(0)}
+.more-page .more-list i{background:#789600;color:#fff}
+.more-page .more-list i svg{color:#fff}

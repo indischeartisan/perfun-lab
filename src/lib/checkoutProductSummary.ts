@@ -27,9 +27,9 @@ export function checkoutProductSummaries(items: OrderIntent[], catalog: Catalog)
       blends: item.formulas.map((formula, index) => ({
         label: item.formulas.length > 1 ? `Blend ${index + 1}` : 'Blend pilihanmu',
         notes: [
-          { phase: 'Top', name: names.get(formula.top) ?? formula.top },
-          { phase: 'Middle', name: names.get(formula.middle) ?? formula.middle },
-          { phase: 'Base', name: names.get(formula.base) ?? formula.base },
+          { phase: 'Top', id: formula.top, name: names.get(formula.top) ?? formula.top },
+          { phase: 'Middle', id: formula.middle, name: names.get(formula.middle) ?? formula.middle },
+          { phase: 'Base', id: formula.base, name: names.get(formula.base) ?? formula.base },
         ],
       })),
       price: typeof normal === 'number' && typeof opening === 'number' && normal >= opening

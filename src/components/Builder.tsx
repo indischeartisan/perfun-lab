@@ -8,7 +8,7 @@ import { BottlePreview } from './BottlePreview'
 import { FormatSelectorSheet } from './FormatSelectorSheet'
 
 const layers: NoteLayer[] = ['top', 'middle', 'base']
-const selectorCopy: Record<NoteLayer, string> = { top: 'First impression', middle: 'Main character', base: 'What stays' }
+const selectorCopy: Record<NoteLayer, string> = { top: 'Kesan pertama', middle: 'Karakter utama', base: 'Yang tersisa' }
 
 interface BuilderProps {
   catalog: Catalog
@@ -84,7 +84,7 @@ export function Builder({ catalog, selection, product, playSetBlends, editingPla
   const closeFormatSelector = useCallback(() => setFormatSelectorOpen(false), [])
 
   return <section className="builder-core">
-    <header className="builder-core-title"><h1>Make your mix.</h1><p>Pick one top, one middle, one base.</p><small>There&apos;s no wrong mix.</small></header>
+    <header className="builder-core-title"><h1>Make your mix.</h1><p>Pilih satu top, satu middle, dan satu base.</p><small>Tidak ada racikan yang salah.</small></header>
 
     {product === 'play-set' ? <PlaySetProgress blends={playSetBlends} editingIndex={editingPlaySetIndex} selectionComplete={complete} onEdit={onEditPlaySetBlend} onCancelEdit={onCancelPlaySetEdit} onExit={onExitPlaySet} /> : null}
 
@@ -95,17 +95,17 @@ export function Builder({ catalog, selection, product, playSetBlends, editingPla
           <span className="selector-number">0{index + 1}</span>
           <span className="selector-copy"><small>{layer.toUpperCase()}</small><i>{selectorCopy[layer]}</i></span>
           <PickerSticker note={selection[layer]} />
-          <span className="selector-note"><strong>{selection[layer]?.name ?? 'Choose a note'}</strong>{selection[layer] ? <span className="selector-tags">{selection[layer]!.shortDescription.split(' · ').slice(0, 3).map(tag => <small key={tag}>{tag}</small>)}</span> : null}</span>
+          <span className="selector-note"><strong>{selection[layer]?.name ?? 'Pilih note'}</strong>{selection[layer] ? <span className="selector-tags">{selection[layer]!.shortDescription.split(' · ').slice(0, 3).map(tag => <small key={tag}>{tag}</small>)}</span> : null}</span>
           <ChevronRight/>
         </button>)}
       </div>
     </div>
 
-    {complete && result ? <section className="scent-story"><span>✧ {product === 'play-set' ? editingPlaySetIndex === null ? playSetBlends.length === 3 ? 'PLAY SET COMPLETE.' : `MIX ${playSetBlends.length + 1} READY.` : `EDITING MIX ${editingPlaySetIndex + 1}.` : 'YOU MADE THIS.'}</span><h2>{result.name}</h2><p>{result.copy}</p>{product === 'play-set' && (editingPlaySetIndex !== null || playSetBlends.length < 3) ? <div className="play-set-mix-actions"><button className="get-this-mix" onClick={saveCurrentPlaySetMix}>{editingPlaySetIndex !== null ? 'SAVE CHANGES' : playSetBlends.length === 2 ? 'COMPLETE PLAY SET' : 'SAVE MIX & CONTINUE'} <ArrowRight /></button>{editingPlaySetIndex !== null ? <button className="play-set-cancel-edit" onClick={onCancelPlaySetEdit}>CANCEL EDIT</button> : null}</div> : product !== 'play-set' && !added ? <button className="get-this-mix" onClick={openFormatSelector} disabled={!productOptions.length}>GET THIS MIX <ArrowRight /></button> : null}{getItNowError ? <small className="mix-purchase-error" role="alert">{getItNowError}</small> : null}</section> : null}
+    {complete && result ? <section className="scent-story"><span>✧ {product === 'play-set' ? editingPlaySetIndex === null ? playSetBlends.length === 3 ? 'PLAY SET SELESAI.' : `MIX ${playSetBlends.length + 1} SIAP.` : `EDIT MIX ${editingPlaySetIndex + 1}.` : 'RACIKANMU SIAP.'}</span><h2>{result.name}</h2><p>{result.copy}</p>{product === 'play-set' && (editingPlaySetIndex !== null || playSetBlends.length < 3) ? <div className="play-set-mix-actions"><button className="get-this-mix" onClick={saveCurrentPlaySetMix}>{editingPlaySetIndex !== null ? 'Simpan perubahan' : playSetBlends.length === 2 ? 'Selesaikan Play Set' : 'Simpan & lanjutkan'} <ArrowRight /></button>{editingPlaySetIndex !== null ? <button className="play-set-cancel-edit" onClick={onCancelPlaySetEdit}>Batal edit</button> : null}</div> : product !== 'play-set' && !added ? <button className="get-this-mix" onClick={openFormatSelector} disabled={!productOptions.length}>Dapatkan mix ini <ArrowRight /></button> : null}{getItNowError ? <small className="mix-purchase-error" role="alert">{getItNowError}</small> : null}</section> : null}
 
-    {product === 'play-set' && playSetBlends.length === 3 && editingPlaySetIndex === null ? <section className="play-set-summary" aria-labelledby="play-set-summary-title"><div><span>✧ PLAY SET COMPLETE.</span><h2 id="play-set-summary-title">Your three mixes.</h2></div><ol>{playSetBlends.map((blend, index) => <li key={`${blend.top.id}-${blend.middle.id}-${blend.base.id}-${index}`}><span>MIX {index + 1}</span><strong>{slashBlendName(blend)}</strong><button onClick={() => onEditPlaySetBlend(index)}>EDIT</button></li>)}</ol>{!added ? <div className="play-set-summary-actions"><button className="play-set-get-now" onClick={getPlaySetNow} disabled={getItNowBusy}>{getItNowBusy ? 'PREPARING CHECKOUT…' : <>GET IT NOW <ArrowRight /></>}</button><button className="play-set-add-bag" onClick={onAddPlaySet} disabled={getItNowBusy}>ADD TO BAG</button></div> : null}{getItNowError ? <small className="mix-purchase-error" role="alert">{getItNowError}</small> : null}</section> : null}
+    {product === 'play-set' && playSetBlends.length === 3 && editingPlaySetIndex === null ? <section className="play-set-summary" aria-labelledby="play-set-summary-title"><div><span>✧ PLAY SET SELESAI.</span><h2 id="play-set-summary-title">Your three mixes.</h2></div><ol>{playSetBlends.map((blend, index) => <li key={`${blend.top.id}-${blend.middle.id}-${blend.base.id}-${index}`}><span>MIX {index + 1}</span><strong>{slashBlendName(blend)}</strong><button onClick={() => onEditPlaySetBlend(index)}>Edit</button></li>)}</ol>{!added ? <div className="play-set-summary-actions"><button className="play-set-get-now" onClick={getPlaySetNow} disabled={getItNowBusy}>{getItNowBusy ? 'Menyiapkan checkout…' : <>Beli sekarang <ArrowRight /></>}</button><button className="play-set-add-bag" onClick={onAddPlaySet} disabled={getItNowBusy}>Tambah ke Bag</button></div> : null}{getItNowError ? <small className="mix-purchase-error" role="alert">{getItNowError}</small> : null}</section> : null}
 
-    {complete && added ? <div className="added-confirmation" role="status"><strong><Check/> {product === 'play-set' ? 'Play Set added to your bag.' : 'Added to your bag.'}</strong><div><button onClick={onClearFormula}>MAKE ANOTHER BLEND</button><button onClick={onViewBag}>VIEW BAG <ArrowRight/></button></div></div> : null}
+    {complete && added ? <div className="added-confirmation" role="status"><strong><Check/> Racikanmu sudah masuk ke Bag.</strong><div><button className="added-view-bag" onClick={onViewBag}>Lihat Bag <ArrowRight/></button><button className="added-mix-again" onClick={onClearFormula}>Racik lagi</button></div></div> : null}
 
     {!complete && (product !== 'play-set' || selectedCount > 0) ? <section className={`prediction-panel state-${selectedCount ? 'partial' : 'empty'}`}>
       <div className="prediction-text"><span>{complete ? 'YOU MADE THIS.' : 'SCENT PREDICTION'}</span>

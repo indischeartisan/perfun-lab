@@ -142,7 +142,10 @@ function CheckoutStickerRow({ notes }: { notes: Array<{ phase: string; id?: stri
 }
 export function OrderTotals({ totals }: { totals: Pick<Quote, 'subtotal' | 'discount' | 'shipping' | 'grand_total'> & { shipping_quote_snapshot?: Quote['shipping_quote_snapshot'] | null } }) {
   const shipping = totals.shipping_quote_snapshot ? reviewedShippingBreakdown({ shipping: totals.shipping, shipping_quote_snapshot: totals.shipping_quote_snapshot }) : null
-  return <dl><div><dt>Subtotal produk</dt><dd>{formatPrice(totals.subtotal)}</dd></div><div><dt>Diskon peluncuran</dt><dd>−{formatPrice(totals.discount)}</dd></div>{shipping ? <div className="shipping-customer-total"><dt>Ongkir setelah voucher</dt><dd>{formatPrice(shipping.customer_shipping_total)}</dd></div> : <div><dt>Ongkir</dt><dd>{formatPrice(totals.shipping)}</dd></div>}<div className="total"><dt>Total pesanan</dt><dd>{formatPrice(totals.grand_total)}</dd></div></dl>
+  const shippingRows = shipping && shipping.shipping_discount > 0
+    ? <><div className="shipping-before-voucher"><dt>Ongkir sebelum voucher</dt><dd>{formatPrice(shipping.original_shipping_amount)}</dd></div><div className="shipping-voucher"><dt>Voucher ongkir</dt><dd>−{formatPrice(shipping.shipping_discount)}</dd></div></>
+    : <div className="shipping-customer-total"><dt>Ongkir</dt><dd>{formatPrice(shipping?.customer_shipping_total ?? totals.shipping)}</dd></div>
+  return <dl><div><dt>Subtotal produk</dt><dd>{formatPrice(totals.subtotal)}</dd></div><div><dt>Diskon peluncuran</dt><dd>−{formatPrice(totals.discount)}</dd></div>{shippingRows}<div className="total"><dt>Total pesanan</dt><dd>{formatPrice(totals.grand_total)}</dd></div></dl>
 }
 export function ConfirmationScreen({ order, onBuild, onOrders }: { order: CustomerOrder; onBuild: () => void; onOrders: () => void }) {
   const [copied, setCopied] = useState(false)

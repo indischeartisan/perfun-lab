@@ -315,3 +315,13 @@
 @media(max-width:767px){.admin-order-card>header{padding:14px 15px}.admin-order-card>header strong{max-width:48vw}.admin-order-products{padding:13px 15px}.admin-order-product-heading{display:grid;gap:4px}.admin-order-notes{gap:7px}.admin-order-notes img{width:48px;height:48px}.admin-order-notes strong{font-size:10px}.admin-order-card>footer{padding:9px 15px}}
 .admin-dashboard .admin-metrics article{min-height:0;padding:12px 14px}.admin-dashboard .admin-metrics strong{margin-top:6px;font-size:clamp(20px,2.5vw,26px)}.admin-dashboard .admin-lower-metrics,.admin-dashboard .admin-revenue{margin-top:20px}.admin-dashboard .admin-metric-period{display:block;margin-bottom:3px;color:var(--lab-muted);font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
 @media(max-width:767px){.admin-dashboard .admin-metrics article{padding:10px 11px}.admin-dashboard .admin-metrics strong{font-size:20px}}
+.admin-order-card > footer {
+  height: auto;
+  min-height: 0;
+  padding-block: 12px;
+}
+
+.admin-order-card > footer > span:only-child {
+  grid-column: 1 / -1;
+  justify-self: end;
+}

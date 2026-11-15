@@ -1,12 +1,11 @@
 import { useCallback, useState } from 'react'
 import { useAdminData } from '../hooks/useAdminData'
 import { getAdminCustomers, getAdminOrders, getAdminOverview, getAdminVendorWorkspace, type AdminOrderFilters, type AdminOverview } from '../lib/admin'
-import { formatPrice } from '../lib/currency'
 import { AdminCatalogPanel } from '../components/AdminCatalogPanel'
 import { ProductionPage } from './ProductionPage'
 import { FulfillmentPage } from './FulfillmentPage'
 import { AdminVendorWorkspacePanel } from '../components/AdminVendorWorkspacePanel'
-import { AdminVendorPaymentsPanel } from '../components/AdminVendorPaymentsPanel'
+import { AdminFinancePanel } from '../components/AdminFinancePanel'
 import { AdminMoreMenu, AdminWorkspaceNavigation, type AdminWorkspaceTab } from '../components/WorkspaceNavigation'
 import { OperationsStatusTabs } from '../components/OperationsPresentation'
 import { TestRunsPanel } from '../components/TestRunsPanel'
@@ -19,13 +18,13 @@ export function AdminPage({ userId }: { userId: string }) {
   const [operation, setOperation] = useState<'production' | 'fulfillment' | 'assignment'>('production')
   const openOrders = (status: AdminOrdersTab = 'all') => { setOrdersStatus(status); setTab('Orders') }
   return <section className="app-screen admin-dashboard">
-    <header className="screen-title workspace-title"><span>PERFUN LAB OPERATIONS</span><h1>Dashboard</h1><p>Pantau pesanan, produksi, dan pengiriman.</p></header>
+    <header className="screen-title workspace-title"><span>PERFUN LAB OPERATIONS</span><h1>{tab === 'Keuangan' ? 'Keuangan' : tab === 'Overview' ? 'Ringkasan' : tab}</h1><p>{tab === 'Keuangan' ? 'Ringkasan pesanan, pembayaran pelanggan, dan pembayaran perfumer.' : 'Pantau pesanan, produksi, dan pengiriman.'}</p></header>
     <AdminWorkspaceNavigation active={tab} onNavigate={setTab}/>
     <div className="admin-content" key={tab}>
-      {tab === 'Overview' || tab === 'Revenue' ? <Overview revenueOnly={tab === 'Revenue'} onOrders={status => openOrders(status)}/> : null}
+      {tab === 'Overview' ? <Overview onOrders={status => openOrders(status)}/> : null}
       {tab === 'Orders' ? <><TestRunsPanel role="admin"/><AdminOrders initialStatus={ordersStatus}/></> : null}
       {tab === 'More' ? <AdminMoreMenu onNavigate={setTab}/> : null}
-      {tab === 'Vendor Payments' ? <AdminVendorPaymentsPanel/> : null}
+      {tab === 'Keuangan' ? <AdminFinancePanel/> : null}
       {tab === 'Customers' ? <AdminCustomers/> : null}
       {tab === 'Notes' || tab === 'Products & Pricing' ? <AdminCatalogPanel section={tab === 'Notes' ? 'notes' : 'products'}/> : null}
       {tab === 'Operations' ? <AdminOperations userId={userId} operation={operation} onOperation={setOperation}/> : null}
@@ -44,17 +43,15 @@ function AdminOperations({ userId, operation, onOperation }: { userId: string; o
   ]}/>{operation === 'production' ? <ProductionPage userId={userId} role="admin"/> : operation === 'fulfillment' ? <FulfillmentPage role="admin"/> : <AdminVendorWorkspacePanel/>}</>
 }
 
-function Overview({ revenueOnly, onOrders }: { revenueOnly: boolean; onOrders: (status: AdminOrdersTab) => void }) {
+function Overview({ onOrders }: { onOrders: (status: AdminOrdersTab) => void }) {
   const { data, error, reload } = useAdminData(getAdminOverview)
   const [recentFilter, setRecentFilter] = useState<DashboardOrderFilter>('all')
   const [dashboardRevision, setDashboardRevision] = useState(0)
   const refreshDashboard = () => { setDashboardRevision(value => value + 1); reload() }
   const operations: Array<[keyof AdminOverview, string]> = [['orders_today', 'Pesanan hari ini · WIB'], ['pending_payment', 'Pending payment'], ['paid_orders', 'Pesanan lunas · status saat ini'], ['production_queued', 'Production jobs queued'], ['production_in_progress', 'Production jobs in progress'], ['ready_to_ship', 'Ready to ship'], ['shipped', 'Sedang dikirim · status saat ini'], ['delivered', 'Selesai · status saat ini']]
-  const revenue: Array<[keyof AdminOverview, string]> = [['paid_gross_sales', 'Paid gross sales'], ['discounts', 'Discounts'], ['shipping_collected', 'Shipping collected'], ['net_transaction_total', 'Net transaction total']]
   return <><AdminLoad error={error} loading={!data && !error} reload={reload}/>
     {data ? <>
-      {!revenueOnly ? <><section className="overview-section admin-needs-attention"><div className="operations-section-heading"><div><span className="admin-kicker">Needs Attention</span><h2>Pesanan yang perlu dipantau</h2></div><button type="button" className="admin-refresh-button" onClick={refreshDashboard}>Perbarui</button></div><div className="admin-attention-grid"><button type="button" className="admin-attention-card production" onClick={() => setRecentFilter('queue')}><span>Antrean produksi</span><strong>{data.production_queued}</strong><small>pesanan</small><b aria-hidden="true">→</b></button><button type="button" className="admin-attention-card ready" onClick={() => setRecentFilter('ready')}><span>Siap dikirim</span><strong>{data.ready_to_ship}</strong><small>pesanan</small><b aria-hidden="true">→</b></button><button type="button" className="admin-attention-card payment" onClick={() => setRecentFilter('unpaid')}><span>Menunggu pembayaran</span><strong>{data.pending_payment}</strong><small>pesanan</small><b aria-hidden="true">→</b></button></div></section><section className="overview-section admin-lower-metrics"><span className="admin-kicker">METRICS</span><h2>Today at the Lab</h2><div className="admin-metrics">{[operations[0], operations[2], ...operations.slice(6)].map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</div></section><section className="overview-section admin-revenue"><h2>Revenue</h2><p className="admin-help">All-time orders currently Paid. Gross − discounts + shipping = net transaction total. Refunded orders are excluded; payment fees are not deducted.</p><div className="admin-metrics">{revenue.map(([key, title]) => <article key={key}><span>{title}</span><strong>{formatPrice(Number(data[key]))}</strong></article>)}</div></section><RecentOrders key={`${recentFilter}:${dashboardRevision}`} filter={recentFilter} onFilter={setRecentFilter} onOrders={() => onOrders(recentFilter === 'queue' ? 'production' : recentFilter)}/></> : null}
-      {revenueOnly ? <section className="overview-section admin-revenue"><h2>Revenue</h2><p className="admin-help">All-time orders currently Paid. Gross − discounts + shipping = net transaction total. Refunded orders are excluded; payment fees are not deducted.</p><div className="admin-metrics">{revenue.map(([key, title]) => <article key={key}><span>{title}</span><strong>{formatPrice(Number(data[key]))}</strong></article>)}</div></section> : null}
+      <><section className="overview-section admin-needs-attention"><div className="operations-section-heading"><div><span className="admin-kicker">PERLU DIPANTAU</span><h2>Pesanan yang perlu dipantau</h2></div><button type="button" className="admin-refresh-button" onClick={refreshDashboard}>Perbarui</button></div><div className="admin-attention-grid"><button type="button" className="admin-attention-card production" onClick={() => setRecentFilter('queue')}><span>Antrean produksi</span><strong>{data.production_queued}</strong><small>pesanan</small><b aria-hidden="true">→</b></button><button type="button" className="admin-attention-card ready" onClick={() => setRecentFilter('ready')}><span>Siap dikirim</span><strong>{data.ready_to_ship}</strong><small>pesanan</small><b aria-hidden="true">→</b></button><button type="button" className="admin-attention-card payment" onClick={() => setRecentFilter('unpaid')}><span>Menunggu pembayaran</span><strong>{data.pending_payment}</strong><small>pesanan</small><b aria-hidden="true">→</b></button></div></section><section className="overview-section admin-lower-metrics"><span className="admin-kicker">METRIK</span><h2>Hari ini di Lab</h2><div className="admin-metrics">{[operations[0], operations[2], ...operations.slice(6)].map(([key, title]) => <article key={key}><span>{title}</span><strong>{data[key]}</strong></article>)}</div></section><RecentOrders key={`${recentFilter}:${dashboardRevision}`} filter={recentFilter} onFilter={setRecentFilter} onOrders={() => onOrders(recentFilter === 'queue' ? 'production' : recentFilter)}/></>
       <p className="admin-help">Today follows Asia/Jakarta. Other counts show current status. Updated {new Date(data.as_of).toLocaleString()}.</p>
     </> : null}
   </>

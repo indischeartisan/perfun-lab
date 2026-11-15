@@ -8,7 +8,7 @@ export interface AdminOverview {
 }
 export interface AdminOrder {
   id: string; order_number: string; created_at: string; status: string; payment_status: string; grand_total: number
-  customer: { name: string; email: string }; shipment_status: string; production_status: string
+  customer: { name: string; email: string }; destination?: string | null; shipment_status: string; production_status: string
   item_count: number; job_count: number; queued: number; in_progress: number; completed: number
   products: Array<{ label: string; volume_ml: number; bottle_count: number; quantity: number; notes?: Array<{ phase: string; id?: string; name: string }>; blends?: Array<{ label?: string; notes?: Array<{ phase: string; id?: string; name: string }> }> }>
   shipment?: { courier?: string | null; service?: string | null; tracking_number?: string | null } | null

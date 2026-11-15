@@ -8,8 +8,8 @@ update public.profiles set role='admin' where id='a1100000-0000-4000-8000-000000
 
 insert into public.orders(id,order_number,user_id,request_id,request_payload,address_snapshot,subtotal,discount,shipping,grand_total,payment_status,status)
 values
- ('a1300000-0000-4000-8000-000000000001','TEST-10ML-RECIPE','a1100000-0000-4000-8000-000000000002','a1400000-0000-4000-8000-000000000001','{}','{}',100000,0,0,100000,'paid','paid'),
- ('a1300000-0000-4000-8000-000000000002','TEST-PLAYSET-RECIPE','a1100000-0000-4000-8000-000000000002','a1400000-0000-4000-8000-000000000002','{}','{}',300000,0,0,300000,'paid','paid'),
+ ('a1300000-0000-4000-8000-000000000001','TEST-10ML-RECIPE','a1100000-0000-4000-8000-000000000002','a1400000-0000-4000-8000-000000000001','{}','{"city":"Kota Bandung"}',100000,0,0,100000,'paid','paid'),
+ ('a1300000-0000-4000-8000-000000000002','TEST-PLAYSET-RECIPE','a1100000-0000-4000-8000-000000000002','a1400000-0000-4000-8000-000000000002','{}','{"city":"Kabupaten Sleman"}',300000,0,0,300000,'paid','paid'),
  ('a1300000-0000-4000-8000-000000000003','TEST-NO-SNAPSHOT','a1100000-0000-4000-8000-000000000002','a1400000-0000-4000-8000-000000000003','{}','{}',100000,0,0,100000,'paid','paid');
 insert into public.order_items(id,order_id,position,product_snapshot,creations_snapshot,quantity,normal_unit_price,unit_price,line_total)
 values
@@ -34,14 +34,17 @@ begin
   single_blend := row->'products'->0->'blends';
   if jsonb_array_length(single_blend)<>1 then raise exception 'Single Blend snapshot missing'; end if;
   if (single_blend->0->>'label') is null or jsonb_array_length(single_blend->0->'notes')<>3 then raise exception 'Single Blend notes missing'; end if;
+  if row->>'destination' <> 'Kota Bandung' then raise exception 'Order destination missing'; end if;
 
   payload := public.admin_orders('TEST-PLAYSET-RECIPE',null,null,null,0);
   row := payload->'rows'->0;
   play_set := row->'products'->0->'blends';
   if jsonb_array_length(play_set)<>3 then raise exception 'Play Set grouping missing'; end if;
+  if row->>'destination' <> 'Kabupaten Sleman' then raise exception 'Play Set destination missing'; end if;
 
   payload := public.admin_orders('TEST-NO-SNAPSHOT',null,null,null,0);
   if jsonb_array_length(payload->'rows'->0->'products'->0->'blends')<>0 then raise exception 'Missing snapshot was not preserved as empty'; end if;
+  if payload->'rows'->0->>'destination' is not null then raise exception 'Empty order destination was not preserved as null'; end if;
 
   payload := public.admin_orders('',null,null,null,0);
   for row in select value from jsonb_array_elements(payload->'rows') loop

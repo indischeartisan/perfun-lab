@@ -45,7 +45,7 @@ function AdminOperations({ userId, operation, onOperation }: { userId: string; o
 }
 
 function Overview({ revenueOnly, onOrders }: { revenueOnly: boolean; onOrders: (status: AdminOrdersTab) => void }) {
-  const { data, error, reload } = useAdminData(getAdminOverview, true)
+  const { data, error, reload } = useAdminData(getAdminOverview)
   const [recentFilter, setRecentFilter] = useState<DashboardOrderFilter>('all')
   const [dashboardRevision, setDashboardRevision] = useState(0)
   const refreshDashboard = () => { setDashboardRevision(value => value + 1); reload() }
@@ -84,7 +84,7 @@ async function loadDashboardOrders(filter: DashboardOrderFilter) {
 }
 function RecentOrders({ filter, onFilter, onOrders }: { filter: DashboardOrderFilter; onFilter: (filter: DashboardOrderFilter) => void; onOrders: () => void }) {
   const load = useCallback(() => loadDashboardOrders(filter), [filter])
-  const { data, error, reload } = useAdminData(load, true)
+  const { data, error, reload } = useAdminData(load)
   return <section className="overview-section admin-recent-orders"><div className="operations-section-heading"><h2>Recent Orders</h2><button type="button" onClick={onOrders}>Lihat semua →</button></div><nav className="admin-order-tabs" aria-label="Filter pesanan terbaru">{dashboardTabs.map(([id, title]) => { const active = filter === id || id === 'production' && filter === 'queue'; return <button type="button" key={id} className={active ? 'active' : ''} aria-pressed={active} onClick={() => onFilter(id)}>{title}</button> })}</nav><AdminLoad error={error} loading={!data && !error} reload={reload} showRefresh={false}/>{data?.rows.length === 0 ? <p>Tidak ada pesanan dalam tahap ini.</p> : null}<div className="production-list admin-order-list">{data?.rows.map(order => <AdminOrderCard key={order.id} order={order} onDetail={onOrders}/>)}</div></section>
 }
 
@@ -134,7 +134,7 @@ async function loadAdminOrdersTab(tab: AdminOrdersTab, filter: AdminOrderFilters
 }
 function OrderResults({ filter, statusTab, onPage }: { filter: AdminOrderFilters; statusTab: AdminOrdersTab; onPage: (page: number) => void }) {
   const load = useCallback(() => loadAdminOrdersTab(statusTab, filter), [filter, statusTab])
-  const { data, error, reload } = useAdminData(load, true)
+  const { data, error, reload } = useAdminData(load)
   return <><AdminLoad error={error} loading={!data && !error} reload={reload}/>
     {data?.rows.length === 0 ? <p>No matching orders.</p> : null}
     <div className="production-list admin-order-list admin-orders-results-list">{data?.rows.map(order => <AdminOrdersResultCard key={order.id} order={order}/>)}</div>

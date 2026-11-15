@@ -42,7 +42,7 @@ function AdminOperations({ userId, operation, onOperation }: { userId: string; o
 }
 
 function Overview({ revenueOnly, onOrders }: { revenueOnly: boolean; onOrders: () => void }) {
-  const { data, error, reload } = useAdminData(getAdminOverview, true)
+  const { data, error, reload } = useAdminData(getAdminOverview)
   const operations: Array<[keyof AdminOverview, string]> = [['orders_today', 'Orders today · WIB'], ['pending_payment', 'Pending payment'], ['paid_orders', 'Paid orders'], ['production_queued', 'Production jobs queued'], ['production_in_progress', 'Production jobs in progress'], ['ready_to_ship', 'Ready to ship'], ['shipped', 'Shipped'], ['delivered', 'Delivered']]
   const revenue: Array<[keyof AdminOverview, string]> = [['paid_gross_sales', 'Paid gross sales'], ['discounts', 'Discounts'], ['shipping_collected', 'Shipping collected'], ['net_transaction_total', 'Net transaction total']]
   return <><AdminLoad error={error} loading={!data && !error} reload={reload}/>
@@ -58,7 +58,7 @@ function Overview({ revenueOnly, onOrders }: { revenueOnly: boolean; onOrders: (
 const recentFilter: AdminOrderFilters = { search: '', payment: '', production: '', shipment: '', page: 0 }
 function RecentOrders({ onOrders }: { onOrders: () => void }) {
   const load = useCallback(() => getAdminOrders(recentFilter), [])
-  const { data, error, reload } = useAdminData(load, true)
+  const { data, error, reload } = useAdminData(load)
   return <section className="overview-section"><div className="operations-section-heading"><h2>Recent Orders</h2><button type="button" onClick={onOrders}>View all</button></div><AdminLoad error={error} loading={!data && !error} reload={reload}/>{data?.rows.length === 0 ? <p>No orders yet.</p> : null}<div className="production-list admin-order-list">{data?.rows.slice(0, 3).map(order => <OperationsOrderCard key={order.id}><OperationsOrderHeader orderNumber={order.order_number} status={label(order.payment_status)} time={new Date(order.created_at).toLocaleString()}/><p><strong>{order.customer.name || 'Customer'}</strong></p><div className="workspace-item-sizes">{order.products.map((product, index) => <div key={index}><OperationsBottleSize volumeMl={product.volume_ml} bottleCount={product.bottle_count}/><span>Quantity: {product.quantity}</span></div>)}</div><strong>{formatPrice(order.grand_total)}</strong></OperationsOrderCard>)}</div></section>
 }
 
@@ -80,7 +80,7 @@ function AdminOrders() {
 }
 function OrderResults({ filter, onPage }: { filter: AdminOrderFilters; onPage: (page: number) => void }) {
   const load = useCallback(() => getAdminOrders(filter), [filter])
-  const { data, error, reload } = useAdminData(load, true)
+  const { data, error, reload } = useAdminData(load)
   return <><AdminLoad error={error} loading={!data && !error} reload={reload}/>
     {data?.rows.length === 0 ? <p>No matching orders.</p> : null}
     <div className="production-list admin-order-list">{data?.rows.map(order => <OperationsOrderCard className="admin-order-card" key={order.id}>

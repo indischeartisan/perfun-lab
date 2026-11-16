@@ -39,14 +39,14 @@ begin
       case when p_period='all' then local_today else end_date-1 end last_date
   ),
   order_rows as (
-    select o.id,o.user_id,(o.created_at at time zone 'Asia/Jakarta')::date day,
+    select o.id,o.user_id,(o.created_at at time zone 'Asia/Jakarta')::date AS day,
       o.payment_status,o.subtotal,o.discount,o.shipping,o.grand_total
     from public.orders o,bounds b
     where (b.start_at is null or (o.created_at>=b.start_at and o.created_at<b.end_at))
   ),
   successful_payment_rows as (
     select distinct on (p.order_id) p.order_id,p.paid_at,p.amount,
-      (p.paid_at at time zone 'Asia/Jakarta')::date day
+      (p.paid_at at time zone 'Asia/Jakarta')::date AS day
     from public.payments p
     where p.status in ('paid','refunded') and p.paid_at is not null
       and (start_at is null or (p.paid_at>=start_at and p.paid_at<end_at))
@@ -72,14 +72,14 @@ begin
     where i.status='reserved' and p.status='draft'
   ),
   paid_vendor_rows as (
-    select (p.paid_at at time zone 'Asia/Jakarta')::date day,
+    select (p.paid_at at time zone 'Asia/Jakarta')::date AS day,
       i.vendor_fee_amount,i.shipping_reimbursement,i.total_amount
     from public.vendor_payout_items i join public.vendor_payouts p on p.id=i.payout_id
     where i.status='paid' and p.status='paid' and p.paid_at is not null
       and (start_at is null or (p.paid_at>=start_at and p.paid_at<end_at))
   ),
   days as (
-    select generate_series(b.first_date,b.last_date,interval '1 day')::date day from bounds b
+    select generate_series(b.first_date,b.last_date,interval '1 day')::date AS day from bounds b
   ),
   daily as (
     select d.day,

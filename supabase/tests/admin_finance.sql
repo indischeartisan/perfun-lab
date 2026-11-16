@@ -86,7 +86,7 @@ do $$ begin
  end if;
 end $$;
 insert into public.vendor_payouts(id,vendor_id,payout_date,status,total,transfer_reference,paid_at,paid_by,request_id) values
- ('af600000-0000-4000-8000-000000000001','af100000-0000-4000-8000-000000000004','2026-01-03','paid',62000,'FIN-BANK-1','2026-01-02 18:00:00+00','af100000-0000-4000-8000-000000000001',gen_random_uuid()),
+ ('af600000-0000-4000-8000-000000000001','af100000-0000-4000-8000-000000000004','2026-01-03','paid',62000,'FIN-BANK-1','2026-01-02 16:00:00+00','af100000-0000-4000-8000-000000000001',gen_random_uuid()),
  ('af600000-0000-4000-8000-000000000002','af100000-0000-4000-8000-000000000004','2026-01-03','draft',100000,null,null,null,gen_random_uuid());
 insert into public.vendor_payout_items(payout_id,order_id,vendor_id,vendor_fee_amount,shipping_reimbursement,total_amount,status) values
  ('af600000-0000-4000-8000-000000000001','af200000-0000-4000-8000-000000000001','af100000-0000-4000-8000-000000000004',50000,12000,62000,'paid'),

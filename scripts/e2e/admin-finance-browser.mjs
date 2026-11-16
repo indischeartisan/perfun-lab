@@ -12,7 +12,7 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } })
 
 try {
   await page.goto(`${appUrl}/#admin`, { waitUntil: 'domcontentloaded' })
-  await page.getByRole('button', { name: 'Akun', exact: true }).click()
+  await page.locator('summary[aria-label="Akun"]').click()
   await page.getByRole('button', { name: 'Masuk atau buat akun', exact: true }).click()
   await page.getByLabel('Email address').fill(email)
   await page.getByLabel('Password', { exact: true }).fill(password)
@@ -43,6 +43,9 @@ try {
   await page.getByRole('heading', { name: 'Drafts and paid records', exact: true }).waitFor()
   assert.equal(await page.getByRole('alert').count(), 0)
   await page.screenshot({ path: `${screenshotDir}/finance-vendor-flow.png`, fullPage: true })
+} catch (error) {
+  await page.screenshot({ path: `${screenshotDir}/finance-failure.png`, fullPage: true }).catch(() => {})
+  throw error
 } finally {
   await browser.close()
 }

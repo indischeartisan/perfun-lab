@@ -105,7 +105,21 @@ jobs:
           trap cleanup EXIT
 
           # Keep the local stack's generated credentials out of the Actions log.
-          supabase start >"$RUNNER_TEMP/supabase-start.log" 2>&1
+          start_log="$RUNNER_TEMP/supabase-start.log"
+          if supabase start >"$start_log" 2>&1; then
+            :
+          else
+            start_status=$?
+            echo '::error::Local Supabase stack failed to start (sanitized diagnostics follow).'
+            sed -E \
+              -e '/^[[:space:]]*(API URL|GraphQL URL|DB URL|Studio URL|Inbucket URL|JWT secret|anon key|service_role key):/ s/:.*/: [redacted]/I' \
+              -e 's/([A-Z][A-Z0-9_]*(KEY|TOKEN|SECRET|PASSWORD|URL|URI|AUTH)[A-Z0-9_]*=)[^[:space:]]+/\1[redacted]/gI' \
+              -e 's/(sb_(publishable|secret)_[A-Za-z0-9_-]+)/[redacted]/g' \
+              -e 's/(postgres(ql)?:\/\/)[^@[:space:]]+@/\1[redacted]@/g' \
+              -e 's/((service_role|anon|api[_-]?key|secret)[=:])[^[:space:]]+/\1[redacted]/Ig' \
+              "$start_log"
+            exit "$start_status"
+          fi
           supabase db reset --local --yes
           supabase migration list --local
 

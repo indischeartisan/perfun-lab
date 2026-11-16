@@ -16,7 +16,6 @@ export function AdminFinancePanel() {
   const load = useCallback(() => getAdminFinance(period, period === 'custom' && date ? date : null), [period, date])
   const { data, error, reload } = useAdminData(load)
   return <section className="finance-page">
-    <header className="screen-title"><span>KEUANGAN</span><h1>Keuangan</h1><p>Ringkasan pesanan, pembayaran pelanggan, dan pembayaran perfumer dalam WIB.</p></header>
     <form className="finance-period-filter" onSubmit={event => { event.preventDefault(); reload() }}>
       <label>Periode<select value={period} onChange={event => setPeriod(event.target.value as FinancePeriod)}>{periods.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       {period === 'custom' ? <label>Tanggal WIB<input type="date" value={date} required onChange={event => setDate(event.target.value)}/></label> : null}

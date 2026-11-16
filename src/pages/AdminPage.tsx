@@ -86,7 +86,7 @@ function RecentOrders({ filter, onFilter, onOrders }: { filter: DashboardOrderFi
 }
 
 export function AdminLoad({ error, loading, reload, showRefresh = true }: { error: string; loading: boolean; reload: () => void; showRefresh?: boolean }) {
-  return <div className="production-toolbar"><div>{error ? <p role="alert">{error}</p> : loading ? <p role="status">Loading…</p> : null}</div>{showRefresh ? <button onClick={reload}>Refresh</button> : null}</div>
+  return <div className="production-toolbar"><div>{error ? <p role="alert">Gagal memuat data. Coba lagi.</p> : loading ? <p role="status">Memuat…</p> : null}</div>{showRefresh ? <button onClick={reload}>Perbarui</button> : null}</div>
 }
 export function AdminPagination({ count, page, onPage }: { count: number; page: number; onPage: (page: number) => void }) {
   return <div className="production-pagination"><button disabled={page === 0} onClick={() => onPage(page - 1)}>Sebelumnya</button><span>{count} results · Page {page + 1}</span><button disabled={(page + 1) * 5 >= count} onClick={() => onPage(page + 1)}>Berikutnya</button></div>

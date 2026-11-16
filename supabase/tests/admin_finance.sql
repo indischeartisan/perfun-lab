@@ -25,9 +25,66 @@ insert into public.payments(id,order_id,provider,environment,provider_reference,
 insert into public.order_vendor_assignments(order_id,vendor_id,assigned_by,assignment_source,vendor_fee_amount,vendor_fee_snapshot) values
  ('af200000-0000-4000-8000-000000000001','af100000-0000-4000-8000-000000000004','af100000-0000-4000-8000-000000000001','manual',50000,'{"total_fee":50000}'),
  ('af200000-0000-4000-8000-000000000002','af100000-0000-4000-8000-000000000004','af100000-0000-4000-8000-000000000001','manual',100000,'{"total_fee":100000}');
-insert into public.shipments(id,order_id,status,courier,service,tracking_number,shipping_cost,shipped_at,order_number,ordered_at,address_snapshot,items_snapshot,fulfillment_allowed,provider,packing_status,actual_shipping_cost,shipping_payer,actual_shipping_entered_at,actual_shipping_entered_by,vendor_id) values
- ('af500000-0000-4000-8000-000000000001','af200000-0000-4000-8000-000000000001','shipped','T','R','FIN-1',12000,'2026-01-02 18:00:00+00','FIN-BOUNDARY','2026-01-01 16:59:59+00','{}','[]',true,'manual','packed',12000,'vendor','2026-01-02 17:00:00+00','af100000-0000-4000-8000-000000000004','af100000-0000-4000-8000-000000000004'),
- ('af500000-0000-4000-8000-000000000002','af200000-0000-4000-8000-000000000002','shipped','T','R','FIN-2',9000,'2026-01-03 18:00:00+00','FIN-SAME-DAY','2026-01-02 02:00:00+00','{}','[]',true,'manual','packed',9000,'perfun','2026-01-03 17:00:00+00','af100000-0000-4000-8000-000000000004','af100000-0000-4000-8000-000000000004');
+-- The order-item trigger already created production jobs and one shipment per
+-- paid order. Complete these two jobs so the generated shipments can be
+-- transitioned to the dispatched fixture state without inserting duplicates.
+update public.production_jobs j
+set status='completed',
+    assigned_to='af100000-0000-4000-8000-000000000004',
+    started_at='2026-01-02 16:00:00+00',
+    completed_at='2026-01-02 16:30:00+00'
+from public.order_items i
+where i.id=j.order_item_id
+  and i.order_id in ('af200000-0000-4000-8000-000000000001','af200000-0000-4000-8000-000000000002');
+update public.shipments s
+set status='shipped',
+    courier='T',
+    service='R',
+    tracking_number=case s.order_id
+      when 'af200000-0000-4000-8000-000000000001' then 'FIN-1'
+      when 'af200000-0000-4000-8000-000000000002' then 'FIN-2'
+    end,
+    shipped_at=case s.order_id
+      when 'af200000-0000-4000-8000-000000000001' then '2026-01-02 18:00:00+00'::timestamptz
+      when 'af200000-0000-4000-8000-000000000002' then '2026-01-03 18:00:00+00'::timestamptz
+    end,
+    fulfillment_allowed=true,
+    provider='manual',
+    packing_status='packed',
+    actual_shipping_cost=case s.order_id
+      when 'af200000-0000-4000-8000-000000000001' then 12000
+      when 'af200000-0000-4000-8000-000000000002' then 9000
+    end,
+    shipping_payer=case s.order_id
+      when 'af200000-0000-4000-8000-000000000001' then 'vendor'
+      when 'af200000-0000-4000-8000-000000000002' then 'perfun'
+    end,
+    actual_shipping_entered_at=case s.order_id
+      when 'af200000-0000-4000-8000-000000000001' then '2026-01-02 17:00:00+00'::timestamptz
+      when 'af200000-0000-4000-8000-000000000002' then '2026-01-03 17:00:00+00'::timestamptz
+    end,
+    actual_shipping_entered_by='af100000-0000-4000-8000-000000000004',
+    vendor_id='af100000-0000-4000-8000-000000000004'
+where s.order_id in ('af200000-0000-4000-8000-000000000001','af200000-0000-4000-8000-000000000002');
+do $$ begin
+ if (select count(*) from public.shipments where order_id='af200000-0000-4000-8000-000000000001')<>1
+    or (select count(*) from public.shipments where order_id='af200000-0000-4000-8000-000000000002')<>1 then
+   raise exception 'Finance fixture orders must each have exactly one shipment';
+ end if;
+ if not exists (
+   select 1 from public.shipments
+   where order_id='af200000-0000-4000-8000-000000000001'
+     and status='shipped' and actual_shipping_cost=12000 and shipping_payer='vendor'
+     and packing_status='packed' and vendor_id='af100000-0000-4000-8000-000000000004'
+ ) or not exists (
+   select 1 from public.shipments
+   where order_id='af200000-0000-4000-8000-000000000002'
+     and status='shipped' and actual_shipping_cost=9000 and shipping_payer='perfun'
+     and packing_status='packed' and vendor_id='af100000-0000-4000-8000-000000000004'
+ ) then
+   raise exception 'Finance fixture shipment values were not applied';
+ end if;
+end $$;
 insert into public.vendor_payouts(id,vendor_id,payout_date,status,total,transfer_reference,paid_at,paid_by,request_id) values
  ('af600000-0000-4000-8000-000000000001','af100000-0000-4000-8000-000000000004','2026-01-03','paid',62000,'FIN-BANK-1','2026-01-02 18:00:00+00','af100000-0000-4000-8000-000000000001',gen_random_uuid()),
  ('af600000-0000-4000-8000-000000000002','af100000-0000-4000-8000-000000000004','2026-01-03','draft',100000,null,null,null,gen_random_uuid());

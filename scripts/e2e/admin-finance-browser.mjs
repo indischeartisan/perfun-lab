@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chromium, expect } from 'playwright'
+import { chromium } from 'playwright'
 
 const appUrl = process.env.E2E_APP_URL
 const email = process.env.E2E_EMAIL
@@ -34,7 +34,7 @@ try {
   await page.getByLabel('Periode').selectOption('custom')
   await page.getByLabel('Tanggal WIB').fill('2026-01-02')
   await page.getByRole('button', { name: 'Terapkan', exact: true }).click()
-  await expect(page.locator('.finance-period-note')).toContainText('2026')
+  assert.match((await page.locator('.finance-period-note').textContent()) ?? '', /2026/)
   await assertMetrics()
   await page.screenshot({ path: `${screenshotDir}/finance-wib-date.png`, fullPage: true })
 

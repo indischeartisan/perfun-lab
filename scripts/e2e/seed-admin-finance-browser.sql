@@ -18,7 +18,7 @@ insert into public.orders(
   subtotal, discount, shipping, grand_total, payment_status, status, created_at
 )
 values
-  ('bf200000-0000-4000-8000-000000000001', 'BROWSER-FIN-BOUNDARY', 'bf100000-0000-4000-8000-000000000001', gen_random_uuid(), '{}', '{}', 100000, 10000, 15000, 105000, 'paid', 'paid', '2026-01-01 16:59:59+00'),
+  ('bf200000-0000-4000-8000-000000000001', 'BROWSER-FIN-BOUNDARY', 'bf100000-0000-4000-8000-000000000001', gen_random_uuid(), '{}', '{}', 100000, 10000, 15000, 105000, 'paid', 'paid', '2026-01-01 17:00:00+00'),
   ('bf200000-0000-4000-8000-000000000002', 'BROWSER-FIN-SAME-DAY', 'bf100000-0000-4000-8000-000000000001', gen_random_uuid(), '{}', '{}', 200000, 0, 20000, 220000, 'paid', 'paid', '2026-01-02 02:00:00+00');
 
 insert into public.order_items(

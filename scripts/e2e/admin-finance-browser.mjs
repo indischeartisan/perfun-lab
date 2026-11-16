@@ -9,6 +9,13 @@ assert.ok(appUrl && email && password && screenshotDir)
 
 const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } })
+page.on('response', async response => {
+  if (!response.url().includes('/rest/v1/rpc/admin_finance')) return
+  try {
+    const body = await response.json()
+    console.log(`admin_finance period=${body.period} orders=${body.orders?.orders} payments=${body.payments?.customer_payments} vendor_paid=${body.vendor?.paid_total}`)
+  } catch { /* Playwright may observe a response while the page is closing. */ }
+})
 
 try {
   await page.goto(`${appUrl}/#admin`, { waitUntil: 'domcontentloaded' })

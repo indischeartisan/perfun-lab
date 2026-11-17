@@ -12,8 +12,8 @@ on:
           - dry-run
           - apply
 
-# This workflow is intentionally manual-only. It must never receive production
-# credentials from pull_request or push jobs.
+# Manual-only: this workflow never receives production credentials from a PR
+# or push event. The migration source is pinned to a reviewed, CI-green SHA.
 permissions:
   contents: read
 
@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  SOURCE_REF: codex/keuangan
+  SOURCE_SHA: 737027f34502dc3430597c3fa8179fbe0f947ab4
   TARGET_MIGRATION: 20261115090000_admin_finance.sql
 
 jobs:
@@ -33,11 +33,18 @@ jobs:
     environment:
       name: production
     steps:
-      - name: Check out the reviewed PR branch
+      - name: Check out the reviewed PR commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.SOURCE_REF }}
+          ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 0
+
+      - name: Verify reviewed source commit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -f "supabase/migrations/$TARGET_MIGRATION"
 
       - name: Download pinned Supabase CLI
         shell: bash
@@ -54,7 +61,7 @@ jobs:
           echo "$tools" >> "$GITHUB_PATH"
           "$tools/supabase-bin" --version
 
-      - name: Guard the release bundle and show the database dry-run
+      - name: Guard migration set and verify dry-run output
         shell: bash
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
@@ -72,6 +79,8 @@ jobs:
           local_versions="$RUNNER_TEMP/admin-finance-local-migrations.txt"
           remote_versions="$RUNNER_TEMP/admin-finance-remote-migrations.txt"
           pending_versions="$RUNNER_TEMP/admin-finance-pending-migrations.txt"
+          dry_run_log="$RUNNER_TEMP/admin-finance-dry-run.log"
+          dry_run_versions="$RUNNER_TEMP/admin-finance-dry-run-migrations.txt"
           find supabase/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' \
             | sed -E 's/^([0-9]+)_.*/\1/' | sort -u >"$local_versions"
 
@@ -81,17 +90,19 @@ jobs:
             'select version from supabase_migrations.schema_migrations order by version' \
             >"$remote_versions"
           comm -23 "$local_versions" "$remote_versions" >"$pending_versions"
-
           if ! grep -Fxq "$target_version" "$pending_versions" || [[ "$(wc -l <"$pending_versions")" -ne 1 ]]; then
             echo '::error::Release stopped: the only pending migration must be 20261115090000_admin_finance.sql.'
-            echo 'Pending migration versions (filenames are not printed):'
-            sed 's/.*/- migration version redacted/' "$pending_versions"
             exit 1
           fi
 
-          echo "Verified release candidate: $target_path"
           echo 'Running Supabase dry-run; no production write is performed.'
-          supabase-bin db push --db-url "$SUPABASE_DB_URL" --dry-run
+          supabase-bin db push --db-url "$SUPABASE_DB_URL" --dry-run 2>&1 | tee "$dry_run_log"
+          grep -Eo '[0-9]{14}_[A-Za-z0-9_]+\.sql' "$dry_run_log" | sort -u >"$dry_run_versions" || true
+          if [[ "$(wc -l <"$dry_run_versions")" -ne 1 ]] || ! grep -Fxq "$TARGET_MIGRATION" "$dry_run_versions"; then
+            echo '::error::Release stopped: dry-run must show exactly 20261115090000_admin_finance.sql and no other migration.'
+            exit 1
+          fi
+          echo "Dry-run verified exactly one migration: $TARGET_MIGRATION"
 
           if [[ "${{ inputs.operation }}" == 'dry-run' ]]; then
             echo 'Dry-run complete; apply was not requested.'
@@ -99,14 +110,14 @@ jobs:
           fi
 
           echo 'Apply requested. The production environment approval has passed.'
-          # Re-check the exact same guard immediately before the write so a
-          # concurrent migration cannot turn this into a broader release.
+          # Re-check immediately before writing so a concurrent migration
+          # cannot turn this into a broader release.
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
             'select version from supabase_migrations.schema_migrations order by version' \
             >"$remote_versions"
           comm -23 "$local_versions" "$remote_versions" >"$pending_versions"
           if ! grep -Fxq "$target_version" "$pending_versions" || [[ "$(wc -l <"$pending_versions")" -ne 1 ]]; then
-            echo '::error::Apply stopped: pending migration set changed or contains a migration other than Admin Finance.'
+            echo '::error::Apply stopped: pending migration set changed or contains another migration.'
             exit 1
           fi
 

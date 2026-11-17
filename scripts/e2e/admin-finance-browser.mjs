@@ -34,13 +34,12 @@ try {
   const financeBox = await financePayments.boundingBox()
   assert.ok(rateBox && financeBox && rateBox.y <= financeBox.y + financeBox.height)
 
-  const ordersSection = page.locator('.finance-section').filter({
-    has: page.getByRole('heading', { name: 'Pesanan', exact: true }),
-  })
-  const metric = async (label) => ordersSection.getByText(label, { exact: true }).locator('..').getByRole('strong').textContent()
+  const metric = async (section, label) => page.locator('.finance-section').filter({
+    has: page.getByRole('heading', { name: section, exact: true }),
+  }).getByText(label, { exact: true }).locator('..').getByRole('strong').textContent()
   const assertMetrics = async () => {
-    assert.equal(await metric('Jumlah pesanan'), '2')
-    assert.equal(await metric('Total pembayaran pelanggan'), 'Rp325.000')
+    assert.equal(await metric('Pesanan', 'Jumlah pesanan'), '2')
+    assert.equal(await metric('Pembayaran pelanggan', 'Total pembayaran pelanggan'), 'Rp325.000')
   }
 
   await assertMetrics()

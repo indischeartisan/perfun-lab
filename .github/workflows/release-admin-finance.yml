@@ -1,0 +1,125 @@
+name: Release Admin Finance migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Dry-run first; apply is gated by the production environment approval
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - apply
+
+# Manual-only: this workflow never receives production credentials from a PR
+# or push event. The migration source is pinned to a reviewed, CI-green SHA.
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-production-admin-finance-release
+  cancel-in-progress: false
+
+env:
+  SOURCE_SHA: 737027f34502dc3430597c3fa8179fbe0f947ab4
+  TARGET_MIGRATION: 20261115090000_admin_finance.sql
+
+jobs:
+  release:
+    name: Admin Finance migration ${{ inputs.operation }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production
+    steps:
+      - name: Check out the reviewed PR commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+
+      - name: Verify reviewed source commit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -f "supabase/migrations/$TARGET_MIGRATION"
+
+      - name: Download pinned Supabase CLI
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          tools="$RUNNER_TEMP/admin-finance-release-tools"
+          mkdir -p "$tools"
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "$tools/supabase.tar.gz" \
+            "https://github.com/supabase/cli/releases/download/v3.1.0/supabase_3.1.0_linux_amd64.tar.gz"
+          echo "dbe9fd66771337fc198727da86b9d3551302f87a7091cd8781be2a4cd0c8ac4d  $tools/supabase.tar.gz" | sha256sum --check --status
+          tar -xzf "$tools/supabase.tar.gz" -C "$tools"
+          install -m 0755 "$tools/supabase" "$tools/supabase-bin"
+          echo "$tools" >> "$GITHUB_PATH"
+          "$tools/supabase-bin" --version
+
+      - name: Guard migration set and verify dry-run output
+        shell: bash
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$SUPABASE_DB_URL"
+          command -v psql >/dev/null
+
+          target_path="supabase/migrations/$TARGET_MIGRATION"
+          test -f "$target_path"
+          target_version="${TARGET_MIGRATION%%_*}"
+          test "$target_version" = '20261115090000'
+          test "$(basename "$target_path")" = "$TARGET_MIGRATION"
+
+          local_versions="$RUNNER_TEMP/admin-finance-local-migrations.txt"
+          remote_versions="$RUNNER_TEMP/admin-finance-remote-migrations.txt"
+          pending_versions="$RUNNER_TEMP/admin-finance-pending-migrations.txt"
+          dry_run_log="$RUNNER_TEMP/admin-finance-dry-run.log"
+          dry_run_versions="$RUNNER_TEMP/admin-finance-dry-run-migrations.txt"
+          find supabase/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' \
+            | sed -E 's/^([0-9]+)_.*/\1/' | sort -u >"$local_versions"
+
+          # A missing history table is a release blocker, not permission to
+          # bootstrap production from this workflow.
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
+            'select version from supabase_migrations.schema_migrations order by version' \
+            >"$remote_versions"
+          comm -23 "$local_versions" "$remote_versions" >"$pending_versions"
+          if ! grep -Fxq "$target_version" "$pending_versions" || [[ "$(wc -l <"$pending_versions")" -ne 1 ]]; then
+            echo '::error::Release stopped: the only pending migration must be 20261115090000_admin_finance.sql.'
+            exit 1
+          fi
+
+          echo 'Running Supabase dry-run; no production write is performed.'
+          supabase-bin db push --db-url "$SUPABASE_DB_URL" --dry-run 2>&1 | tee "$dry_run_log"
+          grep -Eo '[0-9]{14}_[A-Za-z0-9_]+\.sql' "$dry_run_log" | sort -u >"$dry_run_versions" || true
+          if [[ "$(wc -l <"$dry_run_versions")" -ne 1 ]] || ! grep -Fxq "$TARGET_MIGRATION" "$dry_run_versions"; then
+            echo '::error::Release stopped: dry-run must show exactly 20261115090000_admin_finance.sql and no other migration.'
+            exit 1
+          fi
+          echo "Dry-run verified exactly one migration: $TARGET_MIGRATION"
+
+          if [[ "${{ inputs.operation }}" == 'dry-run' ]]; then
+            echo 'Dry-run complete; apply was not requested.'
+            exit 0
+          fi
+
+          echo 'Apply requested. The production environment approval has passed.'
+          # Re-check immediately before writing so a concurrent migration
+          # cannot turn this into a broader release.
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
+            'select version from supabase_migrations.schema_migrations order by version' \
+            >"$remote_versions"
+          comm -23 "$local_versions" "$remote_versions" >"$pending_versions"
+          if ! grep -Fxq "$target_version" "$pending_versions" || [[ "$(wc -l <"$pending_versions")" -ne 1 ]]; then
+            echo '::error::Apply stopped: pending migration set changed or contains another migration.'
+            exit 1
+          fi
+
+          supabase-bin db push --db-url "$SUPABASE_DB_URL" --yes
+          echo "Applied and recorded $TARGET_MIGRATION."

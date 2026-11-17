@@ -51,7 +51,7 @@ try {
   await page.locator('.finance-period-filter select').selectOption('custom')
   await page.getByLabel('Tanggal WIB').fill('2026-01-02')
   await page.getByRole('button', { name: 'Terapkan', exact: true }).click()
-  assert.match((await page.locator('.finance-period-note').textContent()) ?? '', /2026/)
+  assert.match((await page.locator('.finance-page > .finance-period-note').textContent()) ?? '', /2026/)
   await assertMetrics()
   await page.screenshot({ path: `${screenshotDir}/finance-wib-date.png`, fullPage: true })
 

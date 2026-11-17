@@ -15,6 +15,10 @@ insert into public.order_items(id,order_id,position,product_snapshot,creations_s
  ('ab300000-0000-4000-8000-000000000002','ab200000-0000-4000-8000-000000000002',1,'{"id":"30ml","label":"30 ML","volume_ml":30,"bottle_count":1}','[]',1,100000,100000,100000),
  ('ab300000-0000-4000-8000-000000000003','ab200000-0000-4000-8000-000000000003',1,'{"id":"bundle-3x10ml","label":"Play Set","volume_ml":10,"bottle_count":3}','[]',1,150000,150000,150000),
  ('ab300000-0000-4000-8000-000000000004','ab200000-0000-4000-8000-000000000004',1,'{"id":"10ml","label":"10 ML","volume_ml":10,"bottle_count":1}','[]',1,50000,50000,50000);
+insert into public.production_jobs(order_item_id)
+select i.id from public.order_items i
+where i.order_id in ('ab200000-0000-4000-8000-000000000001','ab200000-0000-4000-8000-000000000002','ab200000-0000-4000-8000-000000000003','ab200000-0000-4000-8000-000000000004')
+  and not exists(select 1 from public.production_jobs existing where existing.order_item_id=i.id);
 set local role authenticated;
 select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002',true);
 do $$ declare settings jsonb; begin

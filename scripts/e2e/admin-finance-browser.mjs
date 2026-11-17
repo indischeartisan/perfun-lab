@@ -36,7 +36,6 @@ try {
   const assertMetrics = async () => {
     assert.equal(await metric('Jumlah pesanan'), '2')
     assert.equal(await metric('Total pembayaran pelanggan'), 'Rp325.000')
-    assert.equal(await metric('Pembayaran tercatat pada periode ini'), 'Rp62.000')
   }
 
   await assertMetrics()

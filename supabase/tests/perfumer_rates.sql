@@ -97,7 +97,7 @@ do $$ declare workspace jsonb; finance jsonb; payout jsonb; actual_total bigint;
  update public.order_vendor_assignments set payout_ready_at=(private.wib_payout_date()::timestamp + interval '00:01') at time zone 'Asia/Jakarta' where order_id in ('ab200000-0000-4000-8000-000000000001','ab200000-0000-4000-8000-000000000003');
  update public.order_vendor_assignments set payout_ready_at=((private.wib_payout_date()-1)::timestamp + interval '23:59') at time zone 'Asia/Jakarta' where order_id='ab200000-0000-4000-8000-000000000002';
  set local role authenticated;
- select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002',true);
+ perform set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002',true);
  workspace:=public.admin_vendor_payout_recap('day',private.wib_payout_date());
  if (workspace->>'ready_count')::integer<>2 or (workspace->>'ready_service')::bigint<>200000 or (workspace->>'ready_shipping')::bigint<>17000 or (workspace->>'ready_total')::bigint<>217000 or (workspace->>'older_count')::integer<>1 or (workspace->>'older_total')::bigint<>100000 or (workspace->>'all_ready_total')::bigint<>317000 then raise exception 'Daily WIB recap did not separate today from older ready orders: %',workspace; end if;
  if exists(select 1 from jsonb_array_elements(workspace->'ready_orders') x where (x->>'ready_date')::date<>private.wib_payout_date()) then raise exception 'Daily recap crossed a WIB date boundary'; end if;
@@ -108,7 +108,7 @@ do $$ declare workspace jsonb; finance jsonb; payout jsonb; actual_total bigint;
  if (finance->>'ready_total')::bigint<>217000 or (finance->>'older_total')::bigint<>100000 or (finance->>'all_ready_total')::bigint<>317000 or exists(select 1 from jsonb_array_elements(finance->'ready_orders') x where x->>'vendor_id'<>'ab100000-0000-4000-8000-000000000003') then raise exception 'Vendor recap differs from the Admin recap or leaked another vendor: %',finance; end if;
  reset role;
  set local role authenticated;
- select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002',true);
+ perform set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002',true);
  payout:=public.admin_create_vendor_payout('ab100000-0000-4000-8000-000000000003',gen_random_uuid(),null);
  actual_total:=(payout->>'total')::bigint;
  if actual_total<>317000 then

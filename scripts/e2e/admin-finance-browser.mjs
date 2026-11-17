@@ -46,7 +46,7 @@ try {
   await page.screenshot({ path: `${screenshotDir}/finance-wib-date.png`, fullPage: true })
 
   await page.getByRole('button', { name: 'Kelola pembayaran perfumer', exact: true }).click()
-  await page.getByRole('region', { name: 'Vendor payments', exact: true }).waitFor()
+  await page.getByRole('region', { name: 'Pembayaran perfumer', exact: true }).waitFor()
   await page.getByRole('heading', { name: 'Drafts and paid records', exact: true }).waitFor()
   assert.equal(await page.getByRole('alert').count(), 0)
   await page.screenshot({ path: `${screenshotDir}/finance-vendor-flow.png`, fullPage: true })

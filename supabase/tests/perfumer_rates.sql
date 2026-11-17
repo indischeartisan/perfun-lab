@@ -11,10 +11,10 @@ insert into public.orders(id,order_number,user_id,request_id,request_payload,add
  ('ab200000-0000-4000-8000-000000000003','RATES-PLAYSET','ab100000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{}',150000,0,20000,'{"original_shipping_amount":25000,"shipping_discount":5000,"customer_shipping_total":20000}',170000,'paid','paid'),
  ('ab200000-0000-4000-8000-000000000004','RATES-LEGACY','ab100000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{}',50000,0,10000,null,60000,'paid','paid');
 insert into public.order_items(id,order_id,position,product_snapshot,creations_snapshot,quantity,normal_unit_price,unit_price,line_total) values
- ('ab300000-0000-4000-8000-000000000001','ab200000-0000-4000-8000-000000000001',1,'{"id":"10ml"}','[]',1,50000,50000,50000),
- ('ab300000-0000-4000-8000-000000000002','ab200000-0000-4000-8000-000000000002',1,'{"id":"30ml"}','[]',1,100000,100000,100000),
- ('ab300000-0000-4000-8000-000000000003','ab200000-0000-4000-8000-000000000003',1,'{"id":"bundle-3x10ml"}','[]',1,150000,150000,150000),
- ('ab300000-0000-4000-8000-000000000004','ab200000-0000-4000-8000-000000000004',1,'{"id":"10ml"}','[]',1,50000,50000,50000);
+ ('ab300000-0000-4000-8000-000000000001','ab200000-0000-4000-8000-000000000001',1,'{"id":"10ml","label":"10 ML","volume_ml":10,"bottle_count":1}','[]',1,50000,50000,50000),
+ ('ab300000-0000-4000-8000-000000000002','ab200000-0000-4000-8000-000000000002',1,'{"id":"30ml","label":"30 ML","volume_ml":30,"bottle_count":1}','[]',1,100000,100000,100000),
+ ('ab300000-0000-4000-8000-000000000003','ab200000-0000-4000-8000-000000000003',1,'{"id":"bundle-3x10ml","label":"Play Set","volume_ml":10,"bottle_count":3}','[]',1,150000,150000,150000),
+ ('ab300000-0000-4000-8000-000000000004','ab200000-0000-4000-8000-000000000004',1,'{"id":"10ml","label":"10 ML","volume_ml":10,"bottle_count":1}','[]',1,50000,50000,50000);
 set local role authenticated;
 select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002',true);
 do $$ declare settings jsonb; begin
@@ -39,7 +39,7 @@ end $$;
 -- payout workspace must never invent a reimbursement for missing source data.
 reset role;
 set local role authenticated;
-select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002',true);
+select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000003',true);
 do $$ declare job_id uuid; shipment_id uuid; checklist jsonb:='{"bottles_checked":true,"formula_stickers_checked":true,"bottles_sealed":true,"packaging_ready":true,"recipient_label_checked":true}'; target uuid; payer text; cost bigint; begin
  for target,payer,cost in values
   ('ab200000-0000-4000-8000-000000000001'::uuid,'vendor',12000::bigint),

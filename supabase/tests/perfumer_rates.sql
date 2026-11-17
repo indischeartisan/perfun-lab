@@ -30,6 +30,12 @@ select public.admin_assign_vendor('ab200000-0000-4000-8000-000000000002','ab1000
 select public.admin_assign_vendor('ab200000-0000-4000-8000-000000000003','ab100000-0000-4000-8000-000000000003');
 select public.admin_assign_vendor('ab200000-0000-4000-8000-000000000004','ab100000-0000-4000-8000-000000000003');
 select public.admin_update_vendor_fee_settings(60000,120000);
+do $$ begin
+ if not exists(select 1 from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id='ab200000-0000-4000-8000-000000000001' and j.vendor_id='ab100000-0000-4000-8000-000000000003') then raise exception 'Admin fixture projection did not assign the vendor job'; end if;
+ perform set_config('app.rates_job_1',(select j.id::text from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id='ab200000-0000-4000-8000-000000000001' and j.vendor_id='ab100000-0000-4000-8000-000000000003' limit 1),true);
+ perform set_config('app.rates_job_2',(select j.id::text from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id='ab200000-0000-4000-8000-000000000002' and j.vendor_id='ab100000-0000-4000-8000-000000000003' limit 1),true);
+ perform set_config('app.rates_job_3',(select j.id::text from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id='ab200000-0000-4000-8000-000000000003' and j.vendor_id='ab100000-0000-4000-8000-000000000003' limit 1),true);
+end $$;
 reset role;
 do $$ begin
  if (select sum(vendor_fee_amount) from public.order_vendor_assignments where vendor_id='ab100000-0000-4000-8000-000000000003')<>350000 then raise exception 'Existing assignments did not retain rate snapshots'; end if;
@@ -50,8 +56,11 @@ do $$ declare job_id uuid; shipment_id uuid; checklist jsonb:='{"bottles_checked
   ('ab200000-0000-4000-8000-000000000002'::uuid,'perfun',14000::bigint),
   ('ab200000-0000-4000-8000-000000000003'::uuid,'customer',16000::bigint)
  loop
-  select j.id into job_id from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id=target and j.vendor_id=auth.uid();
-  if job_id is null then raise exception 'Vendor fixture job was not assigned for %', target; end if;
+  job_id:=case target
+    when 'ab200000-0000-4000-8000-000000000001'::uuid then current_setting('app.rates_job_1')::uuid
+    when 'ab200000-0000-4000-8000-000000000002'::uuid then current_setting('app.rates_job_2')::uuid
+    when 'ab200000-0000-4000-8000-000000000003'::uuid then current_setting('app.rates_job_3')::uuid
+  end;
   perform public.advance_production_job(job_id,'start'); perform public.advance_production_job(job_id,'complete');
   select id into shipment_id from public.shipments where order_id=target;
   perform public.save_shipment_packing(shipment_id,checklist,true);

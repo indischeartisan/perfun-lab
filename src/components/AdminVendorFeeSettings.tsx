@@ -10,11 +10,11 @@ export function AdminVendorFeeSettings() {
   return <section className="finance-section vendor-fee-settings" aria-label="Pengaturan tarif perfumer">
     <div className="admin-section-heading"><div><span className="admin-kicker">PENGATURAN ADMIN</span><h2>Pengaturan tarif perfumer</h2><p>Tarif disimpan ke snapshot saat pesanan ditugaskan. Perubahan tidak mengubah penugasan atau pembayaran lama.</p></div></div>
     <AdminLoad error={error} loading={!data && !error} reload={reload}/>
-    {data ? <VendorFeeForm initial10ml={data.service_10ml} initial30ml={data.service_30ml}/> : null}
+    {data ? <VendorFeeForm initial10ml={data.service_10ml} initial30ml={data.service_30ml} onSaved={reload}/> : null}
   </section>
 }
 
-function VendorFeeForm({ initial10ml, initial30ml }: { initial10ml: number; initial30ml: number }) {
+function VendorFeeForm({ initial10ml, initial30ml, onSaved }: { initial10ml: number; initial30ml: number; onSaved: () => void }) {
   const [service10ml, setService10ml] = useState(String(initial10ml))
   const [service30ml, setService30ml] = useState(String(initial30ml))
   const [busy, setBusy] = useState(false)
@@ -32,7 +32,7 @@ function VendorFeeForm({ initial10ml, initial30ml }: { initial10ml: number; init
     try {
       await updateAdminVendorFeeSettings(next10ml, next30ml)
       setMessage('Tarif perfumer tersimpan. Penugasan lama tetap memakai snapshot tarifnya.')
-      reload()
+      onSaved()
     } catch (saveError) { setActionError(errorMessage(saveError)) } finally { setBusy(false) }
   }
 

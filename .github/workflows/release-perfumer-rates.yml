@@ -1,0 +1,103 @@
+name: Dry-run Perfumer Rates migration
+
+on:
+  workflow_dispatch:
+
+# Manual-only: this workflow runs solely from main and never applies a migration.
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-production-perfumer-rates-dry-run
+  cancel-in-progress: false
+
+env:
+  SOURCE_SHA: 3c262e9006f473ef6abd7afb08d942d66e101698
+  TARGET_MIGRATION: 20261117100000_perfumer_rates_shipping_reimbursement.sql
+
+jobs:
+  dry-run:
+    name: Perfumer Rates migration dry-run
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production
+    steps:
+      - name: Check out the reviewed PR commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+
+      - name: Verify reviewed source commit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -f "supabase/migrations/$TARGET_MIGRATION"
+
+      - name: Download pinned Supabase CLI
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          tools="$RUNNER_TEMP/perfumer-rates-release-tools"
+          mkdir -p "$tools"
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "$tools/supabase.tar.gz" \
+            "https://github.com/supabase/cli/releases/download/v3.1.0/supabase_3.1.0_linux_amd64.tar.gz"
+          echo "dbe9fd66771337fc198727da86b9d3551302f87a7091cd8781be2a4cd0c8ac4d  $tools/supabase.tar.gz" | sha256sum --check --status
+          tar -xzf "$tools/supabase.tar.gz" -C "$tools"
+          install -m 0755 "$tools/supabase" "$tools/supabase-bin"
+          echo "$tools" >> "$GITHUB_PATH"
+          "$tools/supabase-bin" --version
+
+      - name: Guard history and verify database dry-run
+        shell: bash
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$SUPABASE_DB_URL"
+          command -v psql >/dev/null
+
+          target_path="supabase/migrations/$TARGET_MIGRATION"
+          target_version="${TARGET_MIGRATION%%_*}"
+          test "$target_version" = '20261117100000'
+          test -f "$target_path"
+          test "$(basename "$target_path")" = "$TARGET_MIGRATION"
+
+          local_versions="$RUNNER_TEMP/perfumer-rates-local-versions.txt"
+          remote_versions="$RUNNER_TEMP/perfumer-rates-remote-versions.txt"
+          pending_versions="$RUNNER_TEMP/perfumer-rates-pending-versions.txt"
+          unexpected_remote_versions="$RUNNER_TEMP/perfumer-rates-unexpected-remote-versions.txt"
+          dry_run_log="$RUNNER_TEMP/perfumer-rates-dry-run.log"
+          dry_run_files="$RUNNER_TEMP/perfumer-rates-dry-run-files.txt"
+
+          find supabase/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' \
+            | sed -E 's/^([0-9]+)_.*/\1/' | sort -u >"$local_versions"
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
+            'select version from supabase_migrations.schema_migrations order by version' \
+            | sort -u >"$remote_versions"
+
+          comm -13 "$local_versions" "$remote_versions" >"$unexpected_remote_versions"
+          if [[ -s "$unexpected_remote_versions" ]]; then
+            echo '::error::Dry-run stopped: production migration history does not match the reviewed source.'
+            exit 1
+          fi
+
+          comm -23 "$local_versions" "$remote_versions" >"$pending_versions"
+          if [[ "$(wc -l <"$pending_versions")" -ne 1 ]] || ! grep -Fxq "$target_version" "$pending_versions"; then
+            echo '::error::Dry-run stopped: the only pending migration must be 20261117100000_perfumer_rates_shipping_reimbursement.sql.'
+            exit 1
+          fi
+
+          echo 'Running Supabase dry-run; no production write is performed.'
+          supabase-bin db push --db-url "$SUPABASE_DB_URL" --dry-run 2>&1 | tee "$dry_run_log"
+          grep -Eo '[0-9]{14}_[A-Za-z0-9_]+\.sql' "$dry_run_log" | sort -u >"$dry_run_files" || true
+          if [[ "$(wc -l <"$dry_run_files")" -ne 1 ]] || ! grep -Fxq "$TARGET_MIGRATION" "$dry_run_files"; then
+            echo '::error::Dry-run stopped: output must show exactly 20261117100000_perfumer_rates_shipping_reimbursement.sql and no other migration.'
+            exit 1
+          fi
+
+          echo "Dry-run verified exactly one migration: $TARGET_MIGRATION"

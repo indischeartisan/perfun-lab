@@ -30,17 +30,22 @@ select public.admin_assign_vendor('ab200000-0000-4000-8000-000000000002','ab1000
 select public.admin_assign_vendor('ab200000-0000-4000-8000-000000000003','ab100000-0000-4000-8000-000000000003');
 select public.admin_assign_vendor('ab200000-0000-4000-8000-000000000004','ab100000-0000-4000-8000-000000000003');
 reset role;
+insert into public.production_jobs(order_item_id)
+select i.id from public.order_items i
+where i.order_id in ('ab200000-0000-4000-8000-000000000001','ab200000-0000-4000-8000-000000000002','ab200000-0000-4000-8000-000000000003','ab200000-0000-4000-8000-000000000004')
+  and not exists(select 1 from public.production_jobs existing where existing.order_item_id=i.id);
 update public.production_jobs j set vendor_id='ab100000-0000-4000-8000-000000000003'
 from public.order_items i where i.id=j.order_item_id and i.order_id in ('ab200000-0000-4000-8000-000000000001','ab200000-0000-4000-8000-000000000002','ab200000-0000-4000-8000-000000000003','ab200000-0000-4000-8000-000000000004');
-set local role authenticated;
-select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002',true);
-select public.admin_update_vendor_fee_settings(60000,120000);
 do $$ begin
- if not exists(select 1 from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id='ab200000-0000-4000-8000-000000000001' and j.vendor_id='ab100000-0000-4000-8000-000000000003') then raise exception 'Admin fixture projection did not assign the vendor job'; end if;
+ if (select count(*) from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id in ('ab200000-0000-4000-8000-000000000001','ab200000-0000-4000-8000-000000000002','ab200000-0000-4000-8000-000000000003'))<>3 then raise exception 'Test production jobs are missing after fixture setup'; end if;
+ if (select count(*) from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id in ('ab200000-0000-4000-8000-000000000001','ab200000-0000-4000-8000-000000000002','ab200000-0000-4000-8000-000000000003') and j.vendor_id='ab100000-0000-4000-8000-000000000003')<>3 then raise exception 'Test production jobs have the wrong vendor after fixture setup'; end if;
  perform set_config('app.rates_job_1',(select j.id::text from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id='ab200000-0000-4000-8000-000000000001' and j.vendor_id='ab100000-0000-4000-8000-000000000003' limit 1),true);
  perform set_config('app.rates_job_2',(select j.id::text from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id='ab200000-0000-4000-8000-000000000002' and j.vendor_id='ab100000-0000-4000-8000-000000000003' limit 1),true);
  perform set_config('app.rates_job_3',(select j.id::text from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id='ab200000-0000-4000-8000-000000000003' and j.vendor_id='ab100000-0000-4000-8000-000000000003' limit 1),true);
 end $$;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002',true);
+select public.admin_update_vendor_fee_settings(60000,120000);
 reset role;
 do $$ begin
  if (select sum(vendor_fee_amount) from public.order_vendor_assignments where vendor_id='ab100000-0000-4000-8000-000000000003')<>350000 then raise exception 'Existing assignments did not retain rate snapshots'; end if;

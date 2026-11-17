@@ -44,7 +44,7 @@ try {
   assert.equal(await page.locator('details[open] .finance-table tbody tr').count() > 0, true)
   await page.screenshot({ path: `${screenshotDir}/finance-all-time.png`, fullPage: true })
 
-  await page.getByLabel('Periode').selectOption('custom')
+  await page.getByLabel('Periode', { exact: true }).selectOption('custom')
   await page.getByLabel('Tanggal WIB').fill('2026-01-02')
   await page.getByRole('button', { name: 'Terapkan', exact: true }).click()
   assert.match((await page.locator('.finance-period-note').textContent()) ?? '', /2026/)

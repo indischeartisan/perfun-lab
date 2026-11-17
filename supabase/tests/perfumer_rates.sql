@@ -84,7 +84,7 @@ end $$;
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002',true);
-do $$ declare workspace jsonb; finance jsonb; payout jsonb; actual_total bigint; diagnostic_rows jsonb; begin
+do $$ declare workspace jsonb; finance jsonb; payout jsonb; actual_total bigint; diagnostic_rows jsonb; wib_today date:=(clock_timestamp() at time zone 'Asia/Jakarta')::date; begin
  workspace:=public.admin_vendor_payout_workspace(0);
  finance:=public.admin_finance('all',null);
  if (workspace->>'eligible_count')::integer<>3 or (workspace->>'review_count')::integer<>1 or (workspace->>'outstanding_service')::bigint<>300000 or (workspace->>'outstanding_shipping')::bigint<>17000 or (workspace->>'outstanding_total')::bigint<>317000 then raise exception 'Eligibility summary does not match payout-ready orders'; end if;
@@ -94,17 +94,17 @@ do $$ declare workspace jsonb; finance jsonb; payout jsonb; actual_total bigint;
  if exists(select 1 from jsonb_array_elements(workspace->'eligible_orders') x where x->>'order_number'='RATES-30ML' and (x->>'shipping_reimbursement')::bigint<>0) then raise exception 'Perfun Lab shipping was reimbursed'; end if;
  -- The recap uses the stored first-ready moment in WIB, not order or payout dates.
  reset role;
- update public.order_vendor_assignments set payout_ready_at=(private.wib_payout_date()::timestamp + interval '00:01') at time zone 'Asia/Jakarta' where order_id in ('ab200000-0000-4000-8000-000000000001','ab200000-0000-4000-8000-000000000003');
- update public.order_vendor_assignments set payout_ready_at=((private.wib_payout_date()-1)::timestamp + interval '23:59') at time zone 'Asia/Jakarta' where order_id='ab200000-0000-4000-8000-000000000002';
+ update public.order_vendor_assignments set payout_ready_at=(wib_today::timestamp + interval '00:01') at time zone 'Asia/Jakarta' where order_id in ('ab200000-0000-4000-8000-000000000001','ab200000-0000-4000-8000-000000000003');
+ update public.order_vendor_assignments set payout_ready_at=((wib_today-1)::timestamp + interval '23:59') at time zone 'Asia/Jakarta' where order_id='ab200000-0000-4000-8000-000000000002';
  set local role authenticated;
  perform set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002',true);
- workspace:=public.admin_vendor_payout_recap('day',private.wib_payout_date());
+ workspace:=public.admin_vendor_payout_recap('day',wib_today);
  if (workspace->>'ready_count')::integer<>2 or (workspace->>'ready_service')::bigint<>200000 or (workspace->>'ready_shipping')::bigint<>17000 or (workspace->>'ready_total')::bigint<>217000 or (workspace->>'older_count')::integer<>1 or (workspace->>'older_total')::bigint<>100000 or (workspace->>'all_ready_total')::bigint<>317000 then raise exception 'Daily WIB recap did not separate today from older ready orders: %',workspace; end if;
- if exists(select 1 from jsonb_array_elements(workspace->'ready_orders') x where (x->>'ready_date')::date<>private.wib_payout_date()) then raise exception 'Daily recap crossed a WIB date boundary'; end if;
+ if exists(select 1 from jsonb_array_elements(workspace->'ready_orders') x where (x->>'ready_date')::date<>wib_today) then raise exception 'Daily recap crossed a WIB date boundary'; end if;
  reset role;
  set local role authenticated;
  perform set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000003',true);
- finance:=public.vendor_payout_recap('day',private.wib_payout_date());
+ finance:=public.vendor_payout_recap('day',wib_today);
  if (finance->>'ready_total')::bigint<>217000 or (finance->>'older_total')::bigint<>100000 or (finance->>'all_ready_total')::bigint<>317000 or exists(select 1 from jsonb_array_elements(finance->'ready_orders') x where x->>'vendor_id'<>'ab100000-0000-4000-8000-000000000003') then raise exception 'Vendor recap differs from the Admin recap or leaked another vendor: %',finance; end if;
  reset role;
  set local role authenticated;

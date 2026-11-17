@@ -140,6 +140,7 @@ jobs:
             supabase/tests/shipment_tracking_correction.sql
             supabase/tests/shipment_delivery_confirmation.sql
             supabase/tests/payouts.sql
+            supabase/tests/perfumer_rates.sql
             supabase/tests/shipping_foundation.sql
             supabase/tests/shipping_checkout.sql
             supabase/tests/shipping_address_atomic.sql

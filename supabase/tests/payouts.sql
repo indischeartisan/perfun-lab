@@ -7,12 +7,12 @@ insert into auth.users(id,email) values
  ('aa100000-0000-4000-8000-000000000005','payout-vendor-c@example.invalid');
 update public.profiles set role='admin' where id='aa100000-0000-4000-8000-000000000002';
 update public.profiles set role='vendor' where id in ('aa100000-0000-4000-8000-000000000003','aa100000-0000-4000-8000-000000000004','aa100000-0000-4000-8000-000000000005');
-insert into public.orders(id,order_number,user_id,request_id,request_payload,address_snapshot,subtotal,discount,shipping,grand_total,payment_status,status) values
- ('aa200000-0000-4000-8000-000000000001','PAYOUT-10ML','aa100000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"recipient_name":"Payout Customer"}',50000,0,10000,60000,'paid','paid'),
- ('aa200000-0000-4000-8000-000000000002','PAYOUT-30ML','aa100000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"recipient_name":"Payout Customer"}',100000,0,10000,110000,'paid','paid'),
- ('aa200000-0000-4000-8000-000000000003','PAYOUT-PLAYSET','aa100000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"recipient_name":"Payout Customer"}',300000,0,10000,310000,'paid','paid'),
- ('aa200000-0000-4000-8000-000000000004','PAYOUT-INCOMPLETE','aa100000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"recipient_name":"Payout Customer"}',50000,0,10000,60000,'paid','paid'),
- ('aa200000-0000-4000-8000-000000000005','PAYOUT-VENDOR-B','aa100000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"recipient_name":"Payout Customer"}',50000,0,10000,60000,'paid','paid');
+insert into public.orders(id,order_number,user_id,request_id,request_payload,address_snapshot,subtotal,discount,shipping,shipping_quote_snapshot,grand_total,payment_status,status) values
+ ('aa200000-0000-4000-8000-000000000001','PAYOUT-10ML','aa100000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"recipient_name":"Payout Customer"}',50000,0,12000,'{"original_shipping_amount":17000,"shipping_discount":5000,"customer_shipping_total":12000}',62000,'paid','paid'),
+ ('aa200000-0000-4000-8000-000000000002','PAYOUT-30ML','aa100000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"recipient_name":"Payout Customer"}',100000,0,14000,'{"original_shipping_amount":14000,"shipping_discount":0,"customer_shipping_total":14000}',114000,'paid','paid'),
+ ('aa200000-0000-4000-8000-000000000003','PAYOUT-PLAYSET','aa100000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"recipient_name":"Payout Customer"}',300000,0,10000,'{"original_shipping_amount":15000,"shipping_discount":5000,"customer_shipping_total":10000}',310000,'paid','paid'),
+ ('aa200000-0000-4000-8000-000000000004','PAYOUT-INCOMPLETE','aa100000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"recipient_name":"Payout Customer"}',50000,0,10000,null,60000,'paid','paid'),
+ ('aa200000-0000-4000-8000-000000000005','PAYOUT-VENDOR-B','aa100000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"recipient_name":"Payout Customer"}',50000,0,8000,'{"original_shipping_amount":8000,"shipping_discount":0,"customer_shipping_total":8000}',58000,'paid','paid');
 insert into public.order_items(id,order_id,position,product_snapshot,creations_snapshot,quantity,normal_unit_price,unit_price,line_total) values
  ('aa300000-0000-4000-8000-000000000001','aa200000-0000-4000-8000-000000000001',1,'{"id":"10ml","label":"10 ML","volume_ml":10,"bottle_count":1}','[]',1,50000,50000,50000),
  ('aa300000-0000-4000-8000-000000000002','aa200000-0000-4000-8000-000000000002',1,'{"id":"30ml","label":"30 ML","volume_ml":30,"bottle_count":1}','[]',1,100000,100000,100000),
@@ -81,8 +81,8 @@ do $$ declare first_batch jsonb; retry_batch jsonb; payout_id uuid; second_batch
  first_batch:=public.admin_create_vendor_payout('aa100000-0000-4000-8000-000000000003','aa400000-0000-4000-8000-000000000003',null);
  retry_batch:=public.admin_create_vendor_payout('aa100000-0000-4000-8000-000000000003','aa400000-0000-4000-8000-000000000003',null);
  payout_id:=(first_batch->>'id')::uuid;
- if payout_id<>(retry_batch->>'id')::uuid or jsonb_array_length(first_batch->'items')<>3 or (first_batch->>'total')::bigint<>462000 then raise exception 'Snapshot fees or retry idempotency failed'; end if;
- if not exists(select 1 from jsonb_array_elements(first_batch->'items') item where item->>'order_number'='PAYOUT-10ML' and (item->>'vendor_fee_amount')::bigint=50000 and (item->>'shipping_reimbursement')::bigint=12000)
+ if payout_id<>(retry_batch->>'id')::uuid or jsonb_array_length(first_batch->'items')<>3 or (first_batch->>'total')::bigint<>467000 then raise exception 'Snapshot fees or retry idempotency failed'; end if;
+ if not exists(select 1 from jsonb_array_elements(first_batch->'items') item where item->>'order_number'='PAYOUT-10ML' and (item->>'vendor_fee_amount')::bigint=50000 and (item->>'shipping_reimbursement')::bigint=17000)
   or not exists(select 1 from jsonb_array_elements(first_batch->'items') item where item->>'order_number'='PAYOUT-30ML' and (item->>'vendor_fee_amount')::bigint=100000 and (item->>'shipping_reimbursement')::bigint=0)
   or not exists(select 1 from jsonb_array_elements(first_batch->'items') item where item->>'order_number'='PAYOUT-PLAYSET' and (item->>'vendor_fee_amount')::bigint=300000 and (item->>'shipping_reimbursement')::bigint=0) then raise exception 'Fee/reimbursement rules failed'; end if;
  if exists(select 1 from jsonb_array_elements(first_batch->'items') item where item->>'order_number'='PAYOUT-INCOMPLETE') then raise exception 'Incomplete historical data was counted'; end if;
@@ -99,7 +99,7 @@ end $$;
 select set_config('request.jwt.claim.sub','aa100000-0000-4000-8000-000000000003',true);
 do $$ declare dashboard jsonb; begin
  dashboard:=public.vendor_payout_dashboard(0);
- if (dashboard->>'count')::integer<>1 or (dashboard->>'paid_total')::bigint<>462000 or dashboard::text like '%PAYOUT-VENDOR-B%' then raise exception 'Vendor A payout isolation failed'; end if;
+ if (dashboard->>'count')::integer<>1 or (dashboard->>'paid_total')::bigint<>467000 or dashboard::text like '%PAYOUT-VENDOR-B%' then raise exception 'Vendor A payout isolation failed'; end if;
  begin perform 1 from public.vendor_payouts; raise exception 'Vendor direct table read allowed'; exception when insufficient_privilege then null; end;
 end $$;
 reset role;

@@ -26,8 +26,13 @@ select public.admin_assign_vendor('ab200000-0000-4000-8000-000000000002','ab1000
 select public.admin_assign_vendor('ab200000-0000-4000-8000-000000000003','ab100000-0000-4000-8000-000000000003');
 select public.admin_assign_vendor('ab200000-0000-4000-8000-000000000004','ab100000-0000-4000-8000-000000000003');
 select public.admin_update_vendor_fee_settings(60000,120000);
+reset role;
 do $$ begin
  if (select sum(vendor_fee_amount) from public.order_vendor_assignments where vendor_id='ab100000-0000-4000-8000-000000000003')<>350000 then raise exception 'Existing assignments did not retain rate snapshots'; end if;
+end $$;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002',true);
+do $$ begin
  if (public.admin_vendor_fee_settings()->>'play_set')::bigint<>180000 then raise exception 'Play Set did not track three times the current 10 ml rate'; end if;
 end $$;
 -- The legacy order is intentionally left without a shipment completion; the

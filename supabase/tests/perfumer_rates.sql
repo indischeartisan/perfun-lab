@@ -42,6 +42,7 @@ do $$ begin
  perform set_config('app.rates_job_1',(select j.id::text from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id='ab200000-0000-4000-8000-000000000001' and j.vendor_id='ab100000-0000-4000-8000-000000000003' limit 1),true);
  perform set_config('app.rates_job_2',(select j.id::text from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id='ab200000-0000-4000-8000-000000000002' and j.vendor_id='ab100000-0000-4000-8000-000000000003' limit 1),true);
  perform set_config('app.rates_job_3',(select j.id::text from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id='ab200000-0000-4000-8000-000000000003' and j.vendor_id='ab100000-0000-4000-8000-000000000003' limit 1),true);
+ perform set_config('app.rates_job_4',(select j.id::text from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id='ab200000-0000-4000-8000-000000000004' and j.vendor_id='ab100000-0000-4000-8000-000000000003' limit 1),true);
 end $$;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002',true);
@@ -55,8 +56,8 @@ select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002'
 do $$ begin
  if (public.admin_vendor_fee_settings()->>'play_set')::bigint<>180000 then raise exception 'Play Set did not track three times the current 10 ml rate'; end if;
 end $$;
--- The legacy order is intentionally left without a shipment completion; the
--- payout workspace must never invent a reimbursement for missing source data.
+-- The legacy order is dispatched with a vendor payer but no checkout snapshot;
+-- it must remain review-only rather than receiving a guessed reimbursement.
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000003',true);
@@ -64,12 +65,14 @@ do $$ declare job_id uuid; shipment_id uuid; checklist jsonb:='{"bottles_checked
  for target,payer,cost in values
   ('ab200000-0000-4000-8000-000000000001'::uuid,'vendor',12000::bigint),
   ('ab200000-0000-4000-8000-000000000002'::uuid,'perfun',14000::bigint),
-  ('ab200000-0000-4000-8000-000000000003'::uuid,'customer',16000::bigint)
+  ('ab200000-0000-4000-8000-000000000003'::uuid,'customer',16000::bigint),
+  ('ab200000-0000-4000-8000-000000000004'::uuid,'vendor',10000::bigint)
  loop
   job_id:=case target
     when 'ab200000-0000-4000-8000-000000000001'::uuid then current_setting('app.rates_job_1')::uuid
     when 'ab200000-0000-4000-8000-000000000002'::uuid then current_setting('app.rates_job_2')::uuid
     when 'ab200000-0000-4000-8000-000000000003'::uuid then current_setting('app.rates_job_3')::uuid
+    when 'ab200000-0000-4000-8000-000000000004'::uuid then current_setting('app.rates_job_4')::uuid
   end;
   perform public.advance_production_job(job_id,'start'); perform public.advance_production_job(job_id,'complete');
   select id into shipment_id from public.shipments where order_id=target;
@@ -81,9 +84,12 @@ end $$;
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002',true);
-do $$ declare workspace jsonb; payout jsonb; actual_total bigint; diagnostic_rows jsonb; begin
+do $$ declare workspace jsonb; finance jsonb; payout jsonb; actual_total bigint; diagnostic_rows jsonb; begin
  workspace:=public.admin_vendor_payout_workspace(0);
- if (workspace->>'eligible_count')::integer<>3 or (workspace->>'review_count')::integer<>0 then raise exception 'Eligibility or review count incorrect'; end if;
+ finance:=public.admin_finance('all',null);
+ if (workspace->>'eligible_count')::integer<>3 or (workspace->>'review_count')::integer<>1 or (workspace->>'outstanding_service')::bigint<>300000 or (workspace->>'outstanding_shipping')::bigint<>17000 or (workspace->>'outstanding_total')::bigint<>317000 then raise exception 'Eligibility summary does not match payout-ready orders'; end if;
+ if (finance->'vendor'->>'outstanding_total')::bigint<>317000 then raise exception 'Finance summary does not match payout workspace'; end if;
+ if not exists(select 1 from jsonb_array_elements(workspace->'review_orders') x where x->>'order_number'='RATES-LEGACY' and x->>'review_reason'='Tarif RajaOngkir sebelum voucher tidak tersimpan') then raise exception 'Missing original shipping rate was not marked for review'; end if;
  if not exists(select 1 from jsonb_array_elements(workspace->'eligible_orders') x where x->>'order_number'='RATES-10ML' and (x->>'shipping_reimbursement')::bigint=17000) then raise exception 'Voucher reimbursement did not use original RajaOngkir rate'; end if;
  if exists(select 1 from jsonb_array_elements(workspace->'eligible_orders') x where x->>'order_number'='RATES-30ML' and (x->>'shipping_reimbursement')::bigint<>0) then raise exception 'Perfun Lab shipping was reimbursed'; end if;
  payout:=public.admin_create_vendor_payout('ab100000-0000-4000-8000-000000000003',gen_random_uuid(),null);
@@ -103,6 +109,9 @@ do $$ declare workspace jsonb; payout jsonb; actual_total bigint; diagnostic_row
  if not exists(select 1 from jsonb_array_elements(payout->'items') item where item->>'order_number'='RATES-10ML' and (item->>'vendor_fee_amount')::bigint=50000 and (item->>'shipping_reimbursement')::bigint=17000)
   or not exists(select 1 from jsonb_array_elements(payout->'items') item where item->>'order_number'='RATES-30ML' and (item->>'vendor_fee_amount')::bigint=100000 and (item->>'shipping_reimbursement')::bigint=0)
   or not exists(select 1 from jsonb_array_elements(payout->'items') item where item->>'order_number'='RATES-PLAYSET' and (item->>'vendor_fee_amount')::bigint=150000 and (item->>'shipping_reimbursement')::bigint=0) then raise exception 'Payout item snapshots or shipping reimbursement are incorrect'; end if;
+ workspace:=public.admin_vendor_payout_workspace(0);
+ finance:=public.admin_finance('all',null);
+ if (workspace->>'eligible_count')::integer<>0 or (workspace->>'outstanding_total')::bigint<>0 or (finance->'vendor'->>'draft_total')::bigint<>317000 then raise exception 'Draft and Finance summary did not refresh from the same order set'; end if;
 end $$;
 select 'PASS: perfumer rate snapshots, Play Set, voucher-safe reimbursement and payer rules' as result;
 rollback;

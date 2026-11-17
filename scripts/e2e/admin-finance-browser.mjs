@@ -27,6 +27,10 @@ try {
   await page.getByRole('heading', { name: 'Ringkasan', exact: true }).waitFor()
   await page.getByRole('button', { name: 'Keuangan', exact: true }).click()
   await page.getByRole('heading', { name: 'Pembayaran pelanggan', exact: true }).waitFor()
+  const rateSettings = page.getByRole('heading', { name: 'Atur tarif perfumer', exact: true })
+  await rateSettings.waitFor()
+  const financePayments = page.getByRole('heading', { name: 'Pembayaran perfumer', exact: true })
+  assert.ok((await rateSettings.boundingBox()).y < (await financePayments.boundingBox()).y)
 
   const metric = async (label) => page.getByText(label, { exact: true }).locator('..').getByRole('strong').textContent()
   const assertMetrics = async () => {
@@ -36,6 +40,9 @@ try {
   }
 
   await assertMetrics()
+  await page.locator('summary', { hasText: 'Rincian per tanggal' }).click()
+  await page.locator('.finance-table').waitFor()
+  assert.equal(await page.locator('details[open] .finance-table tbody tr').count() > 0, true)
   await page.screenshot({ path: `${screenshotDir}/finance-all-time.png`, fullPage: true })
 
   await page.getByLabel('Periode').selectOption('custom')

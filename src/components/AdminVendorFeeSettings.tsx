@@ -8,7 +8,7 @@ import { errorMessage } from '../lib/supabase'
 export function AdminVendorFeeSettings() {
   const { data, error, reload } = useAdminData(getAdminVendorFeeSettings)
   return <section className="finance-section vendor-fee-settings" aria-label="Pengaturan tarif perfumer">
-    <div className="admin-section-heading"><div><span className="admin-kicker">PENGATURAN ADMIN</span><h2>Pengaturan tarif perfumer</h2><p>Tarif disimpan ke snapshot saat pesanan ditugaskan. Perubahan tidak mengubah penugasan atau pembayaran lama.</p></div></div>
+    <div className="admin-section-heading"><div><span className="admin-kicker">PENGATURAN ADMIN</span><h2>Atur tarif perfumer</h2><p>Tarif disimpan ke snapshot saat pesanan ditugaskan. Perubahan tidak mengubah penugasan atau pembayaran lama.</p></div></div>
     <AdminLoad error={error} loading={!data && !error} reload={reload}/>
     {data ? <VendorFeeForm initial10ml={data.service_10ml} initial30ml={data.service_30ml} onSaved={reload}/> : null}
   </section>

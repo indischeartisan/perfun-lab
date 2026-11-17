@@ -84,7 +84,7 @@ end $$;
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002',true);
-do $$ declare workspace jsonb; finance jsonb; payout jsonb; actual_total bigint; diagnostic_rows jsonb; wib_today date:=(clock_timestamp() at time zone 'Asia/Jakarta')::date; begin
+do $$ declare workspace jsonb; finance jsonb; payout jsonb; monthly jsonb; actual_total bigint; diagnostic_rows jsonb; wib_today date:='2026-11-17'; begin
  workspace:=public.admin_vendor_payout_workspace(0);
  finance:=public.admin_finance('all',null);
  if (workspace->>'eligible_count')::integer<>3 or (workspace->>'review_count')::integer<>1 or (workspace->>'outstanding_service')::bigint<>300000 or (workspace->>'outstanding_shipping')::bigint<>17000 or (workspace->>'outstanding_total')::bigint<>317000 then raise exception 'Eligibility summary does not match payout-ready orders'; end if;
@@ -101,6 +101,8 @@ do $$ declare workspace jsonb; finance jsonb; payout jsonb; actual_total bigint;
  workspace:=public.admin_vendor_payout_recap('day',wib_today);
  if (workspace->>'ready_count')::integer<>2 or (workspace->>'ready_service')::bigint<>200000 or (workspace->>'ready_shipping')::bigint<>17000 or (workspace->>'ready_total')::bigint<>217000 or (workspace->>'older_count')::integer<>1 or (workspace->>'older_total')::bigint<>100000 or (workspace->>'all_ready_total')::bigint<>317000 then raise exception 'Daily WIB recap did not separate today from older ready orders: %',workspace; end if;
  if exists(select 1 from jsonb_array_elements(workspace->'ready_orders') x where (x->>'ready_date')::date<>wib_today) then raise exception 'Daily recap crossed a WIB date boundary'; end if;
+ monthly:=public.admin_vendor_payout_recap('month',wib_today);
+ if (monthly->>'ready_count')::integer<>3 or (monthly->>'ready_service')::bigint<>300000 or (monthly->>'ready_shipping')::bigint<>17000 or (monthly->>'ready_total')::bigint<>317000 or (monthly->>'review_count')::integer<>1 then raise exception 'Monthly recap did not include this-month earlier ready order or excluded review order: %',monthly; end if;
  reset role;
  set local role authenticated;
  perform set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000003',true);

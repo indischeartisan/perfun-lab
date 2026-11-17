@@ -5,13 +5,14 @@ import { formatPrice } from '../lib/currency'
 import { getAdminVendorFeeSettings, updateAdminVendorFeeSettings } from '../lib/vendorFees'
 import { errorMessage } from '../lib/supabase'
 
-export function AdminVendorFeeSettings() {
+export function AdminVendorFeeSettings({ compact = false }: { compact?: boolean }) {
   const { data, error, reload } = useAdminData(getAdminVendorFeeSettings)
-  return <section className="finance-section vendor-fee-settings" aria-label="Pengaturan tarif perfumer">
-    <div className="admin-section-heading"><div><span className="admin-kicker">PENGATURAN ADMIN</span><h2>Atur tarif perfumer</h2><p>Tarif disimpan ke snapshot saat pesanan ditugaskan. Perubahan tidak mengubah penugasan atau pembayaran lama.</p></div></div>
+  const content = <>
     <AdminLoad error={error} loading={!data && !error} reload={reload}/>
     {data ? <VendorFeeForm initial10ml={data.service_10ml} initial30ml={data.service_30ml} onSaved={reload}/> : null}
-  </section>
+  </>
+  if (compact) return <details className="vendor-fee-settings" aria-label="Pengaturan tarif perfumer"><summary>Atur tarif</summary><p>Tarif disimpan ke snapshot saat pesanan ditugaskan. Perubahan tidak mengubah penugasan atau pembayaran lama.</p>{content}</details>
+  return <section className="finance-section vendor-fee-settings" aria-label="Pengaturan tarif perfumer"><div className="admin-section-heading"><div><span className="admin-kicker">PENGATURAN ADMIN</span><h2>Atur tarif perfumer</h2><p>Tarif disimpan ke snapshot saat pesanan ditugaskan. Perubahan tidak mengubah penugasan atau pembayaran lama.</p></div></div>{content}</section>
 }
 
 function VendorFeeForm({ initial10ml, initial30ml, onSaved }: { initial10ml: number; initial30ml: number; onSaved: () => void }) {
@@ -38,8 +39,8 @@ function VendorFeeForm({ initial10ml, initial30ml, onSaved }: { initial10ml: num
 
   return <>
     <form className="finance-rate-form" onSubmit={save}>
-      <label>Jasa 10 ml<input aria-label="Jasa 10 ml" type="number" min="1" step="1000" value={service10ml} disabled={busy} onChange={event => setService10ml(event.target.value)}/></label>
-      <label>Jasa 30 ml<input aria-label="Jasa 30 ml" type="number" min="1" step="1000" value={service30ml} disabled={busy} onChange={event => setService30ml(event.target.value)}/></label>
+      <label>Jasa 10 ml<input aria-label="Jasa 10 ml" type="number" min="1" step="1" value={service10ml} disabled={busy} onChange={event => setService10ml(event.target.value)}/></label>
+      <label>Jasa 30 ml<input aria-label="Jasa 30 ml" type="number" min="1" step="1" value={service30ml} disabled={busy} onChange={event => setService30ml(event.target.value)}/></label>
       <label>Jasa Play Set<input aria-label="Jasa Play Set" type="text" value={formatPrice(Number(service10ml || 0) * 3)} readOnly/></label>
       <button type="submit" disabled={busy}>{busy ? 'Menyimpan…' : 'Simpan tarif'}</button>
     </form>

@@ -1,0 +1,136 @@
+name: Release Perfumer Payout Recap migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Dry-run is the default; apply requires production approval
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - apply
+
+# Manual-only. This file must be merged to main before it can receive the
+# protected production environment or its database secret.
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-production-perfumer-payout-recap
+  cancel-in-progress: false
+
+env:
+  SOURCE_SHA: 502f08627830f60636b3d224b9c1dee58859b16c
+  TARGET_MIGRATIONS: |-
+    20261117120000_vendor_payout_eligibility_consistency.sql
+    20261117130000_vendor_payout_readonly_recap.sql
+
+jobs:
+  release:
+    name: Perfumer payout recap ${{ inputs.operation }}
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production
+    steps:
+      - name: Check out the reviewed PR commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+
+      - name: Verify reviewed source commit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          while IFS= read -r migration; do
+            test -f "supabase/migrations/$migration"
+          done <<< "$TARGET_MIGRATIONS"
+
+      - name: Download pinned Supabase CLI
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          tools="$RUNNER_TEMP/perfumer-payout-recap-release-tools"
+          mkdir -p "$tools"
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "$tools/supabase.tar.gz" \
+            "https://github.com/supabase/cli/releases/download/v3.1.0/supabase_3.1.0_linux_amd64.tar.gz"
+          echo "dbe9fd66771337fc198727da86b9d3551302f87a7091cd8781be2a4cd0c8ac4d  $tools/supabase.tar.gz" | sha256sum --check --status
+          tar -xzf "$tools/supabase.tar.gz" -C "$tools"
+          install -m 0755 "$tools/supabase" "$tools/supabase-bin"
+          echo "$tools" >> "$GITHUB_PATH"
+          "$tools/supabase-bin" --version
+
+      - name: Guard migration history, dry-run, and optional apply
+        shell: bash
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$SUPABASE_DB_URL"
+          command -v psql >/dev/null
+
+          local_files="$RUNNER_TEMP/perfumer-payout-recap-local-files.txt"
+          local_versions="$RUNNER_TEMP/perfumer-payout-recap-local-versions.txt"
+          remote_versions="$RUNNER_TEMP/perfumer-payout-recap-remote-versions.txt"
+          unexpected_remote="$RUNNER_TEMP/perfumer-payout-recap-unexpected-remote.txt"
+          pending_files="$RUNNER_TEMP/perfumer-payout-recap-pending-files.txt"
+          expected_files="$RUNNER_TEMP/perfumer-payout-recap-expected-files.txt"
+          dry_run_log="$RUNNER_TEMP/perfumer-payout-recap-dry-run.log"
+          dry_run_files="$RUNNER_TEMP/perfumer-payout-recap-dry-run-files.txt"
+
+          find supabase/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | sort >"$local_files"
+          sed -E 's/^([0-9]+)_.*/\1/' "$local_files" | sort -u >"$local_versions"
+          printf '%s\n' "$TARGET_MIGRATIONS" >"$expected_files"
+
+          refresh_history() {
+            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
+              'select version from supabase_migrations.schema_migrations order by version' \
+              | sort -u >"$remote_versions"
+            comm -13 "$local_versions" "$remote_versions" >"$unexpected_remote"
+            if [[ -s "$unexpected_remote" ]]; then
+              echo '::error::Release stopped: production migration history does not match the reviewed source.'
+              exit 1
+            fi
+            : >"$pending_files"
+            while IFS= read -r migration; do
+              version="${migration%%_*}"
+              if ! grep -Fxq "$version" "$remote_versions"; then
+                printf '%s\n' "$migration" >>"$pending_files"
+              fi
+            done <"$local_files"
+            if ! diff -u "$expected_files" "$pending_files"; then
+              echo '::error::Release stopped: pending migrations must be exactly 20261117120000_vendor_payout_eligibility_consistency.sql then 20261117130000_vendor_payout_readonly_recap.sql.'
+              exit 1
+            fi
+          }
+
+          refresh_history
+          echo 'Running Supabase dry-run; no production write is performed.'
+          supabase-bin db push --db-url "$SUPABASE_DB_URL" --dry-run 2>&1 | tee "$dry_run_log"
+          grep -Eo '[0-9]{14}_[A-Za-z0-9_]+\.sql' "$dry_run_log" | sort -u >"$dry_run_files" || true
+          if ! diff -u <(sort "$expected_files") "$dry_run_files"; then
+            echo '::error::Release stopped: dry-run output must show exactly the two approved migrations.'
+            exit 1
+          fi
+          echo 'Dry-run verified the two approved migrations in the required pending order.'
+
+          if [[ "${{ inputs.operation }}" == 'dry-run' ]]; then
+            echo 'Dry-run complete; apply was not requested.'
+            exit 0
+          fi
+
+          echo 'Apply requested after production environment approval. Re-checking history.'
+          refresh_history
+          supabase-bin db push --db-url "$SUPABASE_DB_URL" --yes
+
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
+            "select version from supabase_migrations.schema_migrations where version in ('20261117120000','20261117130000') order by version" \
+            >"$remote_versions"
+          diff -u <(printf '20261117120000\n20261117130000\n') "$remote_versions"
+          echo 'Verified production history recorded both approved migration versions.'

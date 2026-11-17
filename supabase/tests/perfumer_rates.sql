@@ -46,7 +46,7 @@ do $$ declare job_id uuid; shipment_id uuid; checklist jsonb:='{"bottles_checked
   ('ab200000-0000-4000-8000-000000000002'::uuid,'perfun',14000::bigint),
   ('ab200000-0000-4000-8000-000000000003'::uuid,'customer',16000::bigint)
  loop
-  select id into job_id from public.production_jobs where order_number=(select order_number from public.orders where id=target) and vendor_id=auth.uid();
+  select j.id into job_id from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id=target and j.vendor_id=auth.uid();
   if job_id is null then raise exception 'Vendor fixture job was not assigned for %', target; end if;
   perform public.advance_production_job(job_id,'start'); perform public.advance_production_job(job_id,'complete');
   select id into shipment_id from public.shipments where order_id=target;

@@ -81,13 +81,28 @@ end $$;
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002',true);
-do $$ declare workspace jsonb; payout jsonb; begin
+do $$ declare workspace jsonb; payout jsonb; actual_total bigint; diagnostic_rows jsonb; begin
  workspace:=public.admin_vendor_payout_workspace(0);
  if (workspace->>'eligible_count')::integer<>3 or (workspace->>'review_count')::integer<>0 then raise exception 'Eligibility or review count incorrect'; end if;
  if not exists(select 1 from jsonb_array_elements(workspace->'eligible_orders') x where x->>'order_number'='RATES-10ML' and (x->>'shipping_reimbursement')::bigint=17000) then raise exception 'Voucher reimbursement did not use original RajaOngkir rate'; end if;
  if exists(select 1 from jsonb_array_elements(workspace->'eligible_orders') x where x->>'order_number'='RATES-30ML' and (x->>'shipping_reimbursement')::bigint<>0) then raise exception 'Perfun Lab shipping was reimbursed'; end if;
  payout:=public.admin_create_vendor_payout('ab100000-0000-4000-8000-000000000003',gen_random_uuid(),null);
- if (payout->>'total')::bigint<>467000 then raise exception 'Payout total did not use fee snapshots and original shipping rates'; end if;
+ actual_total:=(payout->>'total')::bigint;
+ if actual_total<>317000 then
+  select coalesce(jsonb_agg(jsonb_build_object(
+   'order_number',eligible->>'order_number',
+   'included_in_draft',exists(select 1 from jsonb_array_elements(payout->'items') item where item->>'order_number'=eligible->>'order_number'),
+   'assigned_vendor_fee',eligible->'vendor_fee_amount',
+   'shipping_payer',eligible->'shipping_payer',
+   'original_rajaongkir_before_voucher',eligible->'original_shipping_amount',
+   'shipping_reimbursement',coalesce((select item->'shipping_reimbursement' from jsonb_array_elements(payout->'items') item where item->>'order_number'=eligible->>'order_number' limit 1),'null'::jsonb)
+  ) order by eligible->>'order_number'),'[]'::jsonb)
+  into diagnostic_rows from jsonb_array_elements(workspace->'eligible_orders') eligible;
+  raise exception 'Payout total did not use fee snapshots and original shipping rates: expected %, actual %, rows %',317000,actual_total,diagnostic_rows;
+ end if;
+ if not exists(select 1 from jsonb_array_elements(payout->'items') item where item->>'order_number'='RATES-10ML' and (item->>'vendor_fee_amount')::bigint=50000 and (item->>'shipping_reimbursement')::bigint=17000)
+  or not exists(select 1 from jsonb_array_elements(payout->'items') item where item->>'order_number'='RATES-30ML' and (item->>'vendor_fee_amount')::bigint=100000 and (item->>'shipping_reimbursement')::bigint=0)
+  or not exists(select 1 from jsonb_array_elements(payout->'items') item where item->>'order_number'='RATES-PLAYSET' and (item->>'vendor_fee_amount')::bigint=150000 and (item->>'shipping_reimbursement')::bigint=0) then raise exception 'Payout item snapshots or shipping reimbursement are incorrect'; end if;
 end $$;
 select 'PASS: perfumer rate snapshots, Play Set, voucher-safe reimbursement and payer rules' as result;
 rollback;

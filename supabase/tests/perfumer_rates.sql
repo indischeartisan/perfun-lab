@@ -29,6 +29,11 @@ select public.admin_assign_vendor('ab200000-0000-4000-8000-000000000001','ab1000
 select public.admin_assign_vendor('ab200000-0000-4000-8000-000000000002','ab100000-0000-4000-8000-000000000003');
 select public.admin_assign_vendor('ab200000-0000-4000-8000-000000000003','ab100000-0000-4000-8000-000000000003');
 select public.admin_assign_vendor('ab200000-0000-4000-8000-000000000004','ab100000-0000-4000-8000-000000000003');
+reset role;
+update public.production_jobs j set vendor_id='ab100000-0000-4000-8000-000000000003'
+from public.order_items i where i.id=j.order_item_id and i.order_id in ('ab200000-0000-4000-8000-000000000001','ab200000-0000-4000-8000-000000000002','ab200000-0000-4000-8000-000000000003','ab200000-0000-4000-8000-000000000004');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002',true);
 select public.admin_update_vendor_fee_settings(60000,120000);
 do $$ begin
  if not exists(select 1 from public.production_jobs j join public.order_items i on i.id=j.order_item_id where i.order_id='ab200000-0000-4000-8000-000000000001' and j.vendor_id='ab100000-0000-4000-8000-000000000003') then raise exception 'Admin fixture projection did not assign the vendor job'; end if;

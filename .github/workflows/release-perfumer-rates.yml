@@ -1,9 +1,19 @@
-name: Dry-run Perfumer Rates migration
+name: Release Perfumer Rates migration
 
 on:
   workflow_dispatch:
+    inputs:
+      operation:
+        description: Dry-run is the default; apply is protected by production approval
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - apply
 
-# Manual-only: this workflow runs solely from main and never applies a migration.
+# Manual-only: this workflow runs solely from main. Apply is gated by the
+# protected production environment and repeats the migration-set guard.
 permissions:
   contents: read
 
@@ -17,7 +27,7 @@ env:
 
 jobs:
   dry-run:
-    name: Perfumer Rates migration dry-run
+    name: Perfumer Rates migration ${{ inputs.operation }}
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -101,3 +111,39 @@ jobs:
           fi
 
           echo "Dry-run verified exactly one migration: $TARGET_MIGRATION"
+
+          if [[ "${{ inputs.operation }}" == 'dry-run' ]]; then
+            echo 'Dry-run complete; apply was not requested.'
+            exit 0
+          fi
+
+          echo 'Apply requested after production environment approval.'
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
+            'select version from supabase_migrations.schema_migrations order by version' \
+            | sort -u >"$remote_versions"
+          comm -13 "$local_versions" "$remote_versions" >"$unexpected_remote_versions"
+          if [[ -s "$unexpected_remote_versions" ]]; then
+            echo '::error::Apply stopped: production migration history changed from the reviewed source.'
+            exit 1
+          fi
+          comm -23 "$local_versions" "$remote_versions" >"$pending_versions"
+          if [[ "$(wc -l <"$pending_versions")" -ne 1 ]] || ! grep -Fxq "$target_version" "$pending_versions"; then
+            echo '::error::Apply stopped: the only pending migration must be 20261117100000_perfumer_rates_shipping_reimbursement.sql.'
+            exit 1
+          fi
+
+          supabase-bin db push --db-url "$SUPABASE_DB_URL" --yes
+
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
+            "select exists (select 1 from supabase_migrations.schema_migrations where version = '$target_version')" \
+            | grep -Fxq 't'
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
+            'select version from supabase_migrations.schema_migrations order by version' \
+            | sort -u >"$remote_versions"
+          comm -13 "$local_versions" "$remote_versions" >"$unexpected_remote_versions"
+          comm -23 "$local_versions" "$remote_versions" >"$pending_versions"
+          if [[ -s "$unexpected_remote_versions" || -s "$pending_versions" ]]; then
+            echo '::error::Apply stopped: final migration history does not match the reviewed source.'
+            exit 1
+          fi
+          echo "Verified migration history contains version $target_version."

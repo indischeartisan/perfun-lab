@@ -1,21 +1,20 @@
 import { useCallback, useState } from 'react'
-import { AdminPagination, AdminLoad } from './AdminPage'
+import { AdminLoad } from './AdminPage'
 import { useAdminData } from '../hooks/useAdminData'
-import { getVendorPayoutDashboard, type VendorPayout } from '../lib/payouts'
+import { getVendorPayoutRecap, type PayoutRecapPeriod, type VendorPayout } from '../lib/payouts'
 import { formatPrice } from '../lib/currency'
 import { WorkspaceCardHeader } from '../components/WorkspacePresentation'
+import { PayoutRecap } from '../components/AdminVendorPaymentsPanel'
 
 export function VendorPaymentsPage() {
-  const [page, setPage] = useState(0)
-  const load = useCallback(() => getVendorPayoutDashboard(page), [page])
+  const [period, setPeriod] = useState<PayoutRecapPeriod>('day')
+  const load = useCallback(() => getVendorPayoutRecap(period), [period])
   const { data, error, reload } = useAdminData(load, true)
   return <section className="app-screen admin-dashboard">
-    <header className="screen-title"><span>RUANG KERJA PERFUMER</span><h1>Pembayaran</h1><p>Draf pembayaran disiapkan Admin. “Selesai” mencatat referensi transfer manual, bukan konfirmasi bank.</p></header>
+    <header className="screen-title"><span>RUANG KERJA PERFUMER</span><h1>Pembayaran</h1><p>Rekap baca-saja untuk pesanan Anda. Riwayat pembayaran dicatat terpisah oleh Admin.</p></header>
     <AdminLoad error={error} loading={!data && !error} reload={reload}/>
-    {data ? <><div className="admin-metrics"><article><span>Earned today · WIB</span><strong>{formatPrice(data.earned_today)}</strong></article><article><span>Unpaid total</span><strong>{formatPrice(data.unpaid_total)}</strong></article><article><span>Paid total</span><strong>{formatPrice(data.paid_total)}</strong></article></div>
-      {!data.payouts.length ? <div className="screen-empty"><h2>Belum ada riwayat pembayaran</h2><p>Pengiriman selesai akan muncul setelah Admin membuat draf pembayaran.</p></div> : <div className="production-list">{data.payouts.map(payout => <PayoutCard key={payout.id} payout={payout}/>)}</div>}
-      {data.count > 25 ? <AdminPagination count={data.count} page={page} onPage={setPage}/> : null}
-    </> : null}
+    <label>Rekap periode<select aria-label="Rekap periode" value={period} onChange={event => setPeriod(event.target.value as PayoutRecapPeriod)}><option value="day">Hari ini (WIB)</option><option value="week">Mingguan (WIB)</option><option value="month">Bulanan (WIB)</option></select></label>
+    {data ? <><PayoutRecap data={data} vendorView/>{data.payouts.length ? <details className="finance-section"><summary>Riwayat pembayaran</summary><div className="production-list">{data.payouts.map(payout => <PayoutCard key={payout.id} payout={payout}/>)}</div></details> : null}</> : null}
   </section>
 }
 

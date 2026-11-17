@@ -52,11 +52,14 @@ try {
   await assertMetrics()
   await page.screenshot({ path: `${screenshotDir}/finance-wib-date.png`, fullPage: true })
 
-  await page.getByRole('button', { name: 'Kelola pembayaran perfumer', exact: true }).click()
   await page.getByRole('region', { name: 'Pembayaran perfumer', exact: true }).waitFor()
-  await page.getByRole('heading', { name: 'Draf dan pembayaran selesai', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Rekap pembayaran perfumer', exact: true }).waitFor()
+  await page.getByLabel('Rekap periode').selectOption('week')
+  await page.getByLabel('Rekap periode').selectOption('month')
+  await page.getByLabel('Rekap periode').selectOption('day')
+  assert.equal(await page.getByRole('button', { name: 'Buat draf pembayaran', exact: true }).count(), 0)
   assert.equal(await page.getByRole('alert').count(), 0)
-  await page.screenshot({ path: `${screenshotDir}/finance-vendor-flow.png`, fullPage: true })
+  await page.screenshot({ path: `${screenshotDir}/finance-vendor-recap.png`, fullPage: true })
 } catch (error) {
   await page.screenshot({ path: `${screenshotDir}/finance-failure.png`, fullPage: true }).catch(() => {})
   throw error

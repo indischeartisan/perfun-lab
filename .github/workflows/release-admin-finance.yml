@@ -1,0 +1,114 @@
+name: Release Admin Finance migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Dry-run first; apply is gated by the production environment approval
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - apply
+
+# This workflow is intentionally manual-only. It must never receive production
+# credentials from pull_request or push jobs.
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-production-admin-finance-release
+  cancel-in-progress: false
+
+env:
+  SOURCE_REF: codex/keuangan
+  TARGET_MIGRATION: 20261115090000_admin_finance.sql
+
+jobs:
+  release:
+    name: Admin Finance migration ${{ inputs.operation }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production
+    steps:
+      - name: Check out the reviewed PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REF }}
+          fetch-depth: 0
+
+      - name: Download pinned Supabase CLI
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          tools="$RUNNER_TEMP/admin-finance-release-tools"
+          mkdir -p "$tools"
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "$tools/supabase.tar.gz" \
+            "https://github.com/supabase/cli/releases/download/v3.1.0/supabase_3.1.0_linux_amd64.tar.gz"
+          echo "dbe9fd66771337fc198727da86b9d3551302f87a7091cd8781be2a4cd0c8ac4d  $tools/supabase.tar.gz" | sha256sum --check --status
+          tar -xzf "$tools/supabase.tar.gz" -C "$tools"
+          install -m 0755 "$tools/supabase" "$tools/supabase-bin"
+          echo "$tools" >> "$GITHUB_PATH"
+          "$tools/supabase-bin" --version
+
+      - name: Guard the release bundle and show the database dry-run
+        shell: bash
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$SUPABASE_DB_URL"
+          command -v psql >/dev/null
+
+          target_path="supabase/migrations/$TARGET_MIGRATION"
+          test -f "$target_path"
+          target_version="${TARGET_MIGRATION%%_*}"
+          test "$target_version" = '20261115090000'
+          test "$(basename "$target_path")" = "$TARGET_MIGRATION"
+
+          local_versions="$RUNNER_TEMP/admin-finance-local-migrations.txt"
+          remote_versions="$RUNNER_TEMP/admin-finance-remote-migrations.txt"
+          pending_versions="$RUNNER_TEMP/admin-finance-pending-migrations.txt"
+          find supabase/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' \
+            | sed -E 's/^([0-9]+)_.*/\1/' | sort -u >"$local_versions"
+
+          # A missing history table is a release blocker, not permission to
+          # bootstrap production from this workflow.
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
+            'select version from supabase_migrations.schema_migrations order by version' \
+            >"$remote_versions"
+          comm -23 "$local_versions" "$remote_versions" >"$pending_versions"
+
+          if ! grep -Fxq "$target_version" "$pending_versions" || [[ "$(wc -l <"$pending_versions")" -ne 1 ]]; then
+            echo '::error::Release stopped: the only pending migration must be 20261115090000_admin_finance.sql.'
+            echo 'Pending migration versions (filenames are not printed):'
+            sed 's/.*/- migration version redacted/' "$pending_versions"
+            exit 1
+          fi
+
+          echo "Verified release candidate: $target_path"
+          echo 'Running Supabase dry-run; no production write is performed.'
+          supabase-bin db push --db-url "$SUPABASE_DB_URL" --dry-run
+
+          if [[ "${{ inputs.operation }}" == 'dry-run' ]]; then
+            echo 'Dry-run complete; apply was not requested.'
+            exit 0
+          fi
+
+          echo 'Apply requested. The production environment approval has passed.'
+          # Re-check the exact same guard immediately before the write so a
+          # concurrent migration cannot turn this into a broader release.
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
+            'select version from supabase_migrations.schema_migrations order by version' \
+            >"$remote_versions"
+          comm -23 "$local_versions" "$remote_versions" >"$pending_versions"
+          if ! grep -Fxq "$target_version" "$pending_versions" || [[ "$(wc -l <"$pending_versions")" -ne 1 ]]; then
+            echo '::error::Apply stopped: pending migration set changed or contains a migration other than Admin Finance.'
+            exit 1
+          fi
+
+          supabase-bin db push --db-url "$SUPABASE_DB_URL" --yes
+          echo "Applied and recorded $TARGET_MIGRATION."

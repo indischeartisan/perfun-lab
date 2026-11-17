@@ -9,7 +9,7 @@ import { errorMessage } from '../lib/supabase'
 export function AdminVendorPaymentsPanel() {
   const [page, setPage] = useState(0)
   const load = useCallback(() => getAdminPayoutWorkspace(page), [page])
-  const { data, error, reload } = useAdminData(load, true)
+  const { data, error, reload } = useAdminData(load)
   const [busy, setBusy] = useState<string | null>(null)
   const [references, setReferences] = useState<Record<string, string>>({})
   const [draftRequests, setDraftRequests] = useState<Record<string, string>>({})

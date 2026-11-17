@@ -2,11 +2,11 @@ import { ClipboardList, Factory, LayoutDashboard, MoreHorizontal, WalletCards } 
 import type { AppView } from '../types'
 
 type WorkspaceRole = 'admin' | 'vendor' | 'perfumer'
-export type AdminWorkspaceTab = 'Overview' | 'Orders' | 'Operations' | 'More' | 'Customers' | 'Notes' | 'Products & Pricing' | 'Vendor Payments' | 'Revenue'
+export type AdminWorkspaceTab = 'Overview' | 'Orders' | 'Operations' | 'More' | 'Customers' | 'Notes' | 'Products & Pricing' | 'Keuangan'
 const groups: Array<{ label: string; items: Array<{ id: AdminWorkspaceTab; label: string; icon: typeof Factory }> }> = [
-  { label: 'Main', items: [{ id: 'Overview', label: 'Dashboard', icon: LayoutDashboard }, { id: 'Orders', label: 'Orders', icon: ClipboardList }, { id: 'Operations', label: 'Operations', icon: Factory }] },
-  { label: 'Management', items: [{ id: 'Customers', label: 'Customers', icon: ClipboardList }, { id: 'Notes', label: 'Notes', icon: ClipboardList }, { id: 'Products & Pricing', label: 'Products & Pricing', icon: Factory }] },
-  { label: 'Finance', items: [{ id: 'Vendor Payments', label: 'Vendor Payments', icon: WalletCards }, { id: 'Revenue', label: 'Revenue', icon: WalletCards }] },
+  { label: 'Utama', items: [{ id: 'Overview', label: 'Ringkasan', icon: LayoutDashboard }, { id: 'Orders', label: 'Pesanan', icon: ClipboardList }, { id: 'Operations', label: 'Operasional', icon: Factory }] },
+  { label: 'Pengelolaan', items: [{ id: 'Customers', label: 'Pelanggan', icon: ClipboardList }, { id: 'Notes', label: 'Catatan', icon: ClipboardList }, { id: 'Products & Pricing', label: 'Produk & Harga', icon: Factory }] },
+  { label: 'Keuangan', items: [{ id: 'Keuangan', label: 'Keuangan', icon: WalletCards }] },
 ]
 const vendorItems = [{ id: 'production' as const, label: 'Pekerjaan', icon: Factory }, { id: 'payouts' as const, label: 'Payments', icon: WalletCards }]
 
@@ -23,5 +23,5 @@ export function AdminWorkspaceNavigation({ active, onNavigate }: { active: Admin
 }
 
 export function AdminMoreMenu({ onNavigate }: { onNavigate: (value: AdminWorkspaceTab) => void }) {
-  return <section className="admin-more-page"><h1>More</h1>{groups.slice(1).map(group => <section key={group.label}><h2>{group.label}</h2>{group.items.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => onNavigate(id)}><Icon size={18}/><span>{label}</span><b aria-hidden="true">›</b></button>)}</section>)}</section>
+  return <section className="admin-more-page"><h1>Lainnya</h1>{groups.slice(1).map(group => <section key={group.label}><h2>{group.label}</h2>{group.items.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => onNavigate(id)}><Icon size={18}/><span>{label}</span><b aria-hidden="true">›</b></button>)}</section>)}</section>
 }

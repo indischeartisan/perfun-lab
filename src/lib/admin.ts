@@ -24,12 +24,16 @@ export interface AdminVendor { id: string; name: string | null; email: string | 
 export interface AdminVendorFeeLine { position: number; product_id: string; quantity: number; unit_fee: number; line_fee: number }
 export interface AdminVendorAssignment { order_id: string; order_number: string; status: string; payment_status: string; vendor_id: string; vendor: AdminVendor; assigned_at: string; assignment_source: 'manual' | 'default' | 'backfill'; vendor_fee_amount: number; vendor_fee_snapshot: { policy_version: number; currency: 'IDR'; lines: AdminVendorFeeLine[]; total_fee: number } }
 export interface AdminVendorWorkspace { default_vendor_id: string | null; vendors: AdminVendor[]; unassigned_count: number; unassigned_orders: Array<{ id: string; order_number: string; created_at: string; status: string; grand_total: number; products: Array<{ label: string; volume_ml: number; bottle_count: number; quantity: number }> }> }
+export type FinancePeriod = 'today' | 'yesterday' | 'month' | 'all' | 'custom'
+export interface AdminFinanceDaily { day: string; unique_customers: number; orders: number; paid_orders: number; unpaid_orders: number; refunded_orders: number; product_sales_after_discount: number; customer_shipping: number; customer_payments: number; vendor_service_paid: number; vendor_shipping_paid: number; vendor_paid: number }
+export interface AdminFinance { timezone: string; period: FinancePeriod; date: string | null; start_date: string | null; end_date: string | null; orders: { unique_customers: number; orders: number; paid_orders: number; unpaid_orders: number; refunded_orders: number }; payments: { product_sales_after_discount: number; customer_shipping: number; customer_payments: number }; vendor: { outstanding_service: number; outstanding_shipping: number; outstanding_total: number; draft_service: number; draft_shipping: number; draft_total: number; paid_service: number; paid_shipping: number; paid_total: number }; daily: AdminFinanceDaily[]; limitations: { refunds: string; payment_fees: string; vendor_new_billings: string } }
 async function rpc<T>(name: string, args = {}): Promise<T> {
   const { data, error } = await requireSupabase().rpc(name, args)
   if (error) throw error
   return data as T
 }
 export const getAdminOverview = () => rpc<AdminOverview>('admin_overview')
+export const getAdminFinance = (period: FinancePeriod, date: string | null) => rpc<AdminFinance>('admin_finance', { p_period: period, p_date: date })
 export const getAdminCatalog = () => rpc<AdminCatalog>('admin_catalog')
 export const getAdminOrders = (f: AdminOrderFilters) => rpc<AdminPage<AdminOrder>>('admin_orders', { p_search: f.search, p_payment: f.payment || null, p_production: f.production || null, p_shipment: f.shipment || null, p_page: f.page })
 export const getAdminCustomers = (search: string, page: number) => rpc<AdminPage<AdminCustomer>>('admin_customers', { p_search: search, p_page: page })

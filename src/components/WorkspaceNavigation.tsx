@@ -8,7 +8,7 @@ const groups: Array<{ label: string; items: Array<{ id: AdminWorkspaceTab; label
   { label: 'Pengelolaan', items: [{ id: 'Customers', label: 'Pelanggan', icon: ClipboardList }, { id: 'Notes', label: 'Catatan', icon: ClipboardList }, { id: 'Products & Pricing', label: 'Produk & Harga', icon: Factory }] },
   { label: 'Keuangan', items: [{ id: 'Keuangan', label: 'Keuangan', icon: WalletCards }] },
 ]
-const vendorItems = [{ id: 'production' as const, label: 'Pekerjaan', icon: Factory }, { id: 'payouts' as const, label: 'Payments', icon: WalletCards }]
+const vendorItems = [{ id: 'production' as const, label: 'Pekerjaan', icon: Factory }, { id: 'payouts' as const, label: 'Pembayaran', icon: WalletCards }]
 
 export function WorkspaceNavigation({ role, active, onNavigate }: { role: WorkspaceRole; active: AppView; onNavigate: (view: AppView) => void }) {
   if (role === 'admin') return null

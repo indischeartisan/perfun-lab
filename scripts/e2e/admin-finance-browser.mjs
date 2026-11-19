@@ -83,7 +83,7 @@ try {
   const vendorRecap = vendorPage.locator('.vendor-payments-page')
   assert.ok((await vendorRecap.boundingBox())?.width && (await vendorRecap.boundingBox()).width > 1000)
   assert.equal(await vendorPage.getByRole('button', { name: 'Pembayaran', exact: true }).count(), 1)
-  assert.equal(await vendorPage.getByText('Rp980.000', { exact: true }).count(), 1)
+  assert.equal(await vendorRecap.locator('.payout-total-metric strong').textContent(), 'Rp980.000')
   const desktopMetricBoxes = await vendorRecap.locator('.admin-metrics article').evaluateAll(cards => cards.map(card => { const box = card.getBoundingClientRect(); return { x: Math.round(box.x), y: Math.round(box.y) } }))
   assert.equal(desktopMetricBoxes.length, 4)
   assert.equal(new Set(desktopMetricBoxes.map(box => box.y)).size, 1)

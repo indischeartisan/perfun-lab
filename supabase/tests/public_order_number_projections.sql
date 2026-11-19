@@ -39,6 +39,9 @@ select public_order_number as reference
 from public.orders
 where id = 'd0200000-0000-4000-8000-000000000001';
 
+select set_config('app.test_public_number', reference, true)
+from public_number_fixture;
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'd0100000-0000-4000-8000-000000000003', true);
 select public.admin_assign_vendor('d0200000-0000-4000-8000-000000000001', 'd0100000-0000-4000-8000-000000000004');
@@ -50,7 +53,7 @@ declare
   admin_reference text;
   vendor_reference text;
 begin
-  select reference into customer_reference from public_number_fixture;
+  customer_reference := current_setting('app.test_public_number', true);
 
   if customer_reference !~ '^PF-[0-9]{6,}$' then
     raise exception 'Customer order has no public number: %', customer_reference;

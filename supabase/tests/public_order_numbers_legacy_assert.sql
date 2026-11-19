@@ -11,7 +11,7 @@ begin
   select public_order_number, order_number, id
   into original_public_number, original_internal_number, original_id
   from public.orders
-  where id = 'po500000-0000-4000-8000-000000000001';
+  where id = 'b0500000-0000-4000-8000-000000000001';
 
   if original_public_number !~ '^PF-[0-9]{6,}$' then
     raise exception 'Legacy order was not backfilled with a public number: %', original_public_number;

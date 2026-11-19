@@ -84,11 +84,33 @@ jobs:
           expected_files="$RUNNER_TEMP/public-order-numbers-expected-files.txt"
           dry_run_log="$RUNNER_TEMP/public-order-numbers-dry-run.log"
           dry_run_files="$RUNNER_TEMP/public-order-numbers-dry-run-files.txt"
+          applied_versions="$RUNNER_TEMP/public-order-numbers-applied-versions.txt"
+          expected_versions="$RUNNER_TEMP/public-order-numbers-expected-versions.txt"
           compatibility_checks="$RUNNER_TEMP/public-order-numbers-compatibility-checks.txt"
+          expected_compatibility_checks="$RUNNER_TEMP/public-order-numbers-expected-compatibility-checks.txt"
 
           find supabase/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | sort >"$local_files"
           sed -E 's/^([0-9]+)_.*/\1/' "$local_files" | sort -u >"$local_versions"
           printf '%s\n' "$TARGET_MIGRATIONS" >"$expected_files"
+
+          compare_sorted_sets() {
+            local expected="$1"
+            local actual="$2"
+            local label="$3"
+            local expected_sorted="${expected}.sorted"
+            local actual_sorted="${actual}.sorted"
+
+            LC_ALL=C sort "$expected" >"$expected_sorted"
+            LC_ALL=C sort "$actual" >"$actual_sorted"
+            if [[ -n "$(uniq -d "$expected_sorted")" || -n "$(uniq -d "$actual_sorted")" ]]; then
+              echo "::error::Release stopped: duplicate entries found while checking $label."
+              exit 1
+            fi
+            if ! diff -u "$expected_sorted" "$actual_sorted"; then
+              echo "::error::Release stopped: $label is missing or contains unexpected entries."
+              exit 1
+            fi
+          }
 
           refresh_history() {
             psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
@@ -125,8 +147,9 @@ jobs:
           verify_applied_versions_and_compatibility() {
             psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
               "select version from supabase_migrations.schema_migrations where version in ('20261119140000','20261119150000','20261119160000') order by version" \
-              >"$remote_versions"
-            diff -u <(printf '20261119140000\n20261119150000\n20261119160000\n') "$remote_versions"
+              >"$applied_versions"
+            printf '20261119140000\n20261119150000\n20261119160000\n' >"$expected_versions"
+            compare_sorted_sets "$expected_versions" "$applied_versions" 'applied migration versions'
 
             psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -Atqc "
               with checks(name, ok) as (
@@ -138,7 +161,8 @@ jobs:
                   ('vendor production orders RPC', coalesce(to_regprocedure('public.list_vendor_production_orders(text,timestamptz,text)') is not null, false))
               )
               select name from checks where ok order by name" >"$compatibility_checks"
-            diff -u <(printf 'admin_orders RPC\norders.public_order_number\norders_assign_public_order_number trigger\nplace_order RPC\nvendor production orders RPC\n') "$compatibility_checks"
+            printf 'admin_orders RPC\norders.public_order_number\norders_assign_public_order_number trigger\nplace_order RPC\nvendor production orders RPC\n' >"$expected_compatibility_checks"
+            compare_sorted_sets "$expected_compatibility_checks" "$compatibility_checks" 'checkout/RPC compatibility contract'
             echo 'Verified migration history and checkout/RPC compatibility contract without creating production orders.'
           }
 

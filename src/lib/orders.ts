@@ -29,7 +29,7 @@ export interface ShippingQuoteSnapshot {
 export interface Quote { address_snapshot: AddressInput; items: OrderLine[]; subtotal: number; discount: number; shipping: number; grand_total: number; quote_token: string; shipping_quote_snapshot: ShippingQuoteSnapshot }
 export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'expired' | 'refunded'
 export interface PaymentSummary { id: string; provider: string; status: PaymentStatus; amount: number; paid_at: string | null }
-export interface CustomerOrder extends Omit<Quote, 'items' | 'quote_token' | 'shipping_quote_snapshot'> { id: string; user_id: string; order_number: string; status: string; payment_status: PaymentStatus; created_at: string; shipping_quote_snapshot: ShippingQuoteSnapshot | null; order_items: OrderLine[]; payments: PaymentSummary[]; shipment: ShipmentSummary | null }
+export interface CustomerOrder extends Omit<Quote, 'items' | 'quote_token' | 'shipping_quote_snapshot'> { id: string; user_id: string; order_number: string; public_order_number: string; status: string; payment_status: PaymentStatus; created_at: string; shipping_quote_snapshot: ShippingQuoteSnapshot | null; order_items: OrderLine[]; payments: PaymentSummary[]; shipment: ShipmentSummary | null }
 
 export async function listAddresses() {
   const { data, error } = await requireSupabase().from('addresses').select('*').order('is_default', { ascending: false }).order('created_at')

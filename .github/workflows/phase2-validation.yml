@@ -133,6 +133,7 @@ jobs:
             supabase/tests/ownership.sql
             supabase/tests/orders.sql
             supabase/tests/public_order_numbers.sql
+            supabase/tests/public_order_number_projections.sql
             supabase/tests/direct_formulas.sql
             supabase/tests/payments.sql
             supabase/tests/production.sql

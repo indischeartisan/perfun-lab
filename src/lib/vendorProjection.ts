@@ -22,7 +22,7 @@ function isJob(value: unknown): boolean {
 export function parseVendorOrderPage(value: unknown): VendorOrderPage {
   if (!isRecord(value) || !Array.isArray(value.rows) || typeof value.has_more !== 'boolean' ||
     (value.next_cursor !== null && !isCursor(value.next_cursor)) || (value.has_more && !isCursor(value.next_cursor)) ||
-    !value.rows.every(order => isRecord(order) && typeof order.order_number === 'string' && typeof order.ordered_at === 'string' && Array.isArray(order.jobs) && order.jobs.every(isJob))) {
+    !value.rows.every(order => isRecord(order) && typeof order.order_number === 'string' && typeof order.public_order_number === 'string' && typeof order.ordered_at === 'string' && Array.isArray(order.jobs) && order.jobs.every(isJob))) {
     throw new Error('Data antrean Vendor tidak sesuai dengan versi aplikasi. Hubungi admin dan coba lagi setelah server diperbarui.')
   }
   return value as unknown as VendorOrderPage

@@ -151,12 +151,12 @@ export function ConfirmationScreen({ order, onBuild, onOrders }: { order: Custom
   const [copied, setCopied] = useState(false)
   async function copyOrderNumber() {
     try {
-      await navigator.clipboard.writeText(order.order_number)
+      await navigator.clipboard.writeText(order.public_order_number)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2000)
     } catch { setCopied(false) }
   }
   return <section className="confirmation-screen app-screen"><div className="confirmation-intro"><div className="confirmation-mark"><PackageCheck/></div><span>PESANAN DIBUAT</span><h1>Siap dibayar.</h1><p>Terima kasih, {order.address_snapshot.recipient_name}. Pesanan Anda menunggu pembayaran.</p></div>
-    <section className="confirmation-card" aria-label="Status pesanan"><div className="confirmation-status"><span>STATUS PESANAN</span><strong>Menunggu pembayaran</strong></div><div className="confirmation-total"><span>TOTAL PEMBAYARAN</span><strong>{formatPrice(order.grand_total)}</strong></div><div className="confirmation-number"><span>NOMOR PESANAN</span><div><strong>{order.order_number}</strong><button type="button" onClick={() => void copyOrderNumber()} aria-label="Salin nomor pesanan">{copied ? <Check/> : <Copy/>}<span>{copied ? 'Tersalin' : 'Salin'}</span></button></div><details><summary>Lihat nomor pesanan lengkap</summary><code>{order.order_number}</code></details></div></section>
+    <section className="confirmation-card" aria-label="Status pesanan"><div className="confirmation-status"><span>STATUS PESANAN</span><strong>Menunggu pembayaran</strong></div><div className="confirmation-total"><span>TOTAL PEMBAYARAN</span><strong>{formatPrice(order.grand_total)}</strong></div><div className="confirmation-number"><span>NOMOR PESANAN</span><div><strong>{order.public_order_number}</strong><button type="button" onClick={() => void copyOrderNumber()} aria-label="Salin nomor pesanan">{copied ? <Check/> : <Copy/>}<span>{copied ? 'Tersalin' : 'Salin'}</span></button></div><details><summary>Lihat nomor pesanan lengkap</summary><code>{order.public_order_number}</code></details></div></section>
     <PaymentActions order={order} onRefresh={onOrders}/><div className="confirmation-actions"><button className="confirmation-orders" onClick={onOrders}>Lihat detail pesanan</button><button className="confirmation-build" onClick={onBuild}>Racik lagi</button></div></section>
 }

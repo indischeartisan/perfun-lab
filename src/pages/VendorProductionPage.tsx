@@ -50,7 +50,8 @@ function VendorOrderList({ userId, status, cursor, page, onPrevious, onNext, onR
     {error ? <p role="alert">{error}</p> : null}
     {!loading && !error && !orders.length ? <div className="screen-empty"><h2>Belum ada pesanan</h2><p>Pesanan yang ditugaskan akan muncul saat mencapai tahap ini.</p></div> : null}
     <div className="production-list">{orders.map(order => <OperationsOrderCard key={order.order_number} className="vendor-production-card production-card" isolated>
-      <OperationsOrderHeader orderNumber={order.order_number} time={new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(order.ordered_at))}/>
+      <OperationsOrderHeader orderNumber={order.public_order_number} time={new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(order.ordered_at))}/>
+      <p>Referensi internal: {order.order_number}</p>
       {order.jobs.map(job => <VendorOrderJob key={job.id} job={job} userId={userId} canWork={status !== 'completed'} onChanged={action => { setRevision(n => n + 1); onChanged(action, order.order_number) }}/>) }
     </OperationsOrderCard>)}</div>
     <div className="production-pagination"><button type="button" disabled={page === 0 || loading} onClick={onPrevious}>Sebelumnya</button><span>Halaman {page + 1}</span><button type="button" disabled={!next || loading} onClick={() => { if (next) onNext(next) }}>Berikutnya</button></div>

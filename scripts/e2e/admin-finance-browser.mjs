@@ -70,7 +70,8 @@ try {
   assert.equal(await page.getByRole('alert').count(), 0)
   await page.screenshot({ path: `${screenshotDir}/finance-vendor-recap.png`, fullPage: true })
 
-  const vendorPage = await browser.newPage({ viewport: { width: 1440, height: 1100 } })
+  const vendorContext = await browser.newContext({ viewport: { width: 1440, height: 1100 } })
+  const vendorPage = await vendorContext.newPage()
   await vendorPage.goto(`${appUrl}/#payouts`, { waitUntil: 'domcontentloaded' })
   await vendorPage.locator('summary[aria-label="Akun"]').click()
   await vendorPage.getByRole('button', { name: 'Masuk atau buat akun', exact: true }).click()
@@ -93,7 +94,7 @@ try {
   assert.equal(await vendorPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true)
   await vendorPage.screenshot({ path: `${screenshotDir}/vendor-payout-desktop-open.png`, fullPage: true })
 
-  const vendorMobile = await vendorPage.context().newPage({ viewport: { width: 390, height: 844 } })
+  const vendorMobile = await vendorContext.newPage({ viewport: { width: 390, height: 844 } })
   await vendorMobile.goto(`${appUrl}/#payouts`, { waitUntil: 'domcontentloaded' })
   await vendorMobile.getByRole('heading', { name: 'Pembayaran', exact: true }).waitFor()
   await vendorMobile.getByText('Pesanan yang perlu dibayar', { exact: true }).click()

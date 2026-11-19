@@ -56,9 +56,27 @@ select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002'
 do $$ begin
  if (public.admin_vendor_fee_settings()->>'play_set')::bigint<>180000 then raise exception 'Play Set did not track three times the current 10 ml rate'; end if;
 end $$;
+reset role;
+-- A newly paid order deliberately has no shipment. It must still appear in the
+-- read-only recap because payment, not fulfillment, establishes the obligation.
+insert into public.orders(id,order_number,user_id,request_id,request_payload,address_snapshot,subtotal,discount,shipping,shipping_quote_snapshot,grand_total,payment_status,status) values
+ ('ab200000-0000-4000-8000-000000000005','RATES-NEWPAID','ab100000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{}',50000,0,12000,'{"original_shipping_amount":17000,"shipping_discount":5000,"customer_shipping_total":12000}',62000,'paid','paid'),
+ ('ab200000-0000-4000-8000-000000000006','RATES-UNASSIGNED','ab100000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{}',50000,0,12000,'{"original_shipping_amount":17000,"shipping_discount":5000,"customer_shipping_total":12000}',62000,'paid','paid');
+insert into public.order_items(id,order_id,position,product_snapshot,creations_snapshot,quantity,normal_unit_price,unit_price,line_total) values
+ ('ab300000-0000-4000-8000-000000000005','ab200000-0000-4000-8000-000000000005',1,'{"id":"10ml","label":"10 ML","volume_ml":10,"bottle_count":1}','[]',1,50000,50000,50000),
+ ('ab300000-0000-4000-8000-000000000006','ab200000-0000-4000-8000-000000000006',1,'{"id":"10ml","label":"10 ML","volume_ml":10,"bottle_count":1}','[]',1,50000,50000,50000);
+insert into public.order_vendor_assignments(order_id,vendor_id,assigned_by,assignment_source,vendor_fee_amount,vendor_fee_snapshot) values
+ ('ab200000-0000-4000-8000-000000000005','ab100000-0000-4000-8000-000000000003','ab100000-0000-4000-8000-000000000002','manual',50000,'{"total_fee":50000}');
+insert into public.payments(order_id,provider,environment,provider_reference,amount,status,paid_at,request_payload) values
+ ('ab200000-0000-4000-8000-000000000001','fixture','sandbox','RATES-10ML-PAID',62000,'paid','2026-11-17 00:10:00+07','{}'),
+ ('ab200000-0000-4000-8000-000000000002','fixture','sandbox','RATES-30ML-PAID',114000,'paid','2026-11-16 23:59:00+07','{}'),
+ ('ab200000-0000-4000-8000-000000000003','fixture','sandbox','RATES-PLAYSET-PAID',170000,'paid','2026-11-17 00:20:00+07','{}'),
+ ('ab200000-0000-4000-8000-000000000004','fixture','sandbox','RATES-LEGACY-PAID',60000,'paid','2026-11-17 00:30:00+07','{}'),
+ ('ab200000-0000-4000-8000-000000000005','fixture','sandbox','RATES-NEWPAID-PAID',62000,'paid','2026-11-17 00:40:00+07','{}'),
+ ('ab200000-0000-4000-8000-000000000005','fixture','sandbox','RATES-NEWPAID-RETRY',62000,'paid','2026-11-17 00:50:00+07','{}'),
+ ('ab200000-0000-4000-8000-000000000006','fixture','sandbox','RATES-UNASSIGNED-PAID',62000,'paid','2026-11-17 00:45:00+07','{}');
 -- The legacy order is dispatched with a vendor payer but no checkout snapshot;
 -- it must remain review-only rather than receiving a guessed reimbursement.
-reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000003',true);
 do $$ declare job_id uuid; shipment_id uuid; checklist jsonb:='{"bottles_checked":true,"formula_stickers_checked":true,"bottles_sealed":true,"packaging_ready":true,"recipient_label_checked":true}'; target uuid; payer text; cost bigint; begin
@@ -92,22 +110,27 @@ do $$ declare workspace jsonb; finance jsonb; payout jsonb; monthly jsonb; actua
  if not exists(select 1 from jsonb_array_elements(workspace->'review_orders') x where x->>'order_number'='RATES-LEGACY' and x->>'review_reason'='Tarif RajaOngkir sebelum voucher tidak tersimpan') then raise exception 'Missing original shipping rate was not marked for review'; end if;
  if not exists(select 1 from jsonb_array_elements(workspace->'eligible_orders') x where x->>'order_number'='RATES-10ML' and (x->>'shipping_reimbursement')::bigint=17000) then raise exception 'Voucher reimbursement did not use original RajaOngkir rate'; end if;
  if exists(select 1 from jsonb_array_elements(workspace->'eligible_orders') x where x->>'order_number'='RATES-30ML' and (x->>'shipping_reimbursement')::bigint<>0) then raise exception 'Perfun Lab shipping was reimbursed'; end if;
- -- The recap uses the stored first-ready moment in WIB, not order or payout dates.
+ -- The recap is based on the first successful customer payment in WIB. It must
+ -- include a new, not-yet-shipped order, deduplicate payment retries, and keep
+ -- a legacy order's known creation fee when its original shipping rate is absent.
  reset role;
- update public.order_vendor_assignments set payout_ready_at=(wib_today::timestamp + interval '00:01') at time zone 'Asia/Jakarta' where order_id in ('ab200000-0000-4000-8000-000000000001','ab200000-0000-4000-8000-000000000003');
- update public.order_vendor_assignments set payout_ready_at=((wib_today-1)::timestamp + interval '23:59') at time zone 'Asia/Jakarta' where order_id='ab200000-0000-4000-8000-000000000002';
  set local role authenticated;
  perform set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002',true);
  workspace:=public.admin_vendor_payout_recap('day',wib_today);
- if (workspace->>'ready_count')::integer<>2 or (workspace->>'ready_service')::bigint<>200000 or (workspace->>'ready_shipping')::bigint<>17000 or (workspace->>'ready_total')::bigint<>217000 or (workspace->>'older_count')::integer<>1 or (workspace->>'older_total')::bigint<>100000 or (workspace->>'all_ready_total')::bigint<>317000 then raise exception 'Daily WIB recap did not separate today from older ready orders: %',workspace; end if;
- if exists(select 1 from jsonb_array_elements(workspace->'ready_orders') x where (x->>'ready_date')::date<>wib_today) then raise exception 'Daily recap crossed a WIB date boundary'; end if;
+ if (workspace->>'paid_count')::integer<>4 or (workspace->>'paid_service')::bigint<>300000 or (workspace->>'paid_shipping')::bigint<>59000 or (workspace->>'paid_total')::bigint<>359000 or (workspace->>'shipping_missing_count')::integer<>1 or (workspace->>'unassigned_count')::integer<>1 then raise exception 'Daily payment-based recap is incorrect: %',workspace; end if;
+ if not exists(select 1 from jsonb_array_elements(workspace->'paid_orders') x where x->>'order_number'='RATES-NEWPAID' and (x->>'vendor_fee_amount')::bigint=50000 and (x->>'shipping_reimbursement')::bigint=17000)
+  or (select count(*) from jsonb_array_elements(workspace->'paid_orders') x where x->>'order_number'='RATES-NEWPAID')<>1 then raise exception 'New paid unshipped order was omitted or payment retries were counted twice: %',workspace; end if;
+ if not exists(select 1 from jsonb_array_elements(workspace->'paid_orders') x where x->>'order_number'='RATES-LEGACY' and (x->>'vendor_fee_amount')::bigint=50000 and x->'shipping_reimbursement'='null'::jsonb and x->'total_amount'='null'::jsonb) then raise exception 'Legacy order did not retain its known creation fee with an incomplete shipping total: %',workspace; end if;
+ if not exists(select 1 from jsonb_array_elements(workspace->'shipping_missing_orders') x where x->>'order_number'='RATES-LEGACY' and x->>'review_reason'='Ongkir belum tercatat') then raise exception 'Legacy missing shipping rate was not labelled: %',workspace; end if;
+ if not exists(select 1 from jsonb_array_elements(workspace->'unassigned_orders') x where x->>'order_number'='RATES-UNASSIGNED' and x->>'review_reason'='Belum ditugaskan') then raise exception 'Paid unassigned order was not isolated for Admin: %',workspace; end if;
+ if exists(select 1 from jsonb_array_elements(workspace->'paid_orders') x where (x->>'payment_date')::date<>wib_today) then raise exception 'Daily payment recap crossed a WIB date boundary: %',workspace; end if;
  monthly:=public.admin_vendor_payout_recap('month',wib_today);
- if (monthly->>'ready_count')::integer<>3 or (monthly->>'ready_service')::bigint<>300000 or (monthly->>'ready_shipping')::bigint<>17000 or (monthly->>'ready_total')::bigint<>317000 or (monthly->>'review_count')::integer<>1 then raise exception 'Monthly recap did not include this-month earlier ready order or excluded review order: %',monthly; end if;
+ if (monthly->>'paid_count')::integer<>5 or (monthly->>'paid_service')::bigint<>400000 or (monthly->>'paid_shipping')::bigint<>73000 or (monthly->>'paid_total')::bigint<>473000 or (monthly->>'shipping_missing_count')::integer<>1 then raise exception 'Monthly payment recap did not include the earlier paid order: %',monthly; end if;
  reset role;
  set local role authenticated;
  perform set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000003',true);
  finance:=public.vendor_payout_recap('day',wib_today);
- if (finance->>'ready_total')::bigint<>217000 or (finance->>'older_total')::bigint<>100000 or (finance->>'all_ready_total')::bigint<>317000 or exists(select 1 from jsonb_array_elements(finance->'ready_orders') x where x->>'vendor_id'<>'ab100000-0000-4000-8000-000000000003') then raise exception 'Vendor recap differs from the Admin recap or leaked another vendor: %',finance; end if;
+ if (finance->>'paid_count')::integer<>4 or (finance->>'paid_total')::bigint<>359000 or (finance->>'shipping_missing_count')::integer<>1 or (finance->>'unassigned_count')::integer<>0 or exists(select 1 from jsonb_array_elements(finance->'paid_orders') x where x->>'vendor_id'<>'ab100000-0000-4000-8000-000000000003') then raise exception 'Vendor recap differs from the Admin recap or leaked an unassigned order: %',finance; end if;
  reset role;
  set local role authenticated;
  perform set_config('request.jwt.claim.sub','ab100000-0000-4000-8000-000000000002',true);

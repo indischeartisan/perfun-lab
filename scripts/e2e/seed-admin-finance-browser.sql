@@ -67,7 +67,7 @@ insert into public.vendor_payouts(
   paid_by, request_id
 )
 values (
-  'bf600000-0000-4000-8000-000000000001', :'admin_id'::uuid, '2026-01-02',
+  'bf600000-0000-4000-8000-000000000001', :'vendor_id'::uuid, '2026-01-02',
   'paid', 62000, 'BROWSER-FIN-BANK', '2026-01-02 16:00:00+00',
   :'admin_id'::uuid, gen_random_uuid()
 );
@@ -79,7 +79,7 @@ insert into public.vendor_payout_items(
 values (
   'bf600000-0000-4000-8000-000000000001',
   'bf200000-0000-4000-8000-000000000001',
-  :'admin_id'::uuid, 50000, 12000, 62000, 'paid'
+  :'vendor_id'::uuid, 50000, 12000, 62000, 'paid'
 );
 
 commit;

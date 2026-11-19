@@ -68,6 +68,9 @@ try {
   await page.getByLabel('Rekap periode').selectOption('day')
   assert.equal(await page.getByRole('button', { name: 'Buat draf pembayaran', exact: true }).count(), 0)
   assert.equal(await page.getByRole('alert').count(), 0)
+  await payoutRegion.locator('details.payout-group summary').click()
+  const adminPayoutReference = await payoutRegion.locator('li').filter({ hasText: 'Produk: Blend 30 ml × 1 · Blend 10 ml × 2' }).getByRole('strong').textContent()
+  assert.match(adminPayoutReference ?? '', /^PF-\d{6,}$/)
   await page.screenshot({ path: `${screenshotDir}/finance-vendor-recap.png`, fullPage: true })
 
   const vendorContext = await browser.newContext({ viewport: { width: 1440, height: 1100 } })
@@ -91,6 +94,11 @@ try {
   await vendorPage.getByText('Pesanan yang perlu dibayar', { exact: true }).click()
   await vendorPage.getByText('Produk: Blend 30 ml × 1 · Blend 10 ml × 2', { exact: true }).waitFor()
   await vendorPage.getByText('Produk: Play Set (3 × 10 ml) × 1', { exact: true }).waitFor()
+  const vendorPayoutReference = await vendorRecap.locator('li').filter({ hasText: 'Produk: Blend 30 ml × 1 · Blend 10 ml × 2' }).getByRole('strong').textContent()
+  assert.equal(vendorPayoutReference, adminPayoutReference)
+  await vendorPage.getByText('Riwayat pembayaran', { exact: true }).click()
+  const vendorHistoryReference = await vendorPage.locator('.payout-card li').getByRole('strong').textContent()
+  assert.match(vendorHistoryReference ?? '', /^PF-\d{6,}$/)
   assert.equal(await vendorPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true)
   await vendorPage.screenshot({ path: `${screenshotDir}/vendor-payout-desktop-open.png`, fullPage: true })
 

@@ -34,6 +34,17 @@ insert into public.order_items(
   '[]', 1, 100000, 100000, 100000
 );
 
+update public.orders
+set shipping_quote_snapshot = '{"original_shipping_amount":17000,"shipping_discount":0,"customer_shipping_total":17000}'::jsonb
+where id = 'd0200000-0000-4000-8000-000000000001';
+
+insert into public.payments(
+  order_id, provider, environment, provider_reference, amount, status, paid_at, request_payload
+) values (
+  'd0200000-0000-4000-8000-000000000001',
+  'fixture', 'sandbox', 'PUBLIC-NUMBER-PAYOUT', 117000, 'paid', clock_timestamp(), '{}'
+);
+
 create temp table public_number_fixture as
 select public_order_number as reference
 from public.orders
@@ -52,6 +63,10 @@ declare
   customer_visible_reference text;
   admin_reference text;
   vendor_reference text;
+  admin_payout_reference text;
+  vendor_payout_reference text;
+  admin_payout_amounts jsonb;
+  vendor_payout_amounts jsonb;
 begin
   customer_reference := current_setting('app.test_public_number', true);
 
@@ -78,11 +93,28 @@ begin
     raise exception 'Admin legacy internal-number search failed';
   end if;
 
+  select element.value->>'public_order_number', element.value - 'public_order_number' - 'order_number'
+    into admin_payout_reference, admin_payout_amounts
+  from jsonb_array_elements(public.admin_vendor_payout_recap('day', (clock_timestamp() at time zone 'Asia/Jakarta')::date)->'paid_orders') as element(value)
+  where element.value->>'order_id' = 'd0200000-0000-4000-8000-000000000001';
+  if admin_payout_reference is distinct from customer_reference then
+    raise exception 'Admin payout recap differs from the stored public reference';
+  end if;
+
   perform set_config('request.jwt.claim.sub', 'd0100000-0000-4000-8000-000000000004', true);
   select element.value->>'public_order_number' into vendor_reference
   from jsonb_array_elements(public.list_vendor_production_orders('queued')->'rows') as element(value);
   if vendor_reference is distinct from customer_reference then
     raise exception 'Vendor projection differs from customer public number';
+  end if;
+
+  select element.value->>'public_order_number', element.value - 'public_order_number' - 'order_number'
+    into vendor_payout_reference, vendor_payout_amounts
+  from jsonb_array_elements(public.vendor_payout_recap('day', (clock_timestamp() at time zone 'Asia/Jakarta')::date)->'paid_orders') as element(value)
+  where element.value->>'order_id' = 'd0200000-0000-4000-8000-000000000001';
+  if vendor_payout_reference is distinct from customer_reference
+    or vendor_payout_amounts is distinct from admin_payout_amounts then
+    raise exception 'Vendor payout recap changed the public reference or amounts';
   end if;
 
   if not exists (

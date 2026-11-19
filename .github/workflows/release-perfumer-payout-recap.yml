@@ -1,4 +1,4 @@
-name: Release Perfumer Payout Recap migrations
+name: Release Perfumer Payout Recap products migration
 
 on:
   workflow_dispatch:
@@ -18,17 +18,17 @@ permissions:
   contents: read
 
 concurrency:
-  group: supabase-production-perfumer-payout-recap
+  group: supabase-production-perfumer-payout-recap-products
   cancel-in-progress: false
 
 env:
-  SOURCE_SHA: 268a7eb8514cd269e18cd91ffe6f58908c273354
+  SOURCE_SHA: 7f819c13b7fd1553e3bf8e4610b5f82e039c99b2
   TARGET_MIGRATIONS: |-
-    20261119100000_vendor_payout_paid_at_recap.sql
+    20261119110000_vendor_payout_recap_products.sql
 
 jobs:
   release:
-    name: Perfumer payout recap ${{ inputs.operation }}
+    name: Perfumer payout recap products ${{ inputs.operation }}
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -104,7 +104,7 @@ jobs:
               fi
             done <"$local_files"
             if ! diff -u "$expected_files" "$pending_files"; then
-              echo '::error::Release stopped: the only pending migration must be 20261119100000_vendor_payout_paid_at_recap.sql.'
+              echo '::error::Release stopped: the only pending migration must be 20261119110000_vendor_payout_recap_products.sql.'
               exit 1
             fi
           }
@@ -114,7 +114,7 @@ jobs:
             supabase-bin db push --db-url "$SUPABASE_DB_URL" --dry-run 2>&1 | tee "$dry_run_log"
             grep -Eo '[0-9]{14}_[A-Za-z0-9_]+\.sql' "$dry_run_log" | sort -u >"$dry_run_files" || true
             if ! diff -u <(sort "$expected_files") "$dry_run_files"; then
-              echo '::error::Release stopped: dry-run output must show only 20261119100000_vendor_payout_paid_at_recap.sql.'
+              echo '::error::Release stopped: dry-run output must show only 20261119110000_vendor_payout_recap_products.sql.'
               exit 1
             fi
           }
@@ -134,7 +134,7 @@ jobs:
           supabase-bin db push --db-url "$SUPABASE_DB_URL" --yes
 
           psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
-            "select version from supabase_migrations.schema_migrations where version='20261119100000'" \
+            "select version from supabase_migrations.schema_migrations where version='20261119110000'" \
             >"$remote_versions"
-          diff -u <(printf '20261119100000\n') "$remote_versions"
+          diff -u <(printf '20261119110000\n') "$remote_versions"
           echo 'Verified production history recorded the approved migration version.'

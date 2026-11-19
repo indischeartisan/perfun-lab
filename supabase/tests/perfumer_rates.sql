@@ -120,6 +120,12 @@ do $$ declare workspace jsonb; finance jsonb; payout jsonb; monthly jsonb; actua
  if (workspace->>'paid_count')::integer<>4 or (workspace->>'paid_service')::bigint<>300000 or (workspace->>'paid_shipping')::bigint<>59000 or (workspace->>'paid_total')::bigint<>359000 or (workspace->>'shipping_missing_count')::integer<>1 or (workspace->>'unassigned_count')::integer<>1 then raise exception 'Daily payment-based recap is incorrect: %',workspace; end if;
  if not exists(select 1 from jsonb_array_elements(workspace->'paid_orders') x where x->>'order_number'='RATES-NEWPAID' and (x->>'vendor_fee_amount')::bigint=50000 and (x->>'shipping_reimbursement')::bigint=17000)
   or (select count(*) from jsonb_array_elements(workspace->'paid_orders') x where x->>'order_number'='RATES-NEWPAID')<>1 then raise exception 'New paid unshipped order was omitted or payment retries were counted twice: %',workspace; end if;
+ if not exists(
+  select 1 from jsonb_array_elements(workspace->'paid_orders') x
+  cross join lateral jsonb_array_elements(x->'products') product
+  where x->>'order_number'='RATES-PLAYSET' and product->>'label'='Play Set'
+   and (product->>'volume_ml')::integer=10 and (product->>'bottle_count')::integer=3 and (product->>'quantity')::integer=1
+ ) then raise exception 'Payout recap did not retain the Play Set product snapshot: %',workspace; end if;
  if not exists(select 1 from jsonb_array_elements(workspace->'paid_orders') x where x->>'order_number'='RATES-LEGACY' and (x->>'vendor_fee_amount')::bigint=50000 and x->'shipping_reimbursement'='null'::jsonb and x->'total_amount'='null'::jsonb) then raise exception 'Legacy order did not retain its known creation fee with an incomplete shipping total: %',workspace; end if;
  if not exists(select 1 from jsonb_array_elements(workspace->'shipping_missing_orders') x where x->>'order_number'='RATES-LEGACY' and x->>'review_reason'='Ongkir belum tercatat') then raise exception 'Legacy missing shipping rate was not labelled: %',workspace; end if;
  if not exists(select 1 from jsonb_array_elements(workspace->'unassigned_orders') x where x->>'order_number'='RATES-UNASSIGNED' and x->>'review_reason'='Belum ditugaskan') then raise exception 'Paid unassigned order was not isolated for Admin: %',workspace; end if;

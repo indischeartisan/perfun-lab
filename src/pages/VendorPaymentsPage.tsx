@@ -10,10 +10,10 @@ export function VendorPaymentsPage() {
   const [period, setPeriod] = useState<PayoutRecapPeriod>('day')
   const load = useCallback(() => getVendorPayoutRecap(period), [period])
   const { data, error, reload } = useAdminData(load, true)
-  return <section className="app-screen admin-dashboard">
+  return <section className="app-screen vendor-payments-page">
     <header className="screen-title"><span>RUANG KERJA PERFUMER</span><h1>Pembayaran</h1><p>Rekap baca-saja untuk pesanan Anda. Riwayat pembayaran dicatat terpisah oleh Admin.</p></header>
     <AdminLoad error={error} loading={!data && !error} reload={reload}/>
-    <label>Rekap periode<select aria-label="Rekap periode" value={period} onChange={event => setPeriod(event.target.value as PayoutRecapPeriod)}><option value="day">Hari ini (WIB)</option><option value="week">Mingguan (WIB)</option><option value="month">Bulanan (WIB)</option></select></label>
+    <div className="vendor-payout-controls"><label>Rekap periode<select aria-label="Rekap periode" value={period} onChange={event => setPeriod(event.target.value as PayoutRecapPeriod)}><option value="day">Hari ini (WIB)</option><option value="week">Mingguan (WIB)</option><option value="month">Bulanan (WIB)</option></select></label></div>
     {data ? <><PayoutRecap data={data} vendorView/>{data.payouts.length ? <details className="finance-section"><summary>Riwayat pembayaran</summary><div className="production-list">{data.payouts.map(payout => <PayoutCard key={payout.id} payout={payout}/>)}</div></details> : null}</> : null}
   </section>
 }

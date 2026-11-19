@@ -94,7 +94,8 @@ try {
   assert.equal(await vendorPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true)
   await vendorPage.screenshot({ path: `${screenshotDir}/vendor-payout-desktop-open.png`, fullPage: true })
 
-  const vendorMobile = await vendorContext.newPage({ viewport: { width: 390, height: 844 } })
+  const vendorMobile = await vendorContext.newPage()
+  await vendorMobile.setViewportSize({ width: 390, height: 844 })
   await vendorMobile.goto(`${appUrl}/#payouts`, { waitUntil: 'domcontentloaded' })
   await vendorMobile.getByRole('heading', { name: 'Pembayaran', exact: true }).waitFor()
   await vendorMobile.getByText('Pesanan yang perlu dibayar', { exact: true }).click()

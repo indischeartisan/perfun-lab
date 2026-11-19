@@ -132,6 +132,8 @@ jobs:
           sql_tests=(
             supabase/tests/ownership.sql
             supabase/tests/orders.sql
+            supabase/tests/public_order_numbers.sql
+            supabase/tests/public_order_number_projections.sql
             supabase/tests/direct_formulas.sql
             supabase/tests/payments.sql
             supabase/tests/production.sql
@@ -215,6 +217,20 @@ jobs:
           wait "$first"
           wait "$second"
           docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < supabase/tests/test_run_concurrency_check.sql
+          echo '::endgroup::'
+
+          echo '::group::Public order number legacy-backfill regression'
+          # Exercise the migration against an order that predates it, using only
+          # the disposable stack on this runner.
+          supabase db reset --local --yes --version 20261115090000
+          db_container="$(docker ps --format '{{.ID}} {{.Names}}' | awk '$2 ~ /^supabase_db_/ { print $1; exit }')"
+          if [[ -z "$db_container" ]]; then
+            echo '::error::Local Supabase Postgres container was not found after resetting for the legacy migration regression.'
+            exit 1
+          fi
+          docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < supabase/tests/public_order_numbers_legacy_setup.sql
+          supabase migration up --local
+          docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < supabase/tests/public_order_numbers_legacy_assert.sql
           echo '::endgroup::'
 
   shipping-address-e2e:

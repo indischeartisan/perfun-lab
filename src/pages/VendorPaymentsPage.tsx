@@ -26,7 +26,7 @@ export function PayoutCard({ payout, admin }: { payout: VendorPayout; admin?: bo
     {paidAt ? <p>Tanggal pembayaran dicatat: {paidAt}</p> : null}
     {payout.transfer_reference ? <p>Referensi transfer: {payout.transfer_reference}</p> : null}
     {payout.void_reason ? <p>Alasan pembatalan: {payout.void_reason}</p> : null}
-    <ul className="fulfillment-products">{payout.items.map(item => <li key={item.id}><strong>{item.order_number}</strong><span>Jasa pembuatan: {formatPrice(item.vendor_fee_amount)}</span><span>Penggantian ongkir: {formatPrice(item.shipping_reimbursement)}</span><span>Total dibayar ke perfumer: {formatPrice(item.total_amount)}</span></li>)}</ul>
+    <ul className="fulfillment-products">{payout.items.map(item => <li key={item.id}><strong>{item.public_order_number}</strong><span>Referensi internal: {item.order_number}</span><span>Jasa pembuatan: {formatPrice(item.vendor_fee_amount)}</span><span>Penggantian ongkir: {formatPrice(item.shipping_reimbursement)}</span><span>Total dibayar ke perfumer: {formatPrice(item.total_amount)}</span></li>)}</ul>
     {admin ? <p className="admin-help">{payout.status === 'draft' ? 'Dipesan: pesanan ini tidak dapat masuk ke draf aktif lain.' : payout.status === 'paid' ? 'Transfer manual dicatat oleh Admin.' : 'Draf dibatalkan; pesanan dapat memenuhi syarat lagi.'}</p> : null}
   </article>
 }

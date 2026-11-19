@@ -1,7 +1,7 @@
 import { requireSupabase } from './supabase'
 
 export type PayoutStatus = 'draft' | 'paid' | 'void'
-export interface PayoutItem { id: string; order_id: string; order_number: string; vendor_fee_amount: number; shipping_reimbursement: number; total_amount: number; status: 'reserved' | 'paid' | 'void' }
+export interface PayoutItem { id: string; order_id: string; order_number: string; public_order_number: string; vendor_fee_amount: number; shipping_reimbursement: number; total_amount: number; status: 'reserved' | 'paid' | 'void' }
 export interface VendorPayout { id: string; vendor_id: string; vendor: { name: string | null; email: string | null }; payout_date: string; status: PayoutStatus; total: number; transfer_reference: string | null; paid_at: string | null; paid_by: string | null; request_id: string; void_reason: string | null; voided_at: string | null; voided_by: string | null; created_at: string; items: PayoutItem[] }
 export interface EligiblePayoutOrder { order_id: string; order_number: string; vendor_id: string; vendor: { name: string | null; email: string | null }; vendor_fee_amount: number; shipping_reimbursement: number; total_amount: number; shipping_payer: 'vendor' | 'perfun' | 'customer'; original_shipping_amount: number | null; shipped_at: string }
 export interface ReviewPayoutOrder { order_id: string; order_number: string; vendor_id: string; vendor: { name: string | null; email: string | null }; vendor_fee_amount: number; shipping_payer: 'vendor' | 'perfun' | 'customer' | null; review_reason: string; shipped_at: string }
@@ -9,8 +9,8 @@ export interface AdminPayoutWorkspace { today: string; outstanding_service: numb
 export interface VendorPayoutDashboard { today: string; earned_today: number; unpaid_total: number; paid_total: number; payouts: VendorPayout[]; count: number }
 export type PayoutRecapPeriod = 'day' | 'week' | 'month'
 export interface PayoutRecapProduct { label: string | null; volume_ml: number | null; bottle_count: number | null; quantity: number }
-export interface PayoutRecapOrder extends Omit<EligiblePayoutOrder, 'shipping_reimbursement' | 'total_amount' | 'shipping_payer' | 'shipped_at'> { products: PayoutRecapProduct[]; shipping_reimbursement: number | null; total_amount: number | null; payment_paid_at: string; payment_date: string }
-export interface PayoutRecapReviewOrder { order_id: string; order_number: string; vendor_id?: string; vendor?: { name: string | null; email: string | null }; products?: PayoutRecapProduct[]; vendor_fee_amount?: number; review_reason: string; payment_paid_at: string; payment_date: string }
+export interface PayoutRecapOrder extends Omit<EligiblePayoutOrder, 'shipping_reimbursement' | 'total_amount' | 'shipping_payer' | 'shipped_at'> { public_order_number: string; products: PayoutRecapProduct[]; shipping_reimbursement: number | null; total_amount: number | null; payment_paid_at: string; payment_date: string }
+export interface PayoutRecapReviewOrder { order_id: string; order_number: string; public_order_number: string; vendor_id?: string; vendor?: { name: string | null; email: string | null }; products?: PayoutRecapProduct[]; vendor_fee_amount?: number; review_reason: string; payment_paid_at: string; payment_date: string }
 export interface PayoutRecap { today: string; period: PayoutRecapPeriod; anchor_date: string; period_start: string; period_end: string; paid_count: number; paid_service: number; paid_shipping: number; paid_total: number; shipping_missing_count: number; all_paid_count: number; all_paid_total: number; all_shipping_missing_count: number; older_count: number; older_total: number; unassigned_count: number; paid_orders: PayoutRecapOrder[]; older_orders: PayoutRecapOrder[]; shipping_missing_orders: PayoutRecapReviewOrder[]; unassigned_orders: PayoutRecapReviewOrder[]; payouts: VendorPayout[] }
 
 async function rpc<T>(name: string, args = {}): Promise<T> {

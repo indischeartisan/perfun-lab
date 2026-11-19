@@ -77,6 +77,8 @@ try {
   await vendorPage.getByLabel('Email address').fill(vendorEmail)
   await vendorPage.getByLabel('Password', { exact: true }).fill(password)
   await vendorPage.getByRole('button', { name: 'SIGN IN', exact: true }).click()
+  await vendorPage.getByRole('button', { name: 'Pekerjaan', exact: true }).waitFor()
+  await vendorPage.getByRole('button', { name: 'Pembayaran', exact: true }).click()
   await vendorPage.getByRole('heading', { name: 'Pembayaran', exact: true }).waitFor()
   const vendorRecap = vendorPage.locator('.vendor-payments-page')
   assert.ok((await vendorRecap.boundingBox())?.width && (await vendorRecap.boundingBox()).width > 1000)
@@ -91,7 +93,7 @@ try {
   assert.equal(await vendorPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true)
   await vendorPage.screenshot({ path: `${screenshotDir}/vendor-payout-desktop-open.png`, fullPage: true })
 
-  const vendorMobile = await browser.newPage({ viewport: { width: 390, height: 844 } })
+  const vendorMobile = await vendorPage.context().newPage({ viewport: { width: 390, height: 844 } })
   await vendorMobile.goto(`${appUrl}/#payouts`, { waitUntil: 'domcontentloaded' })
   await vendorMobile.getByRole('heading', { name: 'Pembayaran', exact: true }).waitFor()
   await vendorMobile.getByText('Pesanan yang perlu dibayar', { exact: true }).click()

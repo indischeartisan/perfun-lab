@@ -119,6 +119,13 @@ test('catalog dan profil tidak lagi refresh semata-mata karena window focus', ()
   assert.doesNotMatch(auth, /addEventListener\('focus'/)
 })
 
+test('auth mempertahankan profil pada event sesi akun yang sama dan mengisolasi respons akun lama', () => {
+  const auth = readFileSync(new URL('../src/hooks/useAuth.ts', import.meta.url), 'utf8')
+  assert.match(auth, /preservesAuthenticatedProfile\(sessionUserId\.current, nextUserId\)/)
+  assert.match(auth, /if \(!sameAccount\) setProfile\(null\)/)
+  assert.match(auth, /profileRequests\.current\.accepts\(requestGeneration, userId\)/)
+})
+
 test('customer payment details only use an internally consistent server shipping snapshot', () => {
   const source = readFileSync(new URL('../src/pages/OrdersPage.tsx', import.meta.url), 'utf8')
 

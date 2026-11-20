@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { errorMessage, requireSupabase, supabase } from '../lib/supabase'
 import { errorWithCause } from '../lib/errors'
+import { createAuthProfileRequestGuard, preservesAuthenticatedProfile } from '../lib/authSessionState'
 
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null)
@@ -9,16 +10,19 @@ export function useAuth() {
   const [passwordRecovery, setPasswordRecovery] = useState(false)
   const [error, setError] = useState(() => new URLSearchParams(window.location.search).get('error_description') ?? '')
   const [profile, setProfile] = useState<{ userId: string; role: 'customer' | 'perfumer' | 'admin' | 'vendor' | null } | null>(null)
+  const sessionUserId = useRef<string | null>(null)
+  const profileRequests = useRef(createAuthProfileRequestGuard())
   const userId = session?.user.id
   useEffect(() => {
     if (!userId || !supabase) return
     let active = true
+    const requestGeneration = profileRequests.current.begin(userId)
     const refresh = async () => {
       try {
         const { data, error } = await requireSupabase().from('profiles').select('role').eq('id', userId).single()
         if (error) throw error
-        if (active) setProfile({ userId, role: data.role })
-      } catch (error) { if (active) { setProfile({ userId, role: null }); setError(errorMessage(error)) } }
+        if (active && profileRequests.current.accepts(requestGeneration, userId)) setProfile({ userId, role: data.role })
+      } catch (error) { if (active && profileRequests.current.accepts(requestGeneration, userId)) { setProfile({ userId, role: null }); setError(errorMessage(error)) } }
     }
     void refresh()
     return () => { active = false }
@@ -28,7 +32,11 @@ export function useAuth() {
     let active = true
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, next) => {
       if (active) {
-        setProfile(null)
+        const nextUserId = next?.user.id ?? null
+        const sameAccount = preservesAuthenticatedProfile(sessionUserId.current, nextUserId)
+        sessionUserId.current = nextUserId
+        profileRequests.current.switchTo(nextUserId)
+        if (!sameAccount) setProfile(null)
         setSession(next)
         if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
         setLoading(false)
@@ -36,6 +44,11 @@ export function useAuth() {
     })
     supabase.auth.getSession().then(({ data, error }) => {
       if (!active) return
+      const nextUserId = data.session?.user.id ?? null
+      const sameAccount = preservesAuthenticatedProfile(sessionUserId.current, nextUserId)
+      sessionUserId.current = nextUserId
+      profileRequests.current.switchTo(nextUserId)
+      if (!sameAccount) setProfile(null)
       setSession(data.session); setLoading(false)
       if (error) setError(error.message)
     }).catch(error => { if (active) { setError(errorMessage(error)); setLoading(false) } })

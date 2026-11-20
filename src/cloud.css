@@ -13,9 +13,13 @@
 .header-account summary::-webkit-details-marker { display: none; }
 .header-account-panel { position: absolute; right: 0; top: 50px; z-index: 100; width: min(280px,80vw); padding: 18px; background: #fffdf7; border: 1px solid #d5d0c4; border-radius: 14px; box-shadow: 0 8px 24px #0002; }
 .header-account-panel p { overflow-wrap: anywhere; font-size: 13px; }
-.header-account-panel .account-email { margin: 0 0 14px; }
-.header-account-actions { display: grid; gap: 10px; }
-.header-account-panel .account-open-button { width: 100%; min-height: 48px; border: 0; border-bottom: 3px solid var(--orange); border-radius: 8px; background: #789600; color: #fff; padding: 16px; font: 800 11px/1 'Nunito Sans', sans-serif; }
+.header-account-panel .account-email { margin: 0 0 12px; }
+.account-nav { display: grid; gap: 2px; }
+.account-nav-row { display: grid; grid-template-columns: 20px minmax(0,1fr) 18px; align-items: center; gap: 10px; width: 100%; border: 0!important; border-radius: 8px!important; background: transparent!important; color: var(--ink); padding: 10px 8px!important; text-align: left; font: 700 12px/1.2 Manrope; cursor: pointer; }
+.account-nav-row:hover,.account-nav-row:focus-visible { background: #eef2dc!important; }
+.account-nav-row svg { width: 18px; height: 18px; }
+.account-nav-row>svg:last-child { justify-self: end; }
+.account-actions { margin-top: 10px; padding-top: 12px; border-top: 1px solid #d5d0c4; }
 .header-account-panel .account-logout { width: 100%; min-height: 42px; border: 1px solid #9a968c; border-radius: 999px; background: transparent; color: var(--ink); padding: 11px 15px; font: 700 10px Manrope; }
 .header-account-panel button { padding: 12px; border: 1px solid #27271e; border-radius: 8px; background: #e9f47a; cursor: pointer; }
 .header-account-panel:has(.email-login-button)>button:not(.email-login-button){display:none}

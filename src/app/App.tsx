@@ -316,7 +316,7 @@ function ConnectedApp({ catalog, auth }: { catalog: Catalog; auth: ReturnType<ty
   }
 
   return <div className="app-shell product-app customer-app">
-    <Header itemCount={cart.count} activeView={view === 'article' || view === 'wheel' || view === 'fresh' || view === 'study' || view === 'library' ? 'explore' : view} onNavigate={navigate} fulfillmentOnly={auth.role === 'vendor'} account={<AccountMenu auth={auth} onLogin={() => setAuthDialogOpen(true)} onAccount={() => navigate('account')}/>}/>
+    <Header itemCount={cart.count} activeView={view === 'article' || view === 'wheel' || view === 'fresh' || view === 'study' || view === 'library' ? 'explore' : view} onNavigate={navigate} fulfillmentOnly={auth.role === 'vendor'} account={<AccountMenu auth={auth} onLogin={() => setAuthDialogOpen(true)} onAccount={() => navigate('account')} onOrders={() => navigate('orders')} onBag={() => navigate('bag')}/>}/>
     {auth.error ? <p className="cloud-message" role="alert">{auth.error}</p> : null}
     <main className="app-main">{view === 'bag' && checkoutBusy ? <p className="cloud-message" role="status">Preparing checkout…</p> : null}{view === 'bag' && checkoutError ? <p className="cloud-message" role="alert">{checkoutError}</p> : null}
       <WorkspaceLoadBoundary key={view}><Suspense fallback={<WorkspaceLoading/>}>

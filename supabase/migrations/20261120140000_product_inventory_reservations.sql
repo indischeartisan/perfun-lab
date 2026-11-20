@@ -44,7 +44,7 @@ begin
   if physical_id not in ('10ml','30ml') or required_quantity<=0 then return new; end if;
   perform pg_advisory_xact_lock(hashtextextended('perfun-product-inventory',0));
   select * into inventory from public.products where id=physical_id for update;
-  if not found then raise exception 'Inventory product unavailable' using errcode='P0002'; end if;
+  if not found then return new; end if;
   if not inventory.stock_tracking_enabled then return new; end if;
   if inventory.stock_tracking_enabled then
     if inventory.stock_on_hand is null then raise exception 'Stock has not been initialized by Admin' using errcode='23514'; end if;

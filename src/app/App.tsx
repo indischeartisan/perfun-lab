@@ -92,6 +92,7 @@ export default function App() {
 function ConnectedApp({ catalog, auth }: { catalog: Catalog; auth: ReturnType<typeof useAuth> }) {
   const [requestedView, setView] = useState<AppView>(() => viewFromHash(window.location.hash, Boolean(readSessionValue(bagCheckoutResumeKey))))
   const [locationHash, setLocationHash] = useState(() => window.location.hash)
+  const previousView = useRef<AppView | null>(null)
   const [quickContentId, setQuickContentId] = useState<string | null>(null)
   const [wheelExploration, setWheelExploration] = useState<WheelExplorationState>(emptyWheelExplorationState)
   const [wheelSelection, setWheelSelection] = useState<WheelLayerSelection>(emptyWheelLayerSelection)
@@ -178,12 +179,18 @@ function ConnectedApp({ catalog, auth }: { catalog: Catalog; auth: ReturnType<ty
   }
 
   const navigate = useCallback((next: AppView) => {
+    if (next !== view) previousView.current = view
     const hash = navigationHash(next, window.location.pathname, window.location.search)
     setView(next)
     setLocationHash(hash)
     window.history.replaceState(null, '', hash)
     scrollToTop()
-  }, [])
+  }, [view])
+
+  const goBackFromAccount = useCallback(() => {
+    const target = previousView.current && previousView.current !== 'account' ? previousView.current : 'explore'
+    navigate(target)
+  }, [navigate])
 
   const openArticle = useCallback((id: string, origin: ArticleOrigin = 'explore') => {
     const hash = articleHash(id, origin)
@@ -309,7 +316,7 @@ function ConnectedApp({ catalog, auth }: { catalog: Catalog; auth: ReturnType<ty
   }
 
   return <div className="app-shell product-app customer-app">
-    <Header itemCount={cart.count} activeView={view === 'article' || view === 'wheel' || view === 'fresh' || view === 'study' || view === 'library' ? 'explore' : view} onNavigate={navigate} fulfillmentOnly={auth.role === 'vendor'} account={<AccountMenu auth={auth} onLogin={() => setAuthDialogOpen(true)} onAccount={() => navigate('account')}/>}/>
+    <Header itemCount={cart.count} activeView={view === 'article' || view === 'wheel' || view === 'fresh' || view === 'study' || view === 'library' ? 'explore' : view} onNavigate={navigate} fulfillmentOnly={auth.role === 'vendor'} account={<AccountMenu auth={auth} onLogin={() => setAuthDialogOpen(true)} onAccount={() => navigate('account')} onOrders={() => navigate('orders')} onBag={() => navigate('bag')}/>}/>
     {auth.error ? <p className="cloud-message" role="alert">{auth.error}</p> : null}
     <main className="app-main">{view === 'bag' && checkoutBusy ? <p className="cloud-message" role="status">Preparing checkout…</p> : null}{view === 'bag' && checkoutError ? <p className="cloud-message" role="alert">{checkoutError}</p> : null}
       <WorkspaceLoadBoundary key={view}><Suspense fallback={<WorkspaceLoading/>}>
@@ -329,7 +336,7 @@ function ConnectedApp({ catalog, auth }: { catalog: Catalog; auth: ReturnType<ty
       {view === 'checkout' ? auth.user && checkoutDraft?.userId === auth.user.id ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><CheckoutPage key={auth.user.id} userId={auth.user.id} items={checkoutDraft.items} catalog={catalog} onBack={() => navigate('bag')} onPlaced={orderPlaced}/></Suspense></CustomerRouteLoadBoundary> : <div className="screen-empty"><p>{auth.loading ? 'Loading account…' : 'Add a perfume to your bag to checkout.'}</p><button onClick={() => navigate('bag')}>View Bag</button></div> : null}
       {view === 'confirmation' && confirmedOrder && confirmedOrder.user_id === auth.user?.id ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><OrderConfirmationPage order={confirmedOrder} onBuild={() => { blend.clearCurrentFormula(); navigate('build') }} onOrders={() => navigate('orders')}/></Suspense></CustomerRouteLoadBoundary> : null}
       {view === 'orders' ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><OrdersPage key={auth.user?.id ?? 'guest'} userId={auth.user?.id} onLogin={() => setAuthDialogOpen(true)} onBuild={() => navigate('bag')}/></Suspense></CustomerRouteLoadBoundary> : null}
-      {view === 'account' ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><AccountPage email={auth.user?.email} onAddresses={() => navigate('addresses')} onOrders={() => navigate('orders')}/></Suspense></CustomerRouteLoadBoundary> : null}
+      {view === 'account' ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><AccountPage email={auth.user?.email} onBack={goBackFromAccount} onAddresses={() => navigate('addresses')} onOrders={() => navigate('orders')} onLogout={auth.logout}/></Suspense></CustomerRouteLoadBoundary> : null}
       {view === 'addresses' ? auth.user ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><AddressesPage onBack={() => navigate('account')}/></Suspense></CustomerRouteLoadBoundary> : <div className="screen-empty"><h2>Masuk untuk mengatur alamat</h2><button type="button" onClick={() => setAuthDialogOpen(true)}>Masuk</button></div> : null}
       {view === 'more' ? <CustomerRouteLoadBoundary key={view}><Suspense fallback={<CustomerRouteLoading/>}><MorePage onOrders={() => navigate('orders')} onFresh={() => navigate('fresh')} onStudy={() => navigate('study')} onLibrary={() => navigate('library')} onAccount={() => navigate('account')}/></Suspense></CustomerRouteLoadBoundary> : null}
     </main>

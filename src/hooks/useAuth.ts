@@ -20,10 +20,8 @@ export function useAuth() {
         if (active) setProfile({ userId, role: data.role })
       } catch (error) { if (active) { setProfile({ userId, role: null }); setError(errorMessage(error)) } }
     }
-    const onFocus = () => { void refresh() }
     void refresh()
-    window.addEventListener('focus', onFocus)
-    return () => { active = false; window.removeEventListener('focus', onFocus) }
+    return () => { active = false }
   }, [userId])
   useEffect(() => {
     if (!supabase) return

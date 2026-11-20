@@ -2,6 +2,7 @@ import { ArrowLeft, Check, Copy, PackageCheck, X } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { formatPrice } from '../lib/currency'
 import { getOrder, placeOrder, quoteOrder, type CustomerOrder, type OrderIntent, type OrderLine, type Quote } from '../lib/orders'
+import { orderIntentFingerprint } from '../lib/checkoutFingerprint'
 import { reviewedShippingBreakdown } from '../lib/shippingCheckoutReview'
 import { checkoutErrorMessage, checkoutShippingMode, isShippingCheckoutEnabled, shippingUnavailable, type ShippingReadiness } from '../lib/shippingCheckout'
 import { canSubmitReviewedOrder, shouldAutoReview } from '../lib/checkoutReviewState'
@@ -20,10 +21,10 @@ import { getNoteStickerAsset } from '../lib/noteAssets'
 interface Pending { addressId: string; items: OrderIntent[]; shippingQuoteId: string | null; requestId: string; token: string }
 function clearPending(key: string) { try { sessionStorage.removeItem(key) } catch { /* Storage is optional. */ } }
 function savePending(key: string, value: Pending) { try { sessionStorage.setItem(key, JSON.stringify(value)) } catch { /* The request can still continue in memory. */ } }
-function readPending(key: string, expectedItems: OrderIntent[]): Pending | null {
+function readPending(key: string, expectedItemsFingerprint: string): Pending | null {
   try {
     const value = JSON.parse(sessionStorage.getItem(key) ?? 'null')
-    if (isCheckoutPending(value) && JSON.stringify(value.items) === JSON.stringify(expectedItems)) return value
+    if (isCheckoutPending(value) && orderIntentFingerprint(value.items) === expectedItemsFingerprint) return value
     clearPending(key)
     return null
   } catch {
@@ -34,8 +35,11 @@ function readPending(key: string, expectedItems: OrderIntent[]): Pending | null 
 
 export function CheckoutScreen({ userId, items, catalog, onBack, onPlaced }: { userId: string; items: OrderIntent[]; catalog: Catalog; onBack: () => void; onPlaced: (order: CustomerOrder) => void }) {
   const storageKey = `perfun-order-submit:${userId}`
-  const [storedPending, setStoredPending] = useState<Pending | null>(() => readPending(storageKey, items))
-  const [addressId, setAddressId] = useState(() => readPending(storageKey, items)?.addressId ?? '')
+  const itemsFingerprint = orderIntentFingerprint(items)
+  const itemsRef = useRef(items)
+  useEffect(() => { itemsRef.current = items }, [items, itemsFingerprint])
+  const [storedPending, setStoredPending] = useState<Pending | null>(() => readPending(storageKey, itemsFingerprint))
+  const [addressId, setAddressId] = useState(() => readPending(storageKey, itemsFingerprint)?.addressId ?? '')
   const [addressRevision, setAddressRevision] = useState(0)
   const [quote, setQuote] = useState<Quote | null>(null)
   const [shippingQuote, setShippingQuote] = useState<ShippingQuote | null>(null)
@@ -47,7 +51,6 @@ export function CheckoutScreen({ userId, items, catalog, onBack, onPlaced }: { u
   const [error, setError] = useState('')
   const locked = useRef(false)
   const reviewRequest = useRef(0)
-  const itemsFingerprint = JSON.stringify(items)
   const quoteOwner = useRef(createShippingQuoteOwnerGate(itemsFingerprint))
   const [shippingStatus, setShippingStatus] = useState<ShippingReadiness | null>(null)
   const [shippingStatusError, setShippingStatusError] = useState(false)
@@ -88,13 +91,13 @@ export function CheckoutScreen({ userId, items, catalog, onBack, onPlaced }: { u
     const request = ++reviewRequest.current
     const timer = window.setTimeout(() => {
       setReviewBusy(true); setError(''); setQuote(null)
-      void quoteOrder(addressId, items, shippingQuoteId)
+      void quoteOrder(addressId, itemsRef.current, shippingQuoteId)
         .then(next => { if (request === reviewRequest.current && quoteOwner.current.accepts(revision, itemsFingerprint)) setQuote(next) })
         .catch(cause => { if (request === reviewRequest.current) { setQuote(null); setError(checkoutErrorMessage(cause)) } })
         .finally(() => { if (request === reviewRequest.current) setReviewBusy(false) })
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [addressId, addressRevision, items, itemsFingerprint, mode, reviewAttempt, shippingQuote?.quote_id])
+  }, [addressId, addressRevision, itemsFingerprint, mode, reviewAttempt, shippingQuote?.quote_id])
   async function submit() {
     if (locked.current || (!quote && !pending)) return
     locked.current = true; setBusy(true); setError('')
@@ -121,7 +124,7 @@ export function CheckoutScreen({ userId, items, catalog, onBack, onPlaced }: { u
     {mode === 'paused' ? <div className="checkout-unified-flow"><CheckoutAddressCard address={address} onChange={() => setAddressSheetOpen(true)}/><section className="checkout-section"><span>RINGKASAN PESANAN</span><CheckoutProductPreview items={items} catalog={catalog}/><p>Harga produk ditampilkan dari katalog saat ini. Harga final, diskon, dan total tetap menunggu validasi server setelah ongkir tersedia.</p></section><section className="checkout-section"><span>PENGIRIMAN</span><p>{shippingUnavailable}</p></section><aside className="checkout-summary"><span>TOTAL PESANAN</span><p>Harga akhir akan tersedia setelah ongkir dapat dihitung.</p><small>Anda tetap dapat menambah atau mengubah alamat pengiriman.</small></aside></div> : null}
     {mode === 'loading' ? <p role="status">Memeriksa status pengiriman…</p> : null}
     {mode === 'paused' ? null : pending ? <div className="cloud-message"><p>Permintaan pesanan tersimpan. Periksa hasilnya tanpa membuat pesanan kedua.</p><button disabled={busy} onClick={submit}>{busy ? 'Memeriksa pesanan…' : 'Periksa / coba lagi'}</button></div> : <div className="checkout-unified-flow">
-      {mode === 'shipping' ? <><CheckoutAddressCard address={address} onChange={() => setAddressSheetOpen(true)}/><section className="checkout-section"><span>RINGKASAN PESANAN</span>{quote ? <OrderLines items={quote.items}/> : <p role="status">Menyiapkan ringkasan pesanan…</p>}</section>{shippingEnabled ? <ShippingQuotePicker key={`${address?.id ?? 'no-address'}:${addressRevision}:${itemsFingerprint}`} address={address} items={items} onQuote={acceptShippingQuote}/> : null}<aside className="checkout-summary"><span>TOTAL PESANAN</span>{quote ? <OrderTotals totals={quote}/> : <p>{reviewBusy ? 'Memvalidasi harga akhir…' : shippingQuote ? 'Menyiapkan total pesanan…' : 'Menunggu ongkir untuk menghitung total.'}</p>}<button disabled={!canSubmitReviewedOrder(mode, quote?.quote_token, busy, reviewBusy)} onClick={submit}>{busy ? 'Membuat pesanan…' : 'Buat pesanan'}</button><small>{quote ? 'Harga dan ongkir telah divalidasi. Pembayaran belum dilakukan pada tahap ini.' : 'Buat Pesanan tersedia setelah harga akhir tervalidasi.'}</small>{error && shippingQuote && !reviewBusy ? <button type="button" className="checkout-retry" onClick={() => setReviewAttempt(value => value + 1)}>Coba lagi</button> : null}</aside></> : null}
+      {mode === 'shipping' ? <><CheckoutAddressCard address={address} onChange={() => setAddressSheetOpen(true)}/><section className="checkout-section"><span>RINGKASAN PESANAN</span>{quote ? <OrderLines items={quote.items}/> : <p role="status">Menyiapkan ringkasan pesanan…</p>}</section>{shippingEnabled ? <ShippingQuotePicker key={`${address?.id ?? 'no-address'}:${addressRevision}:${itemsFingerprint}`} address={address} items={items} itemsFingerprint={itemsFingerprint} onQuote={acceptShippingQuote}/> : null}<aside className="checkout-summary"><span>TOTAL PESANAN</span>{quote ? <OrderTotals totals={quote}/> : <p>{reviewBusy ? 'Memvalidasi harga akhir…' : shippingQuote ? 'Menyiapkan total pesanan…' : 'Menunggu ongkir untuk menghitung total.'}</p>}<button disabled={!canSubmitReviewedOrder(mode, quote?.quote_token, busy, reviewBusy)} onClick={submit}>{busy ? 'Membuat pesanan…' : 'Buat pesanan'}</button><small>{quote ? 'Harga dan ongkir telah divalidasi. Pembayaran belum dilakukan pada tahap ini.' : 'Buat Pesanan tersedia setelah harga akhir tervalidasi.'}</small>{error && shippingQuote && !reviewBusy ? <button type="button" className="checkout-retry" onClick={() => setReviewAttempt(value => value + 1)}>Coba lagi</button> : null}</aside></> : null}
     </div>}
     <AddressBook hidden selectedId={addressId} onSelect={selectAddress} onAddressSelect={setAddress} destinationSearchEnabled/>
     {addressSheetOpen ? <div className="checkout-address-sheet-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !busy) setAddressSheetOpen(false) }}><section className="checkout-address-sheet" role="dialog" aria-modal="true" aria-labelledby="checkout-address-sheet-title"><header><div><span>ALAMAT PENGIRIMAN</span><h2 id="checkout-address-sheet-title">Ganti alamat</h2></div><button type="button" aria-label="Tutup" onClick={() => setAddressSheetOpen(false)}><X/></button></header><AddressBook selectedId={addressId} onSelect={selectAddress} onAddressSelect={setAddress} destinationSearchEnabled/></section></div> : null}

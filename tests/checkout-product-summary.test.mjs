@@ -25,3 +25,9 @@ test('shipping-off product preview omits an unavailable price rather than invent
   assert.equal(summary.price, null)
   assert.deepEqual(summary.blends[0].notes.map(note => note.name), ['unknown-top', 'unknown-middle', 'unknown-base'])
 })
+
+test('Mix/Bag checkout summary keeps the selected notes and cart quantity in the intent', () => {
+  const [summary] = checkoutProductSummaries([{ product_id: '10ml', quantity: 3, formulas: [{ top: 'top-note', middle: 'middle-note', base: 'base-note' }] }], catalog)
+  assert.equal(summary.quantity, 3)
+  assert.deepEqual(summary.blends[0].notes.map(note => note.name), ['Bergamot', 'Jasmine', 'Vetiver'])
+})

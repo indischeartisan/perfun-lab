@@ -80,8 +80,7 @@ export default function App() {
     const refresh = () => loadCatalog().then(data => { if (active) { setCatalog(data); setError('') } }).catch(error => { if (active) setError(errorMessage(error)) })
     void refresh()
     window.addEventListener('perfun-catalog-updated', refresh)
-    window.addEventListener('focus', refresh)
-    return () => { active = false; window.removeEventListener('perfun-catalog-updated', refresh); window.removeEventListener('focus', refresh) }
+    return () => { active = false; window.removeEventListener('perfun-catalog-updated', refresh) }
   }, [attempt])
   if (auth.loading || (auth.user && auth.roleLoading)) return <RoleLoading/>
   if (auth.user && auth.role && auth.role !== 'customer') return <WorkspaceApp auth={auth}/>

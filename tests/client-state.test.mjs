@@ -111,6 +111,14 @@ test('customer receipt confirmation is explicit, guarded, and has no optimistic 
   assert.match(shipments, /rpc\('confirm_shipment_received'/)
 })
 
+test('catalog dan profil tidak lagi refresh semata-mata karena window focus', () => {
+  const app = readFileSync(new URL('../src/app/App.tsx', import.meta.url), 'utf8')
+  const auth = readFileSync(new URL('../src/hooks/useAuth.ts', import.meta.url), 'utf8')
+  assert.match(app, /perfun-catalog-updated/)
+  assert.doesNotMatch(app, /addEventListener\('focus'/)
+  assert.doesNotMatch(auth, /addEventListener\('focus'/)
+})
+
 test('customer payment details only use an internally consistent server shipping snapshot', () => {
   const source = readFileSync(new URL('../src/pages/OrdersPage.tsx', import.meta.url), 'utf8')
 

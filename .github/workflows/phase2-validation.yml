@@ -156,6 +156,7 @@ jobs:
             supabase/tests/admin_testing_preflight.sql
             supabase/tests/admin_test_runs.sql
             supabase/tests/test_run_shipping_address.sql
+            supabase/tests/inventory.sql
           )
           failed_tests=()
 
@@ -208,6 +209,21 @@ jobs:
           wait "$first"
           wait "$second"
           docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < supabase/tests/vendor_concurrency_check.sql
+          echo '::endgroup::'
+
+          echo '::group::Inventory last-bottle concurrency regression'
+          docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < supabase/tests/inventory_concurrency_setup.sql
+          docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -v order_id=i2000000-0000-4000-8000-000000000001 -U postgres -d postgres < supabase/tests/inventory_concurrency_action.sql & first=$!
+          docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -v order_id=i2000000-0000-4000-8000-000000000002 -U postgres -d postgres < supabase/tests/inventory_concurrency_action.sql & second=$!
+          set +e
+          wait "$first"; first_status=$?
+          wait "$second"; second_status=$?
+          set -e
+          if (( first_status == 0 && second_status == 0 )) || (( first_status != 0 && second_status != 0 )); then
+            echo '::error::Expected exactly one last-bottle reservation transaction to commit.'
+            exit 1
+          fi
+          docker exec -i "$db_container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < supabase/tests/inventory_concurrency_check.sql
           echo '::endgroup::'
 
           echo '::group::TEST run two-session concurrency regression'

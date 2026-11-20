@@ -7,6 +7,7 @@ export interface ProductOption {
   normalPrice: number
   openingPrice: number
   badge?: string
+  stockAvailable: number | null
 }
 
 export const PROTOTYPE_SHIPPING = 25000

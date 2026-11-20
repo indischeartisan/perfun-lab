@@ -25,6 +25,10 @@ export async function loadCatalog(): Promise<Catalog> {
       shortDescription: note.short_description, predictionText: row.prediction_text,
       stickerColor: note.sticker_color, icon: note.icon, stickerAsset: note.sticker_asset ?? undefined, profile: note.profile })
   }
+  const inventory = new Map(products.data.map(row => [row.id, row]))
+  const available = (row: typeof products.data[number] | undefined) => row?.stock_tracking_enabled && row.stock_on_hand !== null && row.stock_on_hand !== undefined
+    ? Math.max(0, row.stock_on_hand - row.stock_reserved - row.stock_sold)
+    : null
   const productOptions: ProductOption[] = products.data.filter(row => row.active).map(row => {
     const prices = row.product_prices as Array<{ kind: string; amount: number }>
     const normal = prices.find(price => price.kind === 'normal')?.amount
@@ -32,7 +36,9 @@ export async function loadCatalog(): Promise<Catalog> {
     if (normal == null) throw new Error(`Missing price for ${row.id}`)
     const id = row.id === '10ml' ? 10 : row.id === '30ml' ? 30 : row.id === 'bundle-3x10ml' ? 'play-set' : null
     if (id === null) throw new Error(`Unsupported product: ${row.id}`)
-    return { id, label: row.label, description: row.description, badge: row.badge ?? undefined, normalPrice: normal, openingPrice: launch ?? normal }
+    const physicalAvailable = available(row)
+    return { id, label: row.label, description: row.description, badge: row.badge ?? undefined, normalPrice: normal, openingPrice: launch ?? normal,
+      stockAvailable: id === 'play-set' ? (() => { const stock10 = available(inventory.get('10ml')); return stock10 === null ? null : Math.floor(stock10 / 3) })() : physicalAvailable }
   })
   return { noteGroups, productOptions, price(id) {
     const product = productOptions.find(option => option.id === id)

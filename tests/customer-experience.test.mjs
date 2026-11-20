@@ -5,6 +5,7 @@ import { shouldAutoSelectAddress } from '../src/lib/addressBookMode.ts'
 import { addressEditorFocusKey } from '../src/lib/addressEditorFocus.ts'
 import { shippingErrorMessage } from '../src/lib/shippingMessages.ts'
 import { globalLoadingMessage } from '../src/lib/loadingCopy.ts'
+import { createAuthProfileRequestGuard, preservesAuthenticatedProfile } from '../src/lib/authSessionState.ts'
 
 test('address management mode does not auto-select a saved address', () => {
   assert.equal(shouldAutoSelectAddress('manage'), false)
@@ -27,6 +28,21 @@ test('shipping lookup failures use clear Indonesian recovery copy', () => {
 
 test('global loading uses the approved Indonesian copy', () => {
   assert.equal(globalLoadingMessage, 'Menyiapkan ruangmu…')
+})
+
+test('TOKEN_REFRESHED dan SIGNED_IN akun yang sama mempertahankan profil terverifikasi', () => {
+  assert.equal(preservesAuthenticatedProfile('customer-a', 'customer-a'), true)
+  assert.equal(preservesAuthenticatedProfile('customer-a', 'customer-b'), false)
+  assert.equal(preservesAuthenticatedProfile('customer-a', null), false)
+})
+
+test('respons profil akun lama diabaikan setelah pergantian akun', () => {
+  const guard = createAuthProfileRequestGuard()
+  const oldRequest = guard.begin('customer-a')
+  guard.switchTo('admin-b')
+  assert.equal(guard.accepts(oldRequest, 'customer-a'), false)
+  const newRequest = guard.begin('admin-b')
+  assert.equal(guard.accepts(newRequest, 'admin-b'), true)
 })
 
 test('cart selection defaults to all current items and persists only valid IDs', () => {

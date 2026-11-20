@@ -18,6 +18,7 @@ type CardSummary = { title: string; detail: string }
 
 const filters: Array<[Filter, string]> = [['all', 'Semua'], ['unpaid', 'Belum Bayar'], ['processing', 'Diproses'], ['shipping', 'Dikirim'], ['complete', 'Selesai']]
 const phases = ['top', 'middle', 'base'] as const
+const ordersPerPage = 5
 
 function orderStatus(order: CustomerOrder): Status {
   if (order.payment_status === 'pending') return { label: 'Menunggu pembayaran', detail: 'Selesaikan pembayaran untuk memulai peracikan.', tone: 'amber' }
@@ -35,6 +36,8 @@ function matches(order: CustomerOrder, filter: Filter) {
   const label = orderStatus(order).label
   return filter === 'all' || filter === 'unpaid' && ['Menunggu pembayaran', 'Pembayaran gagal', 'Pembayaran kedaluwarsa'].includes(label) || filter === 'processing' && ['Menunggu diracik', 'Sedang diracik', 'Siap dikirim'].includes(label) || filter === 'shipping' && label === 'Dalam pengiriman' || filter === 'complete' && label === 'Selesai'
 }
+
+function pageCountFor(orders: CustomerOrder[], filter: Filter) { return Math.max(1, Math.ceil(orders.filter(order => matches(order, filter)).length / ordersPerPage)) }
 
 function date(value: string) { return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
 function normalizedPhase(value: string) { return value.trim().toLowerCase() }
@@ -75,15 +78,17 @@ export function OrdersPage({ userId, onLogin, onBuild }: { userId?: string; onLo
   const [loading, setLoading] = useState(Boolean(userId))
   const [error, setError] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const [page, setPage] = useState(1)
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
   const [receiptOrderId, setReceiptOrderId] = useState<string | null>(null)
   const [returnVerification, setReturnVerification] = useState<'idle' | 'verifying' | 'unverified'>('idle')
+  const filterRef = useRef<Filter>('all')
   const inflight = useRef<Promise<void> | null>(null)
   const returnVerificationLock = useRef(false)
   const refresh = useCallback(() => {
     if (!userId || inflight.current) return inflight.current ?? Promise.resolve()
     setLoading(true)
-    const request = listOrders().then(rows => { setOrders(rows); setError('') }).catch(cause => setError(errorMessage(cause))).finally(() => { setLoading(false); inflight.current = null })
+    const request = listOrders().then(rows => { setOrders(rows); setPage(current => Math.min(current, pageCountFor(rows, filterRef.current))); setError('') }).catch(cause => setError(errorMessage(cause))).finally(() => { setLoading(false); inflight.current = null })
     inflight.current = request
     return request
   }, [userId])
@@ -124,16 +129,20 @@ export function OrdersPage({ userId, onLogin, onBuild }: { userId?: string; onLo
   if (!userId) return <section className="app-screen"><div className="screen-empty"><h2>Masuk untuk melihat pesanan</h2><button onClick={onLogin}>Masuk</button></div></section>
   const selected = selectedOrderId ? orders.find(order => order.id === selectedOrderId) ?? null : null
   if (selected) return <><CustomerOrderDetail order={selected} onBack={() => setSelectedOrderId(null)} onRefresh={refresh} onConfirmReceipt={() => setReceiptOrderId(selected.id)} returnVerification={returnVerification} />{receiptOrderId ? <ReceiptConfirmationDialog onCancel={() => setReceiptOrderId(null)} onConfirm={confirmReceipt} /> : null}</>
-  const visible = orders.filter(order => matches(order, filter))
+  const visible = orders.filter(order => matches(order, filter)).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+  const pageCount = Math.max(1, Math.ceil(visible.length / ordersPerPage))
+  const activePage = Math.min(page, pageCount)
+  const pagedOrders = visible.slice((activePage - 1) * ordersPerPage, activePage * ordersPerPage)
   return <section className="app-screen customer-orders-page">
     <header className="customer-orders-heading"><span>AKUN SAYA</span><div><h1>Pesanan Saya.</h1><button className="customer-orders-refresh" disabled={loading} onClick={() => void refresh()}><RefreshCw /> {loading ? 'Memuat' : 'Perbarui'}</button></div><p>Lihat dan kelola semua pesanan parfummu di sini.</p></header>
-    <nav className="customer-order-filters" aria-label="Filter pesanan">{filters.map(([id, label]) => <button key={id} className={filter === id ? 'active' : ''} onClick={() => setFilter(id)}>{label}</button>)}</nav>
+    <nav className="customer-order-filters" aria-label="Filter pesanan">{filters.map(([id, label]) => <button key={id} className={filter === id ? 'active' : ''} onClick={() => { filterRef.current = id; setFilter(id); setPage(1) }}>{label}</button>)}</nav>
     {returnVerification === 'verifying' ? <p role="status">Memeriksa konfirmasi pembayaran…</p> : null}
     {returnVerification === 'unverified' ? <p className="cloud-message" role="alert">Kami belum dapat mengonfirmasi pembayaran. Status pesanan tidak diubah. <button onClick={() => setReturnVerification('idle')}>Tutup</button></p> : null}
     {error ? <p className="cloud-message" role="alert">{error} <button onClick={() => void refresh()}>Coba lagi</button></p> : null}
     {loading && !orders.length ? <p role="status">Menyiapkan pesananmu…</p> : null}
     {!loading && !orders.length ? <div className="screen-empty"><h2>Belum ada pesanan</h2><button onClick={onBuild}>Racik parfum</button></div> : null}
-    <div className="customer-order-list">{visible.map(order => <CustomerOrderCard key={order.id} order={order} onOpen={() => openOrder(order.id)} onConfirmReceipt={() => setReceiptOrderId(order.id)} />)}</div>
+    <div className="customer-order-list">{pagedOrders.map(order => <CustomerOrderCard key={order.id} order={order} onOpen={() => openOrder(order.id)} onConfirmReceipt={() => setReceiptOrderId(order.id)} />)}</div>
+    {visible.length > ordersPerPage ? <nav className="customer-orders-pagination" aria-label="Pagination pesanan"><button className="customer-orders-refresh" type="button" disabled={activePage === 1} onClick={() => setPage(current => Math.max(1, current - 1))}>Sebelumnya</button><span>Halaman {activePage} dari {pageCount}</span><button className="customer-orders-refresh" type="button" disabled={activePage === pageCount} onClick={() => setPage(current => Math.min(pageCount, current + 1))}>Berikutnya</button></nav> : null}
     {!loading && orders.length && !visible.length ? <p className="customer-orders-no-match">Tidak ada pesanan dalam filter ini.</p> : null}
     {receiptOrderId ? <ReceiptConfirmationDialog onCancel={() => setReceiptOrderId(null)} onConfirm={confirmReceipt} /> : null}
   </section>

@@ -158,11 +158,10 @@ end $$;
 create or replace function public.admin_save_product(p_id text,p_version bigint,p_active boolean,p_regular_price integer,p_sale_price integer,p_stock_on_hand bigint,p_stock_tracking_enabled boolean)
 returns void language sql security invoker set search_path='' as $$ select private.admin_save_product_with_inventory(p_id,p_version,p_active,p_regular_price,p_sale_price,p_stock_on_hand,p_stock_tracking_enabled); $$;
 
-do $$ declare signature text; target_schema text; begin
-  foreach signature in array array['admin_catalog()','admin_save_product(text,bigint,boolean,integer,integer,bigint,boolean)'] loop
-    foreach target_schema in array array['public','private'] loop
-      execute 'revoke all on function '||target_schema||'.'||signature||' from public,anon,authenticated';
-      execute 'grant execute on function '||target_schema||'.'||signature||' to authenticated';
-    end loop;
-  end loop;
+do $$ begin
+  revoke all on function public.admin_catalog() from public,anon,authenticated;
+  grant execute on function public.admin_catalog() to authenticated;
+  revoke all on function public.admin_save_product(text,bigint,boolean,integer,integer,bigint,boolean) from public,anon,authenticated;
+  grant execute on function public.admin_save_product(text,bigint,boolean,integer,integer,bigint,boolean) to authenticated;
+  revoke all on function private.admin_save_product_with_inventory(text,bigint,boolean,integer,integer,bigint,boolean) from public,anon,authenticated;
 end $$;

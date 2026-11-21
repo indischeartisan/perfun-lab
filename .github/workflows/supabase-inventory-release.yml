@@ -11,12 +11,6 @@ on:
         options:
           - dry-run
           - apply
-      source_sha:
-        description: Reviewed CI-green source commit
-        required: true
-        default: 1d3e45e545b0a3fdfd1b1536c01d750cf573b4a6
-        type: string
-
 permissions:
   contents: read
 
@@ -25,7 +19,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  TARGET_MIGRATION: 20261120140000_product_inventory_reservations.sql
+  RELEASE_SOURCE_SHA: 1d3e45e545b0a3fdfd1b1536c01d750cf573b4a6
+  TARGET_MIGRATION_PATH: supabase/migrations/20261120140000_product_inventory_reservations.sql
+  TARGET_MIGRATION_FILE: 20261120140000_product_inventory_reservations.sql
   SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
   NO_COLOR: "1"
 
@@ -44,7 +40,6 @@ jobs:
       - name: Verify manual release inputs and install pinned Supabase CLI
         shell: bash
         env:
-          SOURCE_SHA: ${{ inputs.source_sha }}
           RELEASE_MODE: ${{ inputs.mode }}
         run: |
           set -Eeuo pipefail
@@ -56,8 +51,8 @@ jobs:
             echo "::error::Unsupported release mode."
             exit 1
           }
-          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
-            echo "::error::source_sha must be a full 40-character commit SHA."
+          [[ "$RELEASE_SOURCE_SHA" == "1d3e45e545b0a3fdfd1b1536c01d750cf573b4a6" ]] || {
+            echo "::error::The release source SHA is not the reviewed CI-green commit."
             exit 1
           }
           [[ -n "${SUPABASE_DB_URL:-}" ]] || {
@@ -82,56 +77,57 @@ jobs:
 
       - name: Build the single-migration release bundle and verify old-app compatibility
         shell: bash
-        env:
-          SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -Eeuo pipefail
-          target_migration="$TARGET_MIGRATION"
-          target_version="${target_migration:0:14}"
-          git fetch --no-tags origin "$SOURCE_SHA" --depth=1 >/dev/null
-          git cat-file -e "$SOURCE_SHA^{commit}"
-          git cat-file -e "$SOURCE_SHA:$target_migration"
+          target_migration_path="$TARGET_MIGRATION_PATH"
+          target_migration_file="$TARGET_MIGRATION_FILE"
+          target_version="${target_migration_file:0:14}"
+          git fetch --no-tags origin "$RELEASE_SOURCE_SHA" --depth=1 >/dev/null
+          git cat-file -e "$RELEASE_SOURCE_SHA^{commit}"
+          git cat-file -e "$RELEASE_SOURCE_SHA:supabase/migrations/20261120140000_product_inventory_reservations.sql"
 
           # The release bundle intentionally contains only the approved migration.
           bundle="$RUNNER_TEMP/perfun-inventory-release"
           rm -rf -- "$bundle"
           mkdir -p "$bundle/supabase/migrations"
-          git show "$SOURCE_SHA:supabase/config.toml" > "$bundle/supabase/config.toml"
-          git show "$SOURCE_SHA:$target_migration" > "$bundle/supabase/migrations/$target_migration"
+          git show "$RELEASE_SOURCE_SHA:supabase/config.toml" > "$bundle/supabase/config.toml"
+          git show "$RELEASE_SOURCE_SHA:$target_migration_path" > "$bundle/supabase/migrations/$target_migration_file"
           mapfile -t bundle_files < <(find "$bundle/supabase/migrations" -maxdepth 1 -type f -printf '%f\n')
-          [[ "${#bundle_files[@]}" -eq 1 && "${bundle_files[0]}" == "$target_migration" ]] || {
+          [[ "${#bundle_files[@]}" -eq 1 && "${bundle_files[0]}" == "$target_migration_file" ]] || {
             echo "::error::Release bundle contains a migration other than the approved target."
             exit 1
           }
 
           # The old UI still calls these contracts. The migration adds overloads and
           # keeps the original 5-argument product save contract intact.
-          git show "$SOURCE_SHA:supabase/migrations/20260908125938_admin_dashboard_mvp.sql" | \
+          git show "$RELEASE_SOURCE_SHA:supabase/migrations/20260908125938_admin_dashboard_mvp.sql" | \
             grep -Fq "create function public.admin_save_product(p_id text,p_version bigint,p_active boolean,p_regular_price integer,p_sale_price integer default null)"
           git show HEAD:src/lib/admin.ts | grep -Fq "rpc('admin_save_product'"
           git show HEAD:src/lib/orders.ts | grep -Fq "rpc('quote_order'"
           git show HEAD:src/lib/orders.ts | grep -Fq "rpc('place_order'"
           git show HEAD:supabase/functions/_shared/runtime.ts | grep -Fq "rpc('reserve_payment'"
           git show HEAD:supabase/functions/_shared/runtime.ts | grep -Fq "rpc('apply_payment_event'"
-          grep -Fq "stock_tracking_enabled boolean not null default false" "$bundle/supabase/migrations/$target_migration"
-          grep -Fq "Enter initial stock before enabling stock limits" "$bundle/supabase/migrations/$target_migration"
+          grep -Fq "stock_tracking_enabled boolean not null default false" "$bundle/supabase/migrations/$target_migration_file"
+          grep -Fq "Enter initial stock before enabling stock limits" "$bundle/supabase/migrations/$target_migration_file"
           echo "Compatibility guard passed: legacy checkout/payment/Admin calls remain available and stock limits stay opt-in."
 
       - name: Read production migration history and enforce the exact pending set
         shell: bash
-        env:
-          SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -Eeuo pipefail
-          target_version="${TARGET_MIGRATION:0:14}"
+          target_version="${TARGET_MIGRATION_FILE:0:14}"
           source_history="$RUNNER_TEMP/source-migration-history.txt"
           remote_history="$RUNNER_TEMP/remote-migration-history.txt"
-          git ls-tree -r --name-only "$SOURCE_SHA" -- supabase/migrations | \
+          git ls-tree -r --name-only "$RELEASE_SOURCE_SHA" -- supabase/migrations | \
             sed -n 's#^.*/\([0-9]\{14\}\)_[^/]*\.sql$#\1#p' | sort -u > "$source_history"
           grep -Fxq "$target_version" "$source_history"
           psql "$SUPABASE_DB_URL" --no-align --tuples-only --set=ON_ERROR_STOP=1 \
             --command "select version from supabase_migrations.schema_migrations order by version" > "$remote_history"
           sed -i '/^[[:space:]]*$/d' "$remote_history"
+          if ! (cd "$RUNNER_TEMP/perfun-inventory-release" && supabase migration list --db-url "$SUPABASE_DB_URL" > "$RUNNER_TEMP/supabase-migration-list.txt" 2>&1); then
+            echo "::error::Supabase migration history inspection failed; no production write was attempted."
+            exit 1
+          fi
 
           unexpected="$(comm -13 "$source_history" <(sort -u "$remote_history") || true)"
           [[ -z "$unexpected" ]] || {
@@ -146,13 +142,12 @@ jobs:
           if [[ -z "$pending" ]]; then
             echo "Production already records the approved migration; no apply is needed."
           else
-            echo "Production pending set is exactly $TARGET_MIGRATION."
+            echo "Production pending set is exactly $TARGET_MIGRATION_FILE."
           fi
+          printf '%s\n' "$pending" > "$RUNNER_TEMP/pending-migrations.txt"
 
       - name: Run the production dry-run without writing
         shell: bash
-        env:
-          SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -Eeuo pipefail
           bundle="$RUNNER_TEMP/perfun-inventory-release"
@@ -161,7 +156,20 @@ jobs:
             echo "::error::Supabase dry-run failed; no production write was attempted."
             exit 1
           fi
-          echo "Supabase production dry-run completed for the single approved migration."
+          pending="$(cat "$RUNNER_TEMP/pending-migrations.txt")"
+          migrations_in_output="$(grep -oE '[0-9]{14}_[A-Za-z0-9_]+\.sql' "$dry_run_log" | sort -u || true)"
+          if [[ "$pending" == "${TARGET_MIGRATION_FILE:0:14}" ]]; then
+            [[ "$migrations_in_output" == "$TARGET_MIGRATION_FILE" ]] || {
+              echo "::error::Dry-run output did not contain exactly the approved migration."
+              exit 1
+            }
+          else
+            [[ -z "$migrations_in_output" ]] || {
+              echo "::error::Dry-run proposed a migration even though production is up to date."
+              exit 1
+            }
+          fi
+          echo "Supabase production dry-run completed and proposed only the approved migration."
 
   apply:
     name: Apply approved migration to production
@@ -180,12 +188,10 @@ jobs:
 
       - name: Install pinned Supabase CLI and rebuild the exact release bundle
         shell: bash
-        env:
-          SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -Eeuo pipefail
-          git fetch --no-tags origin "$SOURCE_SHA" --depth=1 >/dev/null
-          git cat-file -e "$SOURCE_SHA:$TARGET_MIGRATION"
+          git fetch --no-tags origin "$RELEASE_SOURCE_SHA" --depth=1 >/dev/null
+          git cat-file -e "$RELEASE_SOURCE_SHA:supabase/migrations/20261120140000_product_inventory_reservations.sql"
           tools="$RUNNER_TEMP/perfun-inventory-release-tools"
           mkdir -p "$tools/path"
           curl --fail --silent --show-error --location --retry 3 \
@@ -197,21 +203,25 @@ jobs:
           echo "$tools/path" >> "$GITHUB_PATH"
           bundle="$RUNNER_TEMP/perfun-inventory-release"
           mkdir -p "$bundle/supabase/migrations"
-          git show "$SOURCE_SHA:supabase/config.toml" > "$bundle/supabase/config.toml"
-          git show "$SOURCE_SHA:$TARGET_MIGRATION" > "$bundle/supabase/migrations/$TARGET_MIGRATION"
+          git show "$RELEASE_SOURCE_SHA:supabase/config.toml" > "$bundle/supabase/config.toml"
+          git show "$RELEASE_SOURCE_SHA:$TARGET_MIGRATION_PATH" > "$bundle/supabase/migrations/$TARGET_MIGRATION_FILE"
 
       - name: Repeat exact history guard and dry-run before apply
         shell: bash
         run: |
           set -Eeuo pipefail
-          target_version="${TARGET_MIGRATION:0:14}"
+          target_version="${TARGET_MIGRATION_FILE:0:14}"
           source_history="$RUNNER_TEMP/source-migration-history.txt"
           remote_history="$RUNNER_TEMP/remote-migration-history.txt"
-          git ls-tree -r --name-only "${{ inputs.source_sha }}" -- supabase/migrations | \
+          git ls-tree -r --name-only "$RELEASE_SOURCE_SHA" -- supabase/migrations | \
             sed -n 's#^.*/\([0-9]\{14\}\)_[^/]*\.sql$#\1#p' | sort -u > "$source_history"
           psql "$SUPABASE_DB_URL" --no-align --tuples-only --set=ON_ERROR_STOP=1 \
             --command "select version from supabase_migrations.schema_migrations order by version" > "$remote_history"
           sed -i '/^[[:space:]]*$/d' "$remote_history"
+          if ! (cd "$RUNNER_TEMP/perfun-inventory-release" && supabase migration list --db-url "$SUPABASE_DB_URL" > "$RUNNER_TEMP/supabase-migration-list-before-apply.txt" 2>&1); then
+            echo "::error::Supabase migration history recheck failed; apply stopped."
+            exit 1
+          fi
           unexpected="$(comm -13 "$source_history" <(sort -u "$remote_history") || true)"
           [[ -z "$unexpected" ]] || { echo "::error::Production migration drift detected."; exit 1; }
           pending="$(comm -23 "$source_history" <(sort -u "$remote_history") || true)"
@@ -221,6 +231,11 @@ jobs:
           }
           dry_run_log="$RUNNER_TEMP/perfun-inventory-dry-run-before-apply.log"
           (cd "$RUNNER_TEMP/perfun-inventory-release" && supabase db push --db-url "$SUPABASE_DB_URL" --dry-run > "$dry_run_log" 2>&1)
+          migrations_in_output="$(grep -oE '[0-9]{14}_[A-Za-z0-9_]+\.sql' "$dry_run_log" | sort -u || true)"
+          [[ "$migrations_in_output" == "$TARGET_MIGRATION_FILE" ]] || {
+            echo "::error::Pre-apply dry-run proposed more than the approved migration."
+            exit 1
+          }
           echo "Repeated production guard and dry-run passed."
 
       - name: Apply the single approved migration
@@ -233,7 +248,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          target_version="${TARGET_MIGRATION:0:14}"
+          target_version="${TARGET_MIGRATION_FILE:0:14}"
           applied="$(psql "$SUPABASE_DB_URL" --no-align --tuples-only --set=ON_ERROR_STOP=1 \
             --command "select count(*) from supabase_migrations.schema_migrations where version='$target_version'")"
           [[ "$applied" == 1 ]] || { echo "::error::Approved migration was not recorded exactly once."; exit 1; }

@@ -1,0 +1,271 @@
+name: Release bottle inventory migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Release mode
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - apply
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-production-inventory-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_SOURCE_SHA: 1d3e45e545b0a3fdfd1b1536c01d750cf573b4a6
+  TARGET_MIGRATION_PATH: supabase/migrations/20261120140000_product_inventory_reservations.sql
+  TARGET_MIGRATION_FILE: 20261120140000_product_inventory_reservations.sql
+  SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+  NO_COLOR: "1"
+
+jobs:
+  preflight:
+    name: Verify production history and dry-run
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out main release workflow
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verify manual release inputs and install pinned Supabase CLI
+        shell: bash
+        env:
+          RELEASE_MODE: ${{ inputs.mode }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_REF" == refs/heads/main ]] || {
+            echo "::error::This release workflow must be dispatched from main."
+            exit 1
+          }
+          [[ "$RELEASE_MODE" == dry-run || "$RELEASE_MODE" == apply ]] || {
+            echo "::error::Unsupported release mode."
+            exit 1
+          }
+          [[ "$RELEASE_SOURCE_SHA" == "1d3e45e545b0a3fdfd1b1536c01d750cf573b4a6" ]] || {
+            echo "::error::The release source SHA is not the reviewed CI-green commit."
+            exit 1
+          }
+          [[ -n "${SUPABASE_DB_URL:-}" ]] || {
+            echo "::error::Configure SUPABASE_DB_URL before running the release workflow."
+            exit 1
+          }
+          [[ "$SUPABASE_DB_URL" =~ ^postgres(ql)?:// ]] || {
+            echo "::error::SUPABASE_DB_URL must be a PostgreSQL URL."
+            exit 1
+          }
+
+          tools="$RUNNER_TEMP/perfun-inventory-release-tools"
+          mkdir -p "$tools/path"
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "$tools/supabase.tar.gz" \
+            "https://github.com/supabase/cli/releases/download/v3.1.0/supabase_3.1.0_linux_amd64.tar.gz"
+          echo "dbe9fd66771337fc198727da86b9d3551302f87a7091cd8781be2a4cd0c8ac4d  $tools/supabase.tar.gz" | sha256sum --check --status
+          tar -xzf "$tools/supabase.tar.gz" -C "$tools"
+          install -m 0755 "$tools/supabase" "$tools/path/supabase"
+          echo "$tools/path" >> "$GITHUB_PATH"
+          "$tools/path/supabase" --version
+
+      - name: Build the single-migration release bundle and verify old-app compatibility
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          target_migration_path="$TARGET_MIGRATION_PATH"
+          target_migration_file="$TARGET_MIGRATION_FILE"
+          target_version="${target_migration_file:0:14}"
+          git fetch --no-tags origin "$RELEASE_SOURCE_SHA" --depth=1 >/dev/null
+          git cat-file -e "$RELEASE_SOURCE_SHA^{commit}"
+          git cat-file -e "$RELEASE_SOURCE_SHA:supabase/migrations/20261120140000_product_inventory_reservations.sql"
+
+          # The release bundle intentionally contains only the approved migration.
+          bundle="$RUNNER_TEMP/perfun-inventory-release"
+          rm -rf -- "$bundle"
+          mkdir -p "$bundle/supabase/migrations"
+          git show "$RELEASE_SOURCE_SHA:supabase/config.toml" > "$bundle/supabase/config.toml"
+          git show "$RELEASE_SOURCE_SHA:$target_migration_path" > "$bundle/supabase/migrations/$target_migration_file"
+          mapfile -t bundle_files < <(find "$bundle/supabase/migrations" -maxdepth 1 -type f -printf '%f\n')
+          [[ "${#bundle_files[@]}" -eq 1 && "${bundle_files[0]}" == "$target_migration_file" ]] || {
+            echo "::error::Release bundle contains a migration other than the approved target."
+            exit 1
+          }
+
+          # The old UI still calls these contracts. The migration adds overloads and
+          # keeps the original 5-argument product save contract intact.
+          git show "$RELEASE_SOURCE_SHA:supabase/migrations/20260908125938_admin_dashboard_mvp.sql" | \
+            grep -Fq "create function public.admin_save_product(p_id text,p_version bigint,p_active boolean,p_regular_price integer,p_sale_price integer default null)"
+          git show HEAD:src/lib/admin.ts | grep -Fq "rpc('admin_save_product'"
+          git show HEAD:src/lib/orders.ts | grep -Fq "rpc('quote_order'"
+          git show HEAD:src/lib/orders.ts | grep -Fq "rpc('place_order'"
+          git show HEAD:supabase/functions/_shared/runtime.ts | grep -Fq "rpc('reserve_payment'"
+          git show HEAD:supabase/functions/_shared/runtime.ts | grep -Fq "rpc('apply_payment_event'"
+          grep -Fq "stock_tracking_enabled boolean not null default false" "$bundle/supabase/migrations/$target_migration_file"
+          grep -Fq "Enter initial stock before enabling stock limits" "$bundle/supabase/migrations/$target_migration_file"
+          echo "Compatibility guard passed: legacy checkout/payment/Admin calls remain available and stock limits stay opt-in."
+
+      - name: Read production migration history and enforce the exact pending set
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          target_version="${TARGET_MIGRATION_FILE:0:14}"
+          source_history="$RUNNER_TEMP/source-migration-history.txt"
+          remote_history="$RUNNER_TEMP/remote-migration-history.txt"
+          git ls-tree -r --name-only "$RELEASE_SOURCE_SHA" -- supabase/migrations | \
+            sed -n 's#^.*/\([0-9]\{14\}\)_[^/]*\.sql$#\1#p' | sort -u > "$source_history"
+          grep -Fxq "$target_version" "$source_history"
+          psql "$SUPABASE_DB_URL" --no-align --tuples-only --set=ON_ERROR_STOP=1 \
+            --command "select version from supabase_migrations.schema_migrations order by version" > "$remote_history"
+          sed -i '/^[[:space:]]*$/d' "$remote_history"
+          if ! (cd "$RUNNER_TEMP/perfun-inventory-release" && supabase migration list --db-url "$SUPABASE_DB_URL" > "$RUNNER_TEMP/supabase-migration-list.txt" 2>&1); then
+            echo "::error::Supabase migration history inspection failed; no production write was attempted."
+            exit 1
+          fi
+
+          unexpected="$(comm -13 "$source_history" <(sort -u "$remote_history") || true)"
+          [[ -z "$unexpected" ]] || {
+            echo "::error::Production migration history contains versions absent from the reviewed source SHA."
+            exit 1
+          }
+          pending="$(comm -23 "$source_history" <(sort -u "$remote_history") || true)"
+          if [[ -n "$pending" && "$pending" != "$target_version" ]]; then
+            echo "::error::Pending production migrations are not exactly the approved target."
+            exit 1
+          fi
+          if [[ -z "$pending" ]]; then
+            echo "Production already records the approved migration; no apply is needed."
+          else
+            echo "Production pending set is exactly $TARGET_MIGRATION_FILE."
+          fi
+          printf '%s\n' "$pending" > "$RUNNER_TEMP/pending-migrations.txt"
+
+      - name: Run the production dry-run without writing
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bundle="$RUNNER_TEMP/perfun-inventory-release"
+          dry_run_log="$RUNNER_TEMP/perfun-inventory-dry-run.log"
+          if ! (cd "$bundle" && supabase db push --db-url "$SUPABASE_DB_URL" --dry-run > "$dry_run_log" 2>&1); then
+            echo "::error::Supabase dry-run failed; no production write was attempted."
+            exit 1
+          fi
+          pending="$(cat "$RUNNER_TEMP/pending-migrations.txt")"
+          migrations_in_output="$(grep -oE '[0-9]{14}_[A-Za-z0-9_]+\.sql' "$dry_run_log" | sort -u || true)"
+          if [[ "$pending" == "${TARGET_MIGRATION_FILE:0:14}" ]]; then
+            [[ "$migrations_in_output" == "$TARGET_MIGRATION_FILE" ]] || {
+              echo "::error::Dry-run output did not contain exactly the approved migration."
+              exit 1
+            }
+          else
+            [[ -z "$migrations_in_output" ]] || {
+              echo "::error::Dry-run proposed a migration even though production is up to date."
+              exit 1
+            }
+          fi
+          echo "Supabase production dry-run completed and proposed only the approved migration."
+
+  apply:
+    name: Apply approved migration to production
+    needs: preflight
+    if: ${{ inputs.mode == 'apply' }}
+    environment:
+      name: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out main release workflow
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Install pinned Supabase CLI and rebuild the exact release bundle
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git fetch --no-tags origin "$RELEASE_SOURCE_SHA" --depth=1 >/dev/null
+          git cat-file -e "$RELEASE_SOURCE_SHA:supabase/migrations/20261120140000_product_inventory_reservations.sql"
+          tools="$RUNNER_TEMP/perfun-inventory-release-tools"
+          mkdir -p "$tools/path"
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "$tools/supabase.tar.gz" \
+            "https://github.com/supabase/cli/releases/download/v3.1.0/supabase_3.1.0_linux_amd64.tar.gz"
+          echo "dbe9fd66771337fc198727da86b9d3551302f87a7091cd8781be2a4cd0c8ac4d  $tools/supabase.tar.gz" | sha256sum --check --status
+          tar -xzf "$tools/supabase.tar.gz" -C "$tools"
+          install -m 0755 "$tools/supabase" "$tools/path/supabase"
+          echo "$tools/path" >> "$GITHUB_PATH"
+          bundle="$RUNNER_TEMP/perfun-inventory-release"
+          mkdir -p "$bundle/supabase/migrations"
+          git show "$RELEASE_SOURCE_SHA:supabase/config.toml" > "$bundle/supabase/config.toml"
+          git show "$RELEASE_SOURCE_SHA:$TARGET_MIGRATION_PATH" > "$bundle/supabase/migrations/$TARGET_MIGRATION_FILE"
+
+      - name: Repeat exact history guard and dry-run before apply
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          target_version="${TARGET_MIGRATION_FILE:0:14}"
+          source_history="$RUNNER_TEMP/source-migration-history.txt"
+          remote_history="$RUNNER_TEMP/remote-migration-history.txt"
+          git ls-tree -r --name-only "$RELEASE_SOURCE_SHA" -- supabase/migrations | \
+            sed -n 's#^.*/\([0-9]\{14\}\)_[^/]*\.sql$#\1#p' | sort -u > "$source_history"
+          psql "$SUPABASE_DB_URL" --no-align --tuples-only --set=ON_ERROR_STOP=1 \
+            --command "select version from supabase_migrations.schema_migrations order by version" > "$remote_history"
+          sed -i '/^[[:space:]]*$/d' "$remote_history"
+          if ! (cd "$RUNNER_TEMP/perfun-inventory-release" && supabase migration list --db-url "$SUPABASE_DB_URL" > "$RUNNER_TEMP/supabase-migration-list-before-apply.txt" 2>&1); then
+            echo "::error::Supabase migration history recheck failed; apply stopped."
+            exit 1
+          fi
+          unexpected="$(comm -13 "$source_history" <(sort -u "$remote_history") || true)"
+          [[ -z "$unexpected" ]] || { echo "::error::Production migration drift detected."; exit 1; }
+          pending="$(comm -23 "$source_history" <(sort -u "$remote_history") || true)"
+          [[ "$pending" == "$target_version" ]] || {
+            echo "::error::Apply stopped because pending migrations are not exactly the approved target."
+            exit 1
+          }
+          dry_run_log="$RUNNER_TEMP/perfun-inventory-dry-run-before-apply.log"
+          (cd "$RUNNER_TEMP/perfun-inventory-release" && supabase db push --db-url "$SUPABASE_DB_URL" --dry-run > "$dry_run_log" 2>&1)
+          migrations_in_output="$(grep -oE '[0-9]{14}_[A-Za-z0-9_]+\.sql' "$dry_run_log" | sort -u || true)"
+          [[ "$migrations_in_output" == "$TARGET_MIGRATION_FILE" ]] || {
+            echo "::error::Pre-apply dry-run proposed more than the approved migration."
+            exit 1
+          }
+          echo "Repeated production guard and dry-run passed."
+
+      - name: Apply the single approved migration
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          (cd "$RUNNER_TEMP/perfun-inventory-release" && supabase db push --db-url "$SUPABASE_DB_URL" --yes)
+
+      - name: Verify migration, legacy contracts, and opt-in stock state
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          target_version="${TARGET_MIGRATION_FILE:0:14}"
+          applied="$(psql "$SUPABASE_DB_URL" --no-align --tuples-only --set=ON_ERROR_STOP=1 \
+            --command "select count(*) from supabase_migrations.schema_migrations where version='$target_version'")"
+          [[ "$applied" == 1 ]] || { echo "::error::Approved migration was not recorded exactly once."; exit 1; }
+          contracts="$(psql "$SUPABASE_DB_URL" --no-align --tuples-only --field-separator='|' --set=ON_ERROR_STOP=1 --command "
+            select
+              to_regprocedure('public.quote_order(uuid,jsonb,uuid)') is not null,
+              to_regprocedure('public.place_order(uuid,jsonb,uuid,uuid,text)') is not null,
+              to_regprocedure('public.reserve_payment(uuid,uuid,text,text,text)') is not null,
+              to_regprocedure('public.apply_payment_event(uuid,text,bigint,text,timestamptz,jsonb)') is not null,
+              to_regprocedure('public.admin_catalog()') is not null,
+              to_regprocedure('public.admin_save_product(text,bigint,boolean,integer,integer)') is not null,
+              to_regprocedure('public.admin_save_product(text,bigint,boolean,integer,integer,bigint,boolean)') is not null
+          ")"
+          [[ "$contracts" == "t|t|t|t|t|t|t" ]] || { echo "::error::Checkout, payment, or Admin contract verification failed."; exit 1; }
+          stock_state="$(psql "$SUPABASE_DB_URL" --no-align --tuples-only --field-separator='|' --set=ON_ERROR_STOP=1 --command "
+            select count(*) filter (where id in ('10ml','30ml')), count(*) filter (where id in ('10ml','30ml') and stock_tracking_enabled)
+            from public.products
+          ")"
+          [[ "$stock_state" == "2|0" ]] || { echo "::error::Bottle stock limits are not safely disabled for initial Admin fill."; exit 1; }
+          echo "Verified migration history, checkout/payment/Admin contracts, and disabled bottle stock limits. No production order was created."

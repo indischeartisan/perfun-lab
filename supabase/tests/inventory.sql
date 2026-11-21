@@ -11,7 +11,9 @@ reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','b1000000-0000-4000-8000-000000000001',true);
 select public.save_address('b3000000-0000-4000-8000-000000000001','{"recipient_name":"Inventory One","phone":"0812000001","address_line":"One Street","city":"Bandung","province":"Jawa Barat","postal_code":"40111","label":"Home"}');
+select set_config('request.jwt.claim.sub','b1000000-0000-4000-8000-000000000002',true);
 select public.save_address('b3000000-0000-4000-8000-000000000002','{"recipient_name":"Inventory Two","phone":"0812000002","address_line":"Two Street","city":"Bandung","province":"Jawa Barat","postal_code":"40112","label":"Home"}');
+select set_config('request.jwt.claim.sub','b1000000-0000-4000-8000-000000000001',true);
 do $$ declare items jsonb:='[{"product_id":"10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"}]},{"product_id":"bundle-3x10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"},{"top":"soapy","middle":"peony","base":"amber"},{"top":"mint","middle":"tea","base":"honey"}]},{"product_id":"30ml","quantity":1,"formulas":[{"top":"soapy","middle":"peony","base":"amber"}]}]'; q jsonb; oid uuid; begin
  q:=public.quote_order('b3000000-0000-4000-8000-000000000001',items); oid:=(public.place_order('b3000000-0000-4000-8000-000000000001',items,'b4000000-0000-4000-8000-000000000001',q->>'quote_token')->>'order_id')::uuid;
  if (select stock_reserved from public.products where id='10ml') <> 4 or (select stock_reserved from public.products where id='30ml') <> 1 then raise exception 'Mixed reservation failed'; end if;

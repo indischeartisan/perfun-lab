@@ -11,11 +11,12 @@ export function useCart(catalog: Catalog, ownerId: string | null) {
   const migrationKeys = ownerId === null ? [] : ownerId === 'guest' ? ['perfun-bag-v2'] : ['perfun:guest:bag']
   const [items, setItems] = useLocalStorage<CartItem[]>(scope ? `${scope}:bag` : null, [], { restore: value => restoreCart(value, catalog), migrateFromKeys: migrationKeys })
   const [selection, setSelection] = useLocalStorage<PersistedCartSelection>(scope ? `${scope}:bag-selection` : null, { initialized: false, ids: [] }, { restore: restoreSelection })
-  const available = (id: number | string) => catalog.productOptions.some(option => option.id === id)
-  const visibleItems = items.filter(item => available(isPlaySet(item) ? 'play-set' : item.size))
+  const hasProduct = (id: number | string) => catalog.productOptions.some(option => option.id === id)
+  const available = (id: number | string) => catalog.productOptions.some(option => option.id === id && option.stockAvailable !== 0)
+  const visibleItems = items.filter(item => hasProduct(isPlaySet(item) ? 'play-set' : item.size))
   const count = visibleItems.reduce((sum, item) => sum + item.quantity, 0)
   const selectedIds = selection.ids.filter(id => visibleItems.some(item => item.id === id))
-  const selectedItems = visibleItems.filter(item => selectedIds.includes(item.id))
+  const selectedItems = visibleItems.filter(item => selectedIds.includes(item.id) && available(isPlaySet(item) ? 'play-set' : item.size))
 
   useEffect(() => {
     const visibleIds = visibleItems.map(item => item.id)
@@ -82,7 +83,7 @@ export function useCart(catalog: Catalog, ownerId: string | null) {
   }
 
   function toggleSelection(id: string) { setSelection(current => ({ initialized: true, ids: current.ids.includes(id) ? current.ids.filter(value => value !== id) : [...current.ids, id] })) }
-  function selectAll(selected: boolean) { setSelection({ initialized: true, ids: selected ? visibleItems.map(item => item.id) : [] }) }
+  function selectAll(selected: boolean) { setSelection({ initialized: true, ids: selected ? visibleItems.filter(item => available(isPlaySet(item) ? 'play-set' : item.size)).map(item => item.id) : [] }) }
   function remove(id: string) { setItems(current => current.filter(item => item.id !== id)); setSelection(current => ({ ...current, ids: current.ids.filter(value => value !== id) })) }
   function removeMany(ids: string[]) { const selected = new Set(ids); setItems(current => removeSelectedCartItems(current, ids)); setSelection(current => ({ ...current, ids: current.ids.filter(value => !selected.has(value)) })) }
   function clear() { setItems([]); setSelection({ initialized: true, ids: [] }) }

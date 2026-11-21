@@ -12,7 +12,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub','b1000000-0000-4000-8000-000000000001',true);
 select public.save_address('b3000000-0000-4000-8000-000000000001','{"recipient_name":"Inventory One","phone":"0812000001","address_line":"One Street","city":"Bandung","province":"Jawa Barat","postal_code":"40111","label":"Home"}');
 select public.save_address('b3000000-0000-4000-8000-000000000002','{"recipient_name":"Inventory Two","phone":"0812000002","address_line":"Two Street","city":"Bandung","province":"Jawa Barat","postal_code":"40112","label":"Home"}');
-do $$ declare items jsonb:='[{"product_id":"10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"}]},{"product_id":"bundle-3x10ml","quantity":1,"formulas":[{"top":"mint","middle":"tea","base":"sandalwood"},{"top":"berries","middle":"jasmine","base":"amber"},{"top":"pink-pepper","middle":"clean-musk","base":"coconut-milk"}]},{"product_id":"30ml","quantity":1,"formulas":[{"top":"soapy","middle":"peony","base":"amber"}]}]'; q jsonb; oid uuid; begin
+do $$ declare items jsonb:='[{"product_id":"10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"}]},{"product_id":"bundle-3x10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"},{"top":"soapy","middle":"peony","base":"amber"},{"top":"mint","middle":"tea","base":"honey"}]},{"product_id":"30ml","quantity":1,"formulas":[{"top":"soapy","middle":"peony","base":"amber"}]}]'; q jsonb; oid uuid; begin
  q:=public.quote_order('b3000000-0000-4000-8000-000000000001',items); oid:=(public.place_order('b3000000-0000-4000-8000-000000000001',items,'b4000000-0000-4000-8000-000000000001',q->>'quote_token')->>'order_id')::uuid;
  if (select stock_reserved from public.products where id='10ml') <> 4 or (select stock_reserved from public.products where id='30ml') <> 1 then raise exception 'Mixed reservation failed'; end if;
  if (select count(*) from public.order_inventory_reservations where order_id=oid and status='reserved') <> 2 then raise exception 'Reservation rows missing'; end if;
@@ -31,7 +31,7 @@ update public.products set stock_on_hand=8 where id='10ml';
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','b1000000-0000-4000-8000-000000000002',true);
-do $$ declare items jsonb:='[{"product_id":"bundle-3x10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"},{"top":"mint","middle":"tea","base":"sandalwood"},{"top":"pink-pepper","middle":"jasmine","base":"amber"}]}]'; q jsonb; oid uuid; begin
+do $$ declare items jsonb:='[{"product_id":"bundle-3x10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"},{"top":"soapy","middle":"peony","base":"amber"},{"top":"mint","middle":"tea","base":"honey"}]}]'; q jsonb; oid uuid; begin
  q:=public.quote_order('b3000000-0000-4000-8000-000000000002',items); oid:=(public.place_order('b3000000-0000-4000-8000-000000000002',items,'b4000000-0000-4000-8000-000000000002',q->>'quote_token')->>'order_id')::uuid;
  if (select stock_reserved from public.products where id='10ml') <> 3 then raise exception 'Play Set reservation failed'; end if;
 end $$;

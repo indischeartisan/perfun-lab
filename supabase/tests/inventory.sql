@@ -15,10 +15,13 @@ select public.save_address('b3000000-0000-4000-8000-000000000002','{"recipient_n
 do $$ declare items jsonb:='[{"product_id":"10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"}]},{"product_id":"bundle-3x10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"},{"top":"soapy","middle":"peony","base":"amber"},{"top":"mint","middle":"tea","base":"honey"}]},{"product_id":"30ml","quantity":1,"formulas":[{"top":"soapy","middle":"peony","base":"amber"}]}]'; q jsonb; oid uuid; begin
  q:=public.quote_order('b3000000-0000-4000-8000-000000000001',items); oid:=(public.place_order('b3000000-0000-4000-8000-000000000001',items,'b4000000-0000-4000-8000-000000000001',q->>'quote_token')->>'order_id')::uuid;
  if (select stock_reserved from public.products where id='10ml') <> 4 or (select stock_reserved from public.products where id='30ml') <> 1 then raise exception 'Mixed reservation failed'; end if;
- if (select count(*) from public.order_inventory_reservations where order_id=oid and status='reserved') <> 2 then raise exception 'Reservation rows missing'; end if;
 end $$;
 reset role;
 set local role service_role;
+do $$ declare oid uuid; begin
+ select id into oid from public.orders where request_id='b4000000-0000-4000-8000-000000000001';
+ if (select count(*) from public.order_inventory_reservations where order_id=oid and status='reserved') <> 2 then raise exception 'Reservation rows missing'; end if;
+end $$;
 do $$ declare p jsonb; oid uuid; begin
  select id into oid from public.orders where request_id='b4000000-0000-4000-8000-000000000001';
  p:=public.reserve_payment(oid,'b1000000-0000-4000-8000-000000000001','doku','sandbox','https://example.invalid');

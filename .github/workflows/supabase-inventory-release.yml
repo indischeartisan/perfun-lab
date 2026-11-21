@@ -1,4 +1,4 @@
-name: Release bottle inventory migration
+name: Release inventory admin permission hotfix
 
 on:
   workflow_dispatch:
@@ -15,13 +15,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: supabase-production-inventory-release
+  group: supabase-production-inventory-permission-release
   cancel-in-progress: false
 
 env:
-  RELEASE_SOURCE_SHA: 1d3e45e545b0a3fdfd1b1536c01d750cf573b4a6
-  TARGET_MIGRATION_PATH: supabase/migrations/20261120140000_product_inventory_reservations.sql
-  TARGET_MIGRATION_FILE: 20261120140000_product_inventory_reservations.sql
+  RELEASE_SOURCE_SHA: ee6f48e55541b6eb8af8abc3f71032bfbcee0cba
+  TARGET_MIGRATION_PATH: supabase/migrations/20261121120000_inventory_admin_save_product_security.sql
+  TARGET_MIGRATION_FILE: 20261121120000_inventory_admin_save_product_security.sql
   SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
   NO_COLOR: "1"
 
@@ -51,7 +51,7 @@ jobs:
             echo "::error::Unsupported release mode."
             exit 1
           }
-          [[ "$RELEASE_SOURCE_SHA" == "1d3e45e545b0a3fdfd1b1536c01d750cf573b4a6" ]] || {
+          [[ "$RELEASE_SOURCE_SHA" == "ee6f48e55541b6eb8af8abc3f71032bfbcee0cba" ]] || {
             echo "::error::The release source SHA is not the reviewed CI-green commit."
             exit 1
           }
@@ -75,7 +75,7 @@ jobs:
           echo "$tools/path" >> "$GITHUB_PATH"
           "$tools/path/supabase" --version
 
-      - name: Build the single-migration release bundle and verify old-app compatibility
+      - name: Build the migration-history bundle and verify app compatibility
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -84,7 +84,7 @@ jobs:
           target_version="${target_migration_file:0:14}"
           git fetch --no-tags origin "$RELEASE_SOURCE_SHA" --depth=1 >/dev/null
           git cat-file -e "$RELEASE_SOURCE_SHA^{commit}"
-          git cat-file -e "$RELEASE_SOURCE_SHA:supabase/migrations/20261120140000_product_inventory_reservations.sql"
+          git cat-file -e "$RELEASE_SOURCE_SHA:supabase/migrations/20261121120000_inventory_admin_save_product_security.sql"
 
           # Keep the reviewed migration history so Supabase can compare the local
           # bundle with production. The history guard below still permits only the
@@ -112,9 +112,12 @@ jobs:
           git show HEAD:src/lib/orders.ts | grep -Fq "rpc('place_order'"
           git show HEAD:supabase/functions/_shared/runtime.ts | grep -Fq "rpc('reserve_payment'"
           git show HEAD:supabase/functions/_shared/runtime.ts | grep -Fq "rpc('apply_payment_event'"
-          grep -Fq "stock_tracking_enabled boolean not null default false" "$bundle/supabase/migrations/$target_migration_file"
-          grep -Fq "Enter initial stock before enabling stock limits" "$bundle/supabase/migrations/$target_migration_file"
-          echo "Compatibility guard passed: legacy checkout/payment/Admin calls remain available and stock limits stay opt-in."
+          target_sql="$bundle/supabase/migrations/$target_migration_file"
+          grep -Fq "security definer" "$target_sql"
+          grep -Fq "Authentication required" "$target_sql"
+          grep -Fq "perform private.require_admin();" "$target_sql"
+          grep -Fq "revoke all on function private.admin_save_product_with_inventory" "$target_sql"
+          echo "Compatibility guard passed: legacy checkout/payment/Admin calls remain available and the reviewed wrapper keeps private EXECUTE restricted."
 
       - name: Read production migration history and enforce the exact pending set
         shell: bash
@@ -205,7 +208,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           git fetch --no-tags origin "$RELEASE_SOURCE_SHA" --depth=1 >/dev/null
-          git cat-file -e "$RELEASE_SOURCE_SHA:supabase/migrations/20261120140000_product_inventory_reservations.sql"
+          git cat-file -e "$RELEASE_SOURCE_SHA:supabase/migrations/20261121120000_inventory_admin_save_product_security.sql"
           tools="$RUNNER_TEMP/perfun-inventory-release-tools"
           mkdir -p "$tools/path"
           curl --fail --silent --show-error --location --retry 3 \
@@ -278,7 +281,7 @@ jobs:
           set -Eeuo pipefail
           (cd "$RUNNER_TEMP/perfun-inventory-release" && supabase db push --db-url "$SUPABASE_DB_URL" --yes)
 
-      - name: Verify migration, legacy contracts, and opt-in stock state
+      - name: Verify migration, contracts, and function privileges
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -297,9 +300,14 @@ jobs:
               to_regprocedure('public.admin_save_product(text,bigint,boolean,integer,integer,bigint,boolean)') is not null
           ")"
           [[ "$contracts" == "t|t|t|t|t|t|t" ]] || { echo "::error::Checkout, payment, or Admin contract verification failed."; exit 1; }
-          stock_state="$(psql "$SUPABASE_DB_URL" --no-align --tuples-only --field-separator='|' --set=ON_ERROR_STOP=1 --command "
-            select count(*) filter (where id in ('10ml','30ml')), count(*) filter (where id in ('10ml','30ml') and stock_tracking_enabled)
-            from public.products
+          privileges="$(psql "$SUPABASE_DB_URL" --no-align --tuples-only --field-separator='|' --set=ON_ERROR_STOP=1 --command "
+            select
+              has_function_privilege('authenticated', 'public.admin_save_product(text,bigint,boolean,integer,integer,bigint,boolean)', 'EXECUTE'),
+              has_function_privilege('anon', 'public.admin_save_product(text,bigint,boolean,integer,integer,bigint,boolean)', 'EXECUTE'),
+              has_function_privilege('authenticated', 'private.admin_save_product_with_inventory(text,bigint,boolean,integer,integer,bigint,boolean)', 'EXECUTE'),
+              (select p.prosecdef from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'admin_save_product' and pg_get_function_identity_arguments(p.oid) = 'p_id text, p_version bigint, p_active boolean, p_regular_price integer, p_sale_price integer, p_stock_on_hand bigint, p_stock_tracking_enabled boolean' limit 1),
+              (select p.prosecdef from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'private' and p.proname = 'admin_save_product_with_inventory' and pg_get_function_identity_arguments(p.oid) = 'p_id text, p_version bigint, p_active boolean, p_regular_price integer, p_sale_price integer, p_stock_on_hand bigint, p_stock_tracking_enabled boolean' limit 1),
+              to_regprocedure('private.require_admin()') is not null
           ")"
-          [[ "$stock_state" == "2|0" ]] || { echo "::error::Bottle stock limits are not safely disabled for initial Admin fill."; exit 1; }
-          echo "Verified migration history, checkout/payment/Admin contracts, and disabled bottle stock limits. No production order was created."
+          [[ "$privileges" == "t|f|f|t|t|t" ]] || { echo "::error::Admin wrapper or private EXECUTE privilege verification failed."; exit 1; }
+          echo "Verified migration history, checkout/payment/Admin contracts, authenticated-only SECURITY DEFINER wrapper, private EXECUTE restriction, and no production order was created."

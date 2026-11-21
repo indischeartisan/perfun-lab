@@ -65,6 +65,8 @@ declare
   vendor_reference text;
   admin_payout_reference text;
   vendor_payout_reference text;
+  admin_assignment_reference text;
+  vendor_shipment_reference text;
   admin_payout_amounts jsonb;
   vendor_payout_amounts jsonb;
 begin
@@ -101,11 +103,25 @@ begin
     raise exception 'Admin payout recap differs from the stored public reference';
   end if;
 
+  select element.value->>'public_order_number' into admin_assignment_reference
+  from jsonb_array_elements(public.admin_vendor_assignments(0)->'rows') as element(value)
+  where element.value->>'order_id' = 'd0200000-0000-4000-8000-000000000001';
+  if admin_assignment_reference is distinct from customer_reference then
+    raise exception 'Admin assignment projection differs from the stored public reference';
+  end if;
+
   perform set_config('request.jwt.claim.sub', 'd0100000-0000-4000-8000-000000000004', true);
   select element.value->>'public_order_number' into vendor_reference
   from jsonb_array_elements(public.list_vendor_production_orders('queued')->'rows') as element(value);
   if vendor_reference is distinct from customer_reference then
     raise exception 'Vendor projection differs from customer public number';
+  end if;
+
+  select element.value->>'public_order_number' into vendor_shipment_reference
+  from jsonb_array_elements(public.list_fulfillment_shipments('pending', 0)->'rows') as element(value)
+  where element.value->>'order_id' = 'd0200000-0000-4000-8000-000000000001';
+  if vendor_shipment_reference is distinct from customer_reference then
+    raise exception 'Vendor shipping projection differs from customer public number';
   end if;
 
   select element.value->>'public_order_number', element.value - 'public_order_number' - 'order_number'

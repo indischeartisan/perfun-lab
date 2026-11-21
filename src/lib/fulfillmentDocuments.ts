@@ -21,7 +21,7 @@ function formulaLines(jobs: ShipmentFormulaJob[]) {
 
 export function formatShippingAddress(shipment: Shipment) { return addressLines(shipment).join('\n') }
 export function formatOrderCopy(shipment: Shipment, jobs: ShipmentFormulaJob[]) {
-  return [`Order: ${shipment.order_number}`, '', 'Items:', ...shipment.items_snapshot.map(itemLine), '', 'Formula:', ...formulaLines(jobs), shipment.address_snapshot.delivery_note ? `\nDelivery instruction: ${text(shipment.address_snapshot.delivery_note)}` : ''].filter(Boolean).join('\n')
+  return [`Order: ${shipment.public_order_number}`, '', 'Items:', ...shipment.items_snapshot.map(itemLine), '', 'Formula:', ...formulaLines(jobs), shipment.address_snapshot.delivery_note ? `\nDelivery instruction: ${text(shipment.address_snapshot.delivery_note)}` : ''].filter(Boolean).join('\n')
 }
 
 function printShell(title: string, body: string) {
@@ -32,11 +32,11 @@ export function labelPrintHtml(shipment: Shipment) {
   const address = shipment.address_snapshot
   const courier = [text(shipment.courier), text(shipment.service)].filter(Boolean).join(' / ') || 'Shipping service pending'
   const tracking = text(shipment.tracking_number) || 'Tracking number pending'
-  return printShell(`Shipping label ${shipment.order_number}`, `<p class="eyebrow">PERFUN LAB · SHIPPING LABEL</p><h1 class="title">${escapeHtml(shipment.order_number)}</h1><p class="order">${escapeHtml(courier)}<br>${escapeHtml(tracking)}</p><section class="block"><h2>Recipient</h2><p><strong>${escapeHtml(address.recipient_name)}</strong><br>${escapeHtml(address.phone)}</p></section><section class="block"><h2>Delivery address</h2><p>${addressLines(shipment).slice(2).map(escapeHtml).join('<br>')}</p></section>`)
+  return printShell(`Shipping label ${shipment.public_order_number}`, `<p class="eyebrow">PERFUN LAB · SHIPPING LABEL</p><h1 class="title">${escapeHtml(shipment.public_order_number)}</h1><p class="order">${escapeHtml(courier)}<br>${escapeHtml(tracking)}</p><section class="block"><h2>Recipient</h2><p><strong>${escapeHtml(address.recipient_name)}</strong><br>${escapeHtml(address.phone)}</p></section><section class="block"><h2>Delivery address</h2><p>${addressLines(shipment).slice(2).map(escapeHtml).join('<br>')}</p></section>`)
 }
 
 export function packingSlipPrintHtml(shipment: Shipment, jobs: ShipmentFormulaJob[]) {
   const itemMarkup = shipment.items_snapshot.map(item => `<li>${escapeHtml(itemLine(item))}</li>`).join('') || '<li>No item snapshot available.</li>'
   const formulaMarkup = jobs.length ? jobs.map(job => `<div class="formula"><strong>${escapeHtml(`${job.product_snapshot.label} — ${job.product_snapshot.bottle_count} × ${job.product_snapshot.volume_ml} ml · Quantity: ${job.quantity}`)}</strong>${job.formulas_snapshot.length ? job.formulas_snapshot.map((formula, index) => `<p>Bottle ${index + 1}: Top ${escapeHtml(formula.top ?? '—')} · Middle ${escapeHtml(formula.middle ?? '—')} · Base ${escapeHtml(formula.base ?? '—')}</p>`).join('') : '<p>Formula snapshot unavailable.</p>'}</div>`).join('') : '<p class="muted">Formula snapshot unavailable. Check the Production workspace.</p>'
-  return printShell(`Packing slip ${shipment.order_number}`, `<p class="eyebrow">PERFUN LAB · PACKING SLIP</p><h1 class="title">${escapeHtml(shipment.order_number)}</h1><p class="order">${escapeHtml(shipment.status.replaceAll('_', ' '))}</p><section class="block"><h2>Items</h2><ul>${itemMarkup}</ul></section><section class="block"><h2>Formula</h2>${formulaMarkup}</section><section class="block"><h2>Delivery instruction</h2><p>${escapeHtml(text(shipment.address_snapshot.delivery_note) || 'None')}</p></section>`)
+  return printShell(`Packing slip ${shipment.public_order_number}`, `<p class="eyebrow">PERFUN LAB · PACKING SLIP</p><h1 class="title">${escapeHtml(shipment.public_order_number)}</h1><p class="order">${escapeHtml(shipment.status.replaceAll('_', ' '))}</p><section class="block"><h2>Items</h2><ul>${itemMarkup}</ul></section><section class="block"><h2>Formula</h2>${formulaMarkup}</section><section class="block"><h2>Delivery instruction</h2><p>${escapeHtml(text(shipment.address_snapshot.delivery_note) || 'None')}</p></section>`)
 }

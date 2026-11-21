@@ -68,12 +68,12 @@ function ProductionCard({ job, userId, canWork, onChanged }: { job: ProductionJo
     lock.current = true; setBusy(true); setError('')
     try {
       await advanceProductionJob(job.id, action)
-      onChanged(`${job.order_number}: ${action === 'start' ? 'production started' : 'production completed'}.`, action)
+      onChanged(`${job.public_order_number}: ${action === 'start' ? 'production started' : 'production completed'}.`, action)
     } catch (error) { setError(errorMessage(error)) }
     finally { lock.current = false; setBusy(false) }
   }
   return <OperationsOrderCard className="production-card">
-    <OperationsOrderHeader orderNumber={job.order_number} status={labels[job.status]} time={new Date(job.ordered_at).toLocaleString()}/>
+    <OperationsOrderHeader orderNumber={job.public_order_number} status={labels[job.status]} time={new Date(job.ordered_at).toLocaleString()}/>
     <h2>{job.product_snapshot.label}</h2>
     <OperationsBottleSize volumeMl={job.product_snapshot.volume_ml} bottleCount={job.product_snapshot.bottle_count} detail/>
     <p>Order quantity: {job.quantity}</p>

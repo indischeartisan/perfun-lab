@@ -5,6 +5,7 @@ import { advanceProductionJob, listVendorProductionOrders, type ProductionJob, t
 import { errorMessage } from '../lib/supabase'
 import { matchesProductionAction } from '../lib/operationReadiness'
 import { vendorProjectionError } from '../lib/vendorProjection'
+import { getVendorCached } from '../lib/vendorCache'
 
 const labels: Record<ProductionStatus, string> = { queued: 'Menunggu diracik', in_production: 'Sedang diracik', completed: 'Racikan selesai' }
 
@@ -37,22 +38,22 @@ function VendorOrderList({ userId, status, cursor, page, onPrevious, onNext, onR
       if (fetching) return
       fetching = true
       try {
-        const result = await listVendorProductionOrders(status, cursor)
+        const scope = `production:${status}:${cursor ? `${cursor.ordered_at}:${cursor.order_number}` : 'first'}`
+        const result = await getVendorCached(userId, scope, () => listVendorProductionOrders(status, cursor), { force: revision > 0 })
         if (active) { setOrders(result.rows); setNext(result.has_more ? result.next_cursor : null); setError('') }
-      } catch (cause) { if (active) { setOrders([]); setNext(null); setError(vendorProjectionError(cause)) } }
+      } catch (cause) { if (active) setError(vendorProjectionError(cause)) }
       finally { fetching = false; if (active) setLoading(false) }
     }
     void refresh()
     return () => { active = false }
-  }, [status, cursor, revision])
+  }, [userId, status, cursor, revision])
   return <>
     <div className="production-toolbar"><p role="status">{loading ? 'Memuat pesanan…' : error ? 'Antrean tidak tersedia.' : `${orders.length} pesanan di halaman ini`}</p><button type="button" disabled={loading} onClick={() => { setLoading(true); setError(''); if (page === 0) setRevision(n => n + 1); else onReset() }}>{error ? 'Coba lagi' : 'Perbarui'}</button></div>
     {error ? <p role="alert">{error}</p> : null}
     {!loading && !error && !orders.length ? <div className="screen-empty"><h2>Belum ada pesanan</h2><p>Pesanan yang ditugaskan akan muncul saat mencapai tahap ini.</p></div> : null}
     <div className="production-list">{orders.map(order => <OperationsOrderCard key={order.order_number} className="vendor-production-card production-card" isolated>
       <OperationsOrderHeader orderNumber={order.public_order_number} time={new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(order.ordered_at))}/>
-      <p>Referensi internal: {order.order_number}</p>
-      {order.jobs.map(job => <VendorOrderJob key={job.id} job={job} userId={userId} canWork={status !== 'completed'} onChanged={action => { setRevision(n => n + 1); onChanged(action, order.order_number) }}/>) }
+      {order.jobs.map(job => <VendorOrderJob key={job.id} job={job} userId={userId} canWork={status !== 'completed'} onChanged={action => { if (action === 'complete') setRevision(n => n + 1); onChanged(action, order.order_number) }}/>) }
     </OperationsOrderCard>)}</div>
     <div className="production-pagination"><button type="button" disabled={page === 0 || loading} onClick={onPrevious}>Sebelumnya</button><span>Halaman {page + 1}</span><button type="button" disabled={!next || loading} onClick={() => { if (next) onNext(next) }}>Berikutnya</button></div>
   </>

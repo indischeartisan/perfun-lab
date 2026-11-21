@@ -5,6 +5,7 @@ import { getShipmentReadiness } from '../lib/shipments'
 import { isReadyForShipping } from '../lib/operationReadiness'
 import { TestRunsPanel } from '../components/TestRunsPanel'
 import { VendorShippingPage } from './VendorShippingPage'
+import { clearVendorCache } from '../lib/vendorCache'
 
 type Stage = 'order' | 'production' | 'ready_to_ship' | 'shipped' | 'done'
 
@@ -34,6 +35,6 @@ export function VendorWorkPage({ userId, initialStage = 'order' }: { userId: str
     <OperationsStatusTabs label="Tahap pekerjaan" items={stages.map(item => ({ ...item, active: item.id === stage, onClick: () => setStage(item.id) }))}/>
     {notice ? <p role="status">{notice}</p> : null}
     <TestRunsPanel role="vendor" stage={stage === 'ready_to_ship' || stage === 'shipped' ? 'shipping' : stage}/>
-    {stage === 'order' || stage === 'production' ? <VendorProductionPage key={stage} userId={userId} status={stage === 'order' ? 'queued' : 'in_production'} onStarted={() => setStage('production')} onCompleted={orderNumber => { void completed(orderNumber) }}/> : <VendorShippingPage key={stage} status={stage === 'done' ? 'delivered' : stage} onShipped={() => { setNotice('Pengiriman tercatat oleh server.'); setStage('shipped') }}/>}
+    {stage === 'order' || stage === 'production' ? <VendorProductionPage key={stage} userId={userId} status={stage === 'order' ? 'queued' : 'in_production'} onStarted={() => { clearVendorCache(userId, 'production:in_production'); setStage('production') }} onCompleted={orderNumber => { void completed(orderNumber) }}/> : <VendorShippingPage key={stage} accountId={userId} status={stage === 'done' ? 'delivered' : stage} onShipped={() => { clearVendorCache(userId, 'shipping:shipped'); setNotice('Pengiriman tercatat oleh server.'); setStage('shipped') }}/>}
   </section>
 }

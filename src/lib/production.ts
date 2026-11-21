@@ -5,7 +5,7 @@ export type ProductionStatus = 'queued' | 'in_production' | 'completed'
 export interface ProductionJob {
   id: string; order_item_id: string; status: ProductionStatus; assigned_to: string | null
   started_at: string | null; completed_at: string | null; created_at: string; updated_at: string
-  order_number: string; ordered_at: string; quantity: number; production_allowed: boolean
+  order_number: string; public_order_number: string; ordered_at: string; quantity: number; production_allowed: boolean
   product_snapshot: { label: string; volume_ml: number; bottle_count: number }
   formulas_snapshot: Array<{ top: string | null; middle: string | null; base: string | null }>
 }

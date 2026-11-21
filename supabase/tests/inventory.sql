@@ -16,7 +16,7 @@ do $$ declare items jsonb:='[{"product_id":"10ml","quantity":1,"formulas":[{"top
  q:=public.quote_order('b3000000-0000-4000-8000-000000000001',items); oid:=(public.place_order('b3000000-0000-4000-8000-000000000001',items,'b4000000-0000-4000-8000-000000000001',q->>'quote_token')->>'order_id')::uuid;
  select stock_reserved into reserved_10 from public.products where id = chr(49) || chr(48) || chr(109) || chr(108);
  select stock_reserved into reserved_30 from public.products where id = chr(51) || chr(48) || chr(109) || chr(108);
- select count(*) into reservation_count from public.order_inventory_reservations where order_id=oid and status='reserved';
+ select count(*) into reservation_count from public.order_inventory_reservations where order_id=oid and status = chr(114) || chr(101) || chr(115) || chr(101) || chr(114) || chr(118) || chr(101) || chr(100);
  if not (reserved_10 = 4 and reserved_30 = 1) then perform 1 / 0; end if;
  if not (reservation_count = 2) then perform 1 / 0; end if;
 end $$;

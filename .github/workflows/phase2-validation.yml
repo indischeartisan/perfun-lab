@@ -157,6 +157,7 @@ jobs:
             supabase/tests/admin_test_runs.sql
             supabase/tests/test_run_shipping_address.sql
             supabase/tests/inventory.sql
+            supabase/tests/inventory_admin_permissions.sql
           )
           failed_tests=()
 

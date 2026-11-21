@@ -1,0 +1,194 @@
+/*
+ * Perfun Lab interactive palette.
+ * The latest format/Mix implementation already establishes these values;
+ * this file only centralizes them for buttons and interactive states.
+ */
+:root {
+  --cta-primary: #607a00;
+  --cta-primary-hover: #789600;
+  --cta-primary-active: #4f6600;
+  --cta-primary-disabled: #aab88a;
+  --cta-on-primary: #fff;
+  --cta-focus: #789600;
+  --status-green: #f2f7df;
+  --status-green-accent: #ccf23d;
+  --acid: #ccf23d;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline-color: var(--cta-focus);
+}
+
+/* Public, Bag, and Checkout primary actions. */
+.hero-copy > a,
+.add-button,
+.empty-bag button,
+.bag-summary > button,
+.checkout,
+.screen-empty button,
+.checkout-summary > button,
+.confirmation-actions .confirmation-orders {
+  background: var(--cta-primary);
+  color: var(--cta-on-primary);
+}
+
+.hero-copy > a:hover,
+.add-button:hover:not(:disabled),
+.empty-bag button:hover,
+.bag-summary > button:hover,
+.checkout:hover,
+.screen-empty button:hover,
+.checkout-summary > button:hover,
+.confirmation-actions .confirmation-orders:hover {
+  background: var(--cta-primary-hover);
+}
+
+.hero-copy > a:active,
+.add-button:active:not(:disabled),
+.empty-bag button:active,
+.bag-summary > button:active,
+.checkout:active,
+.screen-empty button:active,
+.checkout-summary > button:active,
+.confirmation-actions .confirmation-orders:active {
+  background: var(--cta-primary-active);
+}
+
+.add-button:disabled,
+.checkout:disabled,
+.screen-empty button:disabled,
+.checkout-summary > button:disabled {
+  background: var(--cta-primary-disabled);
+  color: var(--cta-on-primary);
+}
+
+/* Mix and format CTAs retain their established geometry and use the shared palette. */
+.builder-core .get-this-mix,
+.get-it-now,
+.play-set-get-now,
+.builder-core .added-confirmation .added-view-bag {
+  background: var(--cta-primary-hover);
+  color: var(--cta-on-primary);
+}
+
+.builder-core .get-this-mix:hover:not(:disabled),
+.get-it-now:hover:not(:disabled),
+.play-set-get-now:hover:not(:disabled),
+.builder-core .added-confirmation .added-view-bag:hover:not(:disabled) {
+  background: var(--cta-primary);
+}
+
+.builder-core .get-this-mix:active:not(:disabled),
+.get-it-now:active:not(:disabled),
+.play-set-get-now:active:not(:disabled),
+.builder-core .added-confirmation .added-view-bag:active:not(:disabled) {
+  background: var(--cta-primary-active);
+}
+
+.builder-core .get-this-mix:disabled,
+.get-it-now:disabled,
+.play-set-get-now:disabled {
+  background: var(--cta-primary-disabled);
+  color: var(--cta-on-primary);
+}
+
+/* Header account and authentication actions. Account navigation rows stay contextual. */
+.account-bar button:first-of-type,
+.header-account-panel .email-login-button,
+.header-account-panel > button:not(.account-nav-row):not(.account-logout),
+.auth-dialog > button:not(.auth-dialog-close):not(.auth-dialog-link),
+.payment-actions .orders-build,
+.fulfillment-document-actions button:first-child {
+  background: var(--cta-primary);
+  border-color: var(--cta-primary);
+  color: var(--cta-on-primary);
+}
+
+.account-bar button:first-of-type:hover,
+.header-account-panel .email-login-button:hover,
+.header-account-panel > button:not(.account-nav-row):not(.account-logout):hover,
+.auth-dialog > button:not(.auth-dialog-close):not(.auth-dialog-link):hover,
+.payment-actions .orders-build:hover,
+.fulfillment-document-actions button:first-child:hover {
+  background: var(--cta-primary-hover);
+  border-color: var(--cta-primary-hover);
+}
+
+.account-bar button:first-of-type:active,
+.header-account-panel .email-login-button:active,
+.header-account-panel > button:not(.account-nav-row):not(.account-logout):active,
+.auth-dialog > button:not(.auth-dialog-close):not(.auth-dialog-link):active,
+.payment-actions .orders-build:active,
+.fulfillment-document-actions button:first-child:active {
+  background: var(--cta-primary-active);
+  border-color: var(--cta-primary-active);
+}
+
+.header-account-panel > button:disabled,
+.auth-dialog > button:disabled,
+.payment-actions .orders-build:disabled,
+.fulfillment-document-actions button:disabled {
+  background: var(--cta-primary-disabled);
+  border-color: var(--cta-primary-disabled);
+  color: var(--cta-on-primary);
+}
+
+/* Active filters/statuses intentionally remain pale rather than becoming CTAs. */
+.production-filters button[aria-pressed='true'],
+.customer-order-filters button.active,
+.orders-filter button[aria-pressed='true'],
+.orders-status-filter button[aria-pressed='true'] {
+  background: var(--status-green);
+  border-color: var(--cta-primary-hover);
+}
+
+/* Admin and Vendor primary actions use the same tokens. */
+.workspace-app,
+.fixture-shell {
+  --lab-lime: var(--cta-primary);
+  --fixture-lime: var(--cta-primary);
+}
+
+.calm-order-toolbar button,
+.production-card .orders-build,
+.orders-build,
+.shipping-actions .orders-build,
+.fixture-shell .orders-build,
+.vendor-tracking-correction .orders-build {
+  background: var(--cta-primary);
+  border-color: var(--cta-primary-active);
+  color: var(--cta-on-primary);
+  box-shadow: 0 2px 0 var(--cta-primary-active);
+}
+
+.calm-order-toolbar button:hover,
+.production-card .orders-build:hover,
+.orders-build:hover,
+.shipping-actions .orders-build:hover,
+.fixture-shell .orders-build:hover,
+.vendor-tracking-correction .orders-build:hover {
+  background: var(--cta-primary-hover);
+  border-color: var(--cta-primary);
+}
+
+.calm-order-toolbar button:active,
+.production-card .orders-build:active,
+.orders-build:active,
+.shipping-actions .orders-build:active,
+.fixture-shell .orders-build:active,
+.vendor-tracking-correction .orders-build:active {
+  background: var(--cta-primary-active);
+}
+
+.calm-order-toolbar button:disabled,
+.production-card .orders-build:disabled,
+.orders-build:disabled,
+.shipping-actions .orders-build:disabled,
+.fixture-shell .orders-build:disabled,
+.vendor-tracking-correction .orders-build:disabled {
+  background: var(--cta-primary-disabled);
+  border-color: var(--cta-primary-disabled);
+  color: var(--cta-on-primary);
+  box-shadow: none;
+}

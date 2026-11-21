@@ -24,6 +24,19 @@
 .admin-form fieldset { min-width: 0; border: 1px solid #dedbd2; border-radius: 10px; padding: 12px; }
 .admin-phase { grid-template-columns: 80px 1fr 2fr; align-items: center; padding: 12px 0; }
 .admin-editor summary { cursor: pointer; font-weight: 600; }
+.admin-product-card { display:grid; gap:14px; }
+.admin-product-summary-header { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+.admin-product-summary-header h2 { margin:5px 0 0; }
+.admin-product-status { flex:0 0 auto; padding:6px 9px; border-radius:999px; background:#f0ebe4; color:#777970; font-size:10px; font-weight:800; }
+.admin-product-status.active { background:#edf5d4; color:#55751b; }
+.admin-product-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:0; }
+.admin-product-summary>div { min-width:0; padding:11px; border-radius:10px; background:#faf8f2; }
+.admin-product-summary dt { color:#777970; font-size:10px; }
+.admin-product-summary dd { margin:5px 0 0; font-size:14px; font-weight:800; overflow-wrap:anywhere; }
+.admin-product-stock-note { margin:0; color:#777970; font-size:11px; }
+.admin-product-edit { justify-self:start; min-height:38px; padding:0 16px; }
+.admin-form-actions { display:flex; gap:9px; flex-wrap:wrap; }
+.admin-form-actions .orders-build,.admin-form-actions .secondary-action { width:auto; min-height:42px; margin:0; padding:0 18px; }
 .admin-search { margin-bottom: 18px; }
 .admin-order-details { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 12px; }
 .admin-order-details dt { color: #68665e; font-size: .8rem; }
@@ -65,7 +78,7 @@
 .payout-actions { display: grid; grid-template-columns: minmax(190px,1fr) auto auto; gap: 10px; align-items: end; }
 .payout-actions label { display: grid; gap: 7px; font-size: .85rem; }
 .payout-actions input { min-height: 42px; box-sizing: border-box; padding: 9px; border: 1px solid #bcb9ae; border-radius: 8px; font: inherit; }
-@media(max-width:600px) { .admin-phase { grid-template-columns: 1fr; } .admin-metrics { grid-template-columns: 1fr 1fr; gap: 8px; } .admin-metrics article { padding: 12px; } .admin-metrics strong { font-size: 1.1rem; } .admin-tabs button { flex: 1 1 auto; } .fulfillment-address-copy,.shipping-cost-grid,.payout-actions { grid-template-columns: 1fr; } .fulfillment-address-copy > p { grid-column: auto; } }
+@media(max-width:600px) { .admin-phase { grid-template-columns: 1fr; } .admin-metrics { grid-template-columns: 1fr 1fr; gap: 8px; } .admin-metrics article { padding: 12px; } .admin-metrics strong { font-size: 1.1rem; } .admin-tabs button { flex: 1 1 auto; } .fulfillment-address-copy,.shipping-cost-grid,.payout-actions { grid-template-columns: 1fr; } .fulfillment-address-copy > p { grid-column: auto; } .admin-product-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } .admin-product-summary-header { align-items:stretch; flex-direction:column; } .admin-product-status { align-self:flex-start; } }
 
 /* The Calm Lab workspace: quiet paper, concise cards, responsive navigation. */
 .workspace-app { --lab-paper:#f7f3eb; --lab-card:#fffdf9; --lab-ink:#292b27; --lab-muted:#70736b; --lab-line:#e2ddd3; --lab-lime:#d7ff58; background:var(--lab-paper); }

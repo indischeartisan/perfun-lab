@@ -17,8 +17,8 @@ do $$ declare items jsonb:='[{"product_id":"10ml","quantity":1,"formulas":[{"top
  select stock_reserved into reserved_10 from public.products where id = chr(49) || chr(48) || chr(109) || chr(108);
  select stock_reserved into reserved_30 from public.products where id = chr(51) || chr(48) || chr(109) || chr(108);
  select count(*) into reservation_count from public.order_inventory_reservations where order_id=oid and status='reserved';
- if not (reserved_10 = 4 and reserved_30 = 1) then raise exception using message = 'Mixed single and Play Set reservation incorrect'; end if;
- if not (reservation_count = 2) then raise exception using message = 'Reservation rows missing'; end if;
+ if not (reserved_10 = 4 and reserved_30 = 1) then perform 1 / 0; end if;
+ if not (reservation_count = 2) then perform 1 / 0; end if;
 end $$;
 reset role;
 set local role service_role;
@@ -29,8 +29,8 @@ do $$ declare p jsonb; oid uuid; reserved_10 bigint; sold_10 bigint; reserved_30
  perform public.apply_payment_event((p->>'id')::uuid,'inventory-paid',(p->>'amount')::bigint,'paid',clock_timestamp(),'{}');
  select stock_reserved,stock_sold into reserved_10,sold_10 from public.products where id = chr(49) || chr(48) || chr(109) || chr(108);
  select stock_reserved,stock_sold into reserved_30,sold_30 from public.products where id = chr(51) || chr(48) || chr(109) || chr(108);
- if not (reserved_10 = 0 and sold_10 = 4) then raise exception using message = 'Paid settlement is not idempotent'; end if;
- if not (reserved_30 = 0 and sold_30 = 1) then raise exception using message = '30 ML paid settlement incorrect'; end if;
+ if not (reserved_10 = 0 and sold_10 = 4) then perform 1 / 0; end if;
+ if not (reserved_30 = 0 and sold_30 = 1) then perform 1 / 0; end if;
 end $$;
 update public.products set stock_on_hand=8 where id='10ml';
 reset role;
@@ -39,7 +39,7 @@ select set_config('request.jwt.claim.sub','b1000000-0000-4000-8000-000000000002'
 do $$ declare items jsonb:='[{"product_id":"bundle-3x10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"},{"top":"mint","middle":"tea","base":"sandalwood"},{"top":"pink-pepper","middle":"jasmine","base":"amber"}]}]'; q jsonb; oid uuid; reserved_10 bigint; begin
  q:=public.quote_order('b3000000-0000-4000-8000-000000000002',items); oid:=(public.place_order('b3000000-0000-4000-8000-000000000002',items,'b4000000-0000-4000-8000-000000000002',q->>'quote_token')->>'order_id')::uuid;
  select stock_reserved into reserved_10 from public.products where id = chr(49) || chr(48) || chr(109) || chr(108);
- if not (reserved_10 = 3) then raise exception using message = 'Play Set did not reserve three 10 ML bottles'; end if;
+ if not (reserved_10 = 3) then perform 1 / 0; end if;
 end $$;
 reset role;
 set local role service_role;
@@ -48,14 +48,14 @@ do $$ declare p jsonb; oid uuid; retry jsonb; reserved_10 bigint; sold_10 bigint
  p:=public.reserve_payment(oid,'b1000000-0000-4000-8000-000000000002','doku','sandbox','https://example.invalid');
  perform public.apply_payment_event((p->>'id')::uuid,'inventory-expired',(p->>'amount')::bigint,'expired',null,'{}');
  select stock_reserved into reserved_10 from public.products where id = chr(49) || chr(48) || chr(109) || chr(108);
- if not (reserved_10 = 0) then raise exception using message = 'Expired payment did not release reservation'; end if;
+ if not (reserved_10 = 0) then perform 1 / 0; end if;
  retry:=public.reserve_payment(oid,'b1000000-0000-4000-8000-000000000002','doku','sandbox','https://example.invalid');
  select stock_reserved into reserved_10 from public.products where id='10ml';
- if not (reserved_10 = 3) then raise exception using message = 'Payment retry did not reacquire released stock'; end if;
+ if not (reserved_10 = 3) then perform 1 / 0; end if;
  perform public.apply_payment_event((retry->>'id')::uuid,'inventory-retry-paid',(retry->>'amount')::bigint,'paid',clock_timestamp(),'{}');
  perform public.apply_payment_event((retry->>'id')::uuid,'inventory-retry-paid',(retry->>'amount')::bigint,'paid',clock_timestamp(),'{}');
  select stock_reserved,stock_sold into reserved_10,sold_10 from public.products where id = chr(49) || chr(48) || chr(109) || chr(108);
- if not (reserved_10 = 0 and sold_10 = 7) then raise exception using message = 'Retry settlement is not idempotent'; end if;
+ if not (reserved_10 = 0 and sold_10 = 7) then perform 1 / 0; end if;
 end $$;
 reset role;
 rollback;

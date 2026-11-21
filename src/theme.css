@@ -341,7 +341,7 @@ body{background:var(--paper)}
 .format-option>img{width:34px;height:50px;object-fit:contain}
 .format-option-copy{min-width:0}.format-option-copy strong,.format-option-copy small{display:block}
 .format-option-copy strong{font:700 12px/1.2 'Nunito Sans',sans-serif;color:var(--builder-ink)}
-.format-option-copy small{margin-top:3px;font:400 10px/1.25 'Nunito Sans',sans-serif;color:#6e716a}
+.format-option-copy small{margin-top:3px;font:400 10px/1.25 'Nunito Sans',sans-serif;color:#6e716a}.format-stock-badge{display:block;width:max-content;margin-top:5px;padding:3px 6px;border-radius:999px;background:#eef5d8;color:#55751b;font:800 8px/1 'Nunito Sans',sans-serif}.format-stock-badge.unavailable{background:#f1e5df;color:#a4492a}
 .format-option-copy em{display:block;width:max-content;margin-bottom:3px;padding:2px 5px;border-radius:3px;background:#789600;color:#fff;font:700 7px/1 'Nunito Sans',sans-serif;font-style:normal;letter-spacing:.06em}
 .format-option-price{text-align:right;white-space:nowrap}.format-option-price s,.format-option-price b{display:block}
 .format-option-price s{margin-bottom:3px;font:400 9px/1 'Nunito Sans',sans-serif;color:#8a8c85}.format-option-price b{font:700 12px/1 'Nunito Sans',sans-serif;color:var(--builder-ink)}

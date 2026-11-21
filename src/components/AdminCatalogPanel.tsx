@@ -14,7 +14,7 @@ export function AdminCatalogPanel({ section }: { section: 'notes' | 'products' }
     {error ? <p role="alert">{error}</p> : !data ? <p role="status">Loading catalog…</p> : null}
     {notice ? <p role="status">{notice}</p> : null}
     {section === 'notes' ? <label className="admin-search">Find a note<input value={search} onChange={event => setSearch(event.target.value)}/></label> : null}
-    <div className="production-list">{section === 'notes' ? data?.notes.filter(note => `${note.name} ${note.category}`.toLowerCase().includes(search.toLowerCase())).map(note => <details className="admin-editor" key={`${note.id}:${note.version}`}><summary>{note.name} · {note.active ? 'Active' : 'Inactive'} · {note.category}</summary><NoteEditor note={note} onSaved={saved}/></details>) : data?.products.map(product => <ProductEditor key={`${product.id}:${product.version}`} product={product} onSaved={saved}/>)}</div>
+    <div className="production-list">{section === 'notes' ? data?.notes.filter(note => `${note.name} ${note.category}`.toLowerCase().includes(search.toLowerCase())).map(note => <details className="admin-editor" key={`${note.id}:${note.version}`}><summary>{note.name} · {note.active ? 'Active' : 'Inactive'} · {note.category}</summary><NoteEditor note={note} onSaved={saved}/></details>) : data?.products.map(product => <ProductEditor key={`${product.id}:${product.version}`} product={product} playSetCapacity={playSetCapacity(data.products)} onSaved={saved}/>)}</div>
     <p className="admin-help">Existing orders keep their original snapshots. Reload catalog if another admin has edited the same record. Note assets remain in /public.</p>
   </>
 }
@@ -47,10 +47,18 @@ function NoteEditor({ note, onSaved }: { note: AdminNote; onSaved: () => void })
     {error ? <p role="alert">{error}</p> : null}<button className="orders-build" disabled={busy}>{busy ? 'Saving…' : `Save ${note.name}`}</button>
   </form>
 }
-function ProductEditor({ product, onSaved }: { product: AdminProduct; onSaved: () => void }) {
+function playSetCapacity(products: AdminProduct[]) {
+  const stock = products.find(product => product.id === '10ml')
+  if (!stock?.stock_tracking_enabled || stock.stock_on_hand === null) return null
+  return Math.floor(Math.max(0, stock.stock_on_hand - stock.stock_reserved - stock.stock_sold) / 3)
+}
+function ProductEditor({ product, playSetCapacity, onSaved }: { product: AdminProduct; playSetCapacity: number | null; onSaved: () => void }) {
   const [active, setActive] = useState(product.active)
   const [regular, setRegular] = useState(String(product.regular_price))
   const [sale, setSale] = useState(product.sale_price === null ? '' : String(product.sale_price))
+  const physical = product.id === '10ml' || product.id === '30ml'
+  const [stockOnHand, setStockOnHand] = useState(product.stock_on_hand === null ? '' : String(product.stock_on_hand))
+  const [stockTrackingEnabled, setStockTrackingEnabled] = useState(product.stock_tracking_enabled)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const lock = useRef(false)
@@ -59,7 +67,7 @@ function ProductEditor({ product, onSaved }: { product: AdminProduct; onSaved: (
     if (lock.current) return
     lock.current = true; setBusy(true); setError('')
     try {
-      await saveAdminProduct({ ...product, active, regular_price: Number(regular), sale_price: sale.trim() === '' ? null : Number(sale) })
+      await saveAdminProduct({ ...product, active, regular_price: Number(regular), sale_price: sale.trim() === '' ? null : Number(sale) }, stockOnHand.trim() === '' ? null : Number(stockOnHand), physical && stockTrackingEnabled)
       onSaved()
     } catch (error) { setError(errorMessage(error)) }
     finally { lock.current = false; setBusy(false) }
@@ -68,6 +76,7 @@ function ProductEditor({ product, onSaved }: { product: AdminProduct; onSaved: (
     <label className="admin-checkbox"><input type="checkbox" checked={active} onChange={event => setActive(event.target.checked)}/>Active</label>
     <label>Regular price (IDR)<input type="number" required min={1} max={2147483647} step={1} value={regular} onChange={event => setRegular(event.target.value)}/></label>
     <label>Launch / sale price (IDR)<input type="number" min={1} max={Number(regular) || 2147483647} step={1} value={sale} onChange={event => setSale(event.target.value)}/></label>
+    {physical ? <fieldset><legend>Stok fisik</legend><label>Stok botol awal / fisik<input type="number" min={0} max={2147483647} step={1} value={stockOnHand} onChange={event => setStockOnHand(event.target.value)}/></label><label className="admin-checkbox"><input type="checkbox" checked={stockTrackingEnabled} onChange={event => setStockTrackingEnabled(event.target.checked)}/>Aktifkan pembatasan penjualan</label><p className="admin-help">Tertahan: {product.stock_reserved} · Terjual: {product.stock_sold}. Isi stok dahulu sebelum mengaktifkan pembatasan.</p></fieldset> : <p className="admin-help">Kapasitas Play Set otomatis: {playSetCapacity === null ? 'belum diaktifkan' : `${playSetCapacity} set`}. Play Set memakai 3 botol stok 10 ML.</p>}
     {error ? <p role="alert">{error}</p> : null}<button className="orders-build" disabled={busy}>{busy ? 'Saving…' : `Save ${product.label}`}</button>
   </form></article>
 }

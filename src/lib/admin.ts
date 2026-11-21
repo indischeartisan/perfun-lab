@@ -16,7 +16,7 @@ export interface AdminOrder {
 export interface AdminCustomer { id: string; name: string; email: string; total_orders: number; last_order: string | null }
 export interface AdminPhase { phase: NoteLayer; enabled: boolean; sort_order: number; prediction_text: string }
 export interface AdminNote { id: string; name: string; active: boolean; category: string; descriptor: string; sticker_asset: string | null; version: number; phases: AdminPhase[] }
-export interface AdminProduct { id: string; label: string; active: boolean; version: number; regular_price: number; sale_price: number | null }
+export interface AdminProduct { id: string; label: string; active: boolean; version: number; regular_price: number; sale_price: number | null; stock_on_hand: number | null; stock_reserved: number; stock_sold: number; stock_tracking_enabled: boolean }
 export interface AdminCatalog { notes: AdminNote[]; products: AdminProduct[] }
 export interface AdminOrderFilters { search: string; payment: string; production: string; shipment: string; page: number }
 export interface AdminPage<T> { rows: T[]; count: number }
@@ -45,7 +45,7 @@ export async function saveAdminNote(note: AdminNote, phases: AdminPhase[]) {
   await rpc('admin_save_note', { p_id: note.id, p_version: note.version, p_active: note.active, p_category: note.category, p_descriptor: note.descriptor, p_phases: phases })
   window.dispatchEvent(new Event('perfun-catalog-updated'))
 }
-export async function saveAdminProduct(product: AdminProduct) {
-  await rpc('admin_save_product', { p_id: product.id, p_version: product.version, p_active: product.active, p_regular_price: product.regular_price, p_sale_price: product.sale_price })
+export async function saveAdminProduct(product: AdminProduct, stockOnHand: number | null, stockTrackingEnabled: boolean) {
+  await rpc('admin_save_product', { p_id: product.id, p_version: product.version, p_active: product.active, p_regular_price: product.regular_price, p_sale_price: product.sale_price, p_stock_on_hand: stockOnHand, p_stock_tracking_enabled: stockTrackingEnabled })
   window.dispatchEvent(new Event('perfun-catalog-updated'))
 }

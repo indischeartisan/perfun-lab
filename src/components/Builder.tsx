@@ -38,6 +38,7 @@ export function Builder({ catalog, selection, product, playSetBlends, editingPla
   const [formatSelectorOpen, setFormatSelectorOpen] = useState(false)
   const selectedCount = layers.filter(layer => selection[layer]).length
   const complete = selectedCount === 3
+  const formatAvailable = (id: ProductChoice) => productOptions.find(option => option.id === id)?.stockAvailable !== 0
   const result = useMemo(() => createResult(selection), [selection])
   const partial = getPartialFeedback(selection)
 
@@ -64,7 +65,7 @@ export function Builder({ catalog, selection, product, playSetBlends, editingPla
   }
 
   function getSelectedFormatNow() {
-    if (product === null || !selection.top || !selection.middle || !selection.base) return
+    if (product === null || !formatAvailable(product) || !selection.top || !selection.middle || !selection.base) return
     if (product === 'play-set' && playSetBlends.length !== 3) return
     setFormatSelectorOpen(false)
     onGetItNow(product, { top: selection.top, middle: selection.middle, base: selection.base }, playSetBlends)
@@ -78,6 +79,7 @@ export function Builder({ catalog, selection, product, playSetBlends, editingPla
   function getPlaySetNow() {
     const lastBlend = playSetBlends[2]
     if (!lastBlend || playSetBlends.length !== 3) return
+    if (!formatAvailable('play-set')) return
     onGetItNow('play-set', lastBlend, playSetBlends)
   }
 
@@ -103,7 +105,7 @@ export function Builder({ catalog, selection, product, playSetBlends, editingPla
 
     {complete && result ? <section className="scent-story"><span>✧ {product === 'play-set' ? editingPlaySetIndex === null ? playSetBlends.length === 3 ? 'PLAY SET SELESAI.' : `MIX ${playSetBlends.length + 1} SIAP.` : `EDIT MIX ${editingPlaySetIndex + 1}.` : 'RACIKANMU SIAP.'}</span><h2>{result.name}</h2><p>{result.copy}</p>{product === 'play-set' && (editingPlaySetIndex !== null || playSetBlends.length < 3) ? <div className="play-set-mix-actions"><button className="get-this-mix" onClick={saveCurrentPlaySetMix}>{editingPlaySetIndex !== null ? 'Simpan perubahan' : playSetBlends.length === 2 ? 'Selesaikan Play Set' : 'Simpan & lanjutkan'} <ArrowRight /></button>{editingPlaySetIndex !== null ? <button className="play-set-cancel-edit" onClick={onCancelPlaySetEdit}>Batal edit</button> : null}</div> : product !== 'play-set' && !added ? <button className="get-this-mix" onClick={openFormatSelector} disabled={!productOptions.length}>Dapatkan mix ini <ArrowRight /></button> : null}{getItNowError ? <small className="mix-purchase-error" role="alert">{getItNowError}</small> : null}</section> : null}
 
-    {product === 'play-set' && playSetBlends.length === 3 && editingPlaySetIndex === null ? <section className="play-set-summary" aria-labelledby="play-set-summary-title"><div><span>✧ PLAY SET SELESAI.</span><h2 id="play-set-summary-title">Your three mixes.</h2></div><ol>{playSetBlends.map((blend, index) => <li key={`${blend.top.id}-${blend.middle.id}-${blend.base.id}-${index}`}><span>MIX {index + 1}</span><strong>{slashBlendName(blend)}</strong><button onClick={() => onEditPlaySetBlend(index)}>Edit</button></li>)}</ol>{!added ? <div className="play-set-summary-actions"><button className="play-set-get-now" onClick={getPlaySetNow} disabled={getItNowBusy}>{getItNowBusy ? 'Menyiapkan checkout…' : <>Beli sekarang <ArrowRight /></>}</button><button className="play-set-add-bag" onClick={onAddPlaySet} disabled={getItNowBusy}>Tambah ke Bag</button></div> : null}{getItNowError ? <small className="mix-purchase-error" role="alert">{getItNowError}</small> : null}</section> : null}
+    {product === 'play-set' && playSetBlends.length === 3 && editingPlaySetIndex === null ? <section className="play-set-summary" aria-labelledby="play-set-summary-title"><div><span>✧ PLAY SET SELESAI.</span><h2 id="play-set-summary-title">Your three mixes.</h2></div><ol>{playSetBlends.map((blend, index) => <li key={`${blend.top.id}-${blend.middle.id}-${blend.base.id}-${index}`}><span>MIX {index + 1}</span><strong>{slashBlendName(blend)}</strong><button onClick={() => onEditPlaySetBlend(index)}>Edit</button></li>)}</ol>{!added ? <div className="play-set-summary-actions"><button className="play-set-get-now" onClick={getPlaySetNow} disabled={getItNowBusy || !formatAvailable('play-set')}>{getItNowBusy ? 'Menyiapkan checkout…' : <>Beli sekarang <ArrowRight /></>}</button><button className="play-set-add-bag" onClick={onAddPlaySet} disabled={getItNowBusy || !formatAvailable('play-set')}>Tambah ke Bag</button></div> : null}{getItNowError ? <small className="mix-purchase-error" role="alert">{getItNowError}</small> : null}</section> : null}
 
     {complete && added ? <div className="added-confirmation" role="status"><strong><Check/> Racikanmu sudah masuk ke Bag.</strong><div><button className="added-view-bag" onClick={onViewBag}>Lihat Bag <ArrowRight/></button><button className="added-mix-again" onClick={onClearFormula}>Racik lagi</button></div></div> : null}
 

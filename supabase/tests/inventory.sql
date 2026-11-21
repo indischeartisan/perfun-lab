@@ -1,0 +1,58 @@
+-- Inventory, mixed format reservation, payment settlement, expiry, and retry.
+begin;
+\ir checkout_test_helpers.sql
+insert into auth.users(id,email) values
+ ('b1000000-0000-4000-8000-000000000001','inventory-one@example.invalid'),
+ ('b1000000-0000-4000-8000-000000000002','inventory-two@example.invalid');
+set local role service_role;
+update public.products set stock_on_hand=5,stock_reserved=0,stock_sold=0,stock_tracking_enabled=true where id='10ml';
+update public.products set stock_on_hand=1,stock_reserved=0,stock_sold=0,stock_tracking_enabled=true where id='30ml';
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','b1000000-0000-4000-8000-000000000001',true);
+select public.save_address('b3000000-0000-4000-8000-000000000001','{"recipient_name":"Inventory One","phone":"0812000001","address_line":"One Street","city":"Bandung","province":"Jawa Barat","postal_code":"40111","label":"Home"}');
+select set_config('request.jwt.claim.sub','b1000000-0000-4000-8000-000000000002',true);
+select public.save_address('b3000000-0000-4000-8000-000000000002','{"recipient_name":"Inventory Two","phone":"0812000002","address_line":"Two Street","city":"Bandung","province":"Jawa Barat","postal_code":"40112","label":"Home"}');
+select set_config('request.jwt.claim.sub','b1000000-0000-4000-8000-000000000001',true);
+do $$ declare items jsonb:='[{"product_id":"10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"}]},{"product_id":"bundle-3x10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"},{"top":"soapy","middle":"peony","base":"amber"},{"top":"mint","middle":"tea","base":"honey"}]},{"product_id":"30ml","quantity":1,"formulas":[{"top":"soapy","middle":"peony","base":"amber"}]}]'; q jsonb; oid uuid; begin
+ q:=public.quote_order('b3000000-0000-4000-8000-000000000001',items); oid:=(public.place_order('b3000000-0000-4000-8000-000000000001',items,'b4000000-0000-4000-8000-000000000001',q->>'quote_token')->>'order_id')::uuid;
+ if (select stock_reserved from public.products where id='10ml') <> 4 or (select stock_reserved from public.products where id='30ml') <> 1 then raise exception 'Mixed reservation failed'; end if;
+end $$;
+reset role;
+set local role service_role;
+do $$ declare oid uuid; begin
+ select id into oid from public.orders where request_id='b4000000-0000-4000-8000-000000000001';
+ if (select count(*) from public.order_inventory_reservations where order_id=oid and status='reserved') <> 2 then raise exception 'Reservation rows missing'; end if;
+end $$;
+do $$ declare p jsonb; oid uuid; begin
+ select id into oid from public.orders where request_id='b4000000-0000-4000-8000-000000000001';
+ p:=public.reserve_payment(oid,'b1000000-0000-4000-8000-000000000001','doku','sandbox','https://example.invalid');
+ perform public.apply_payment_event((p->>'id')::uuid,'inventory-paid',(p->>'amount')::bigint,'paid',clock_timestamp(),'{}');
+ perform public.apply_payment_event((p->>'id')::uuid,'inventory-paid',(p->>'amount')::bigint,'paid',clock_timestamp(),'{}');
+ if (select stock_reserved from public.products where id='10ml') <> 0 or (select stock_sold from public.products where id='10ml') <> 4 then raise exception 'Paid settlement failed'; end if;
+ if (select stock_reserved from public.products where id='30ml') <> 0 or (select stock_sold from public.products where id='30ml') <> 1 then raise exception '30 ML settlement failed'; end if;
+end $$;
+update public.products set stock_on_hand=8 where id='10ml';
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','b1000000-0000-4000-8000-000000000002',true);
+do $$ declare items jsonb:='[{"product_id":"bundle-3x10ml","quantity":1,"formulas":[{"top":"yuzu","middle":"matcha","base":"vanilla"},{"top":"soapy","middle":"peony","base":"amber"},{"top":"mint","middle":"tea","base":"honey"}]}]'; q jsonb; oid uuid; begin
+ q:=public.quote_order('b3000000-0000-4000-8000-000000000002',items); oid:=(public.place_order('b3000000-0000-4000-8000-000000000002',items,'b4000000-0000-4000-8000-000000000002',q->>'quote_token')->>'order_id')::uuid;
+ if (select stock_reserved from public.products where id='10ml') <> 3 then raise exception 'Play Set reservation failed'; end if;
+end $$;
+reset role;
+set local role service_role;
+do $$ declare p jsonb; oid uuid; retry jsonb; begin
+ select id into oid from public.orders where request_id='b4000000-0000-4000-8000-000000000002';
+ p:=public.reserve_payment(oid,'b1000000-0000-4000-8000-000000000002','doku','sandbox','https://example.invalid');
+ perform public.apply_payment_event((p->>'id')::uuid,'inventory-expired',(p->>'amount')::bigint,'expired',null,'{}');
+ if (select stock_reserved from public.products where id='10ml') <> 0 then raise exception 'Expiry did not release'; end if;
+ retry:=public.reserve_payment(oid,'b1000000-0000-4000-8000-000000000002','doku','sandbox','https://example.invalid');
+ if (select stock_reserved from public.products where id='10ml') <> 3 then raise exception 'Retry did not reacquire'; end if;
+ perform public.apply_payment_event((retry->>'id')::uuid,'inventory-retry-paid',(retry->>'amount')::bigint,'paid',clock_timestamp(),'{}');
+ perform public.apply_payment_event((retry->>'id')::uuid,'inventory-retry-paid',(retry->>'amount')::bigint,'paid',clock_timestamp(),'{}');
+ if (select stock_reserved from public.products where id='10ml') <> 0 or (select stock_sold from public.products where id='10ml') <> 7 then raise exception 'Retry settlement failed'; end if;
+end $$;
+reset role;
+rollback;
+select 'PASS: mixed single and Play Set reservations, paid/expired/retry settlement, and repeated callbacks' result;

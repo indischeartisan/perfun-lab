@@ -12,7 +12,6 @@ function processStatus(order: AdminOrder) {
   return 'Menunggu diracik'
 }
 
-function shortOrderNumber(value: string) { return value.length > 17 ? `${value.slice(0, 8)}…${value.slice(-5)}` : value }
 function usableLabel(value: string) { return Boolean(value.trim()) && !/^\d+\s*ml$/i.test(value.trim()) }
 
 function Notes({ notes }: { notes?: Array<{ phase: string; id?: string; name: string }> }) {
@@ -28,5 +27,5 @@ function Product({ product }: { product: AdminOrder['products'][number] }) {
 
 export function AdminOrderCard({ order, onDetail }: { order: AdminOrder; onDetail?: () => void }) {
   const status = processStatus(order)
-  return <article className="admin-order-card"><header><div><strong title={order.public_order_number}>{order.public_order_number}</strong><span>Referensi internal: {shortOrderNumber(order.order_number)}</span><span>{order.customer.name || order.customer.email || 'Pemesan belum tersedia'}</span><time>{new Date(order.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</time></div><b className={`admin-process-status ${order.shipment_status === 'delivered' ? 'complete' : order.production_status === 'in_production' ? 'production' : 'default'}`}>{status}</b></header><div className="admin-order-products">{order.products.map((product, index) => <Product key={`${product.label}-${index}`} product={product}/>)}</div><footer><span>Total <strong>{formatPrice(order.grand_total)}</strong></span>{onDetail ? <button type="button" onClick={onDetail}>Lihat detail →</button> : null}</footer></article>
+  return <article className="admin-order-card"><header><div><strong title={order.public_order_number}>{order.public_order_number}</strong><span>{order.customer.name || order.customer.email || 'Pemesan belum tersedia'}</span><time>{new Date(order.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</time></div><b className={`admin-process-status ${order.shipment_status === 'delivered' ? 'complete' : order.production_status === 'in_production' ? 'production' : 'default'}`}>{status}</b></header><div className="admin-order-products">{order.products.map((product, index) => <Product key={`${product.label}-${index}`} product={product}/>)}</div><footer><span>Total <strong>{formatPrice(order.grand_total)}</strong></span>{onDetail ? <button type="button" onClick={onDetail}>Lihat detail →</button> : null}</footer></article>
 }

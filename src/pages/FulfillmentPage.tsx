@@ -117,26 +117,26 @@ function ShipmentCard({ shipment, role, onChanged, onShipped }: { shipment: Ship
     finally { lock.current = false; setBusy(false) }
   }
   function fulfill(type: 'save' | 'ship' | 'deliver') {
-    void run(() => fulfillShipment(shipment.id, type, details), result => { if (type === 'ship' && result.status === 'shipped') onShipped?.(); return `${shipment.order_number}: ${type === 'save' ? 'shipping details saved' : shipmentLabels[result.status]}.` })
+    void run(() => fulfillShipment(shipment.id, type, details), result => { if (type === 'ship' && result.status === 'shipped') onShipped?.(); return `${shipment.public_order_number}: ${type === 'save' ? 'shipping details saved' : shipmentLabels[result.status]}.` })
   }
   function confirmDelivery() {
     if (!window.confirm('Pastikan Anda telah memverifikasi bukti penerimaan pengiriman sebelum menandai pesanan selesai.')) return
     fulfill('deliver')
   }
   function confirmPacking() {
-    const confirmed = window.confirm(`Confirm that you personally checked all packing requirements for ${shipment.order_number}:\n\n${packingItems.map(([, label]) => `• ${label}`).join('\n')}\n\nOnly confirm after every check is complete.`)
+    const confirmed = window.confirm(`Confirm that you personally checked all packing requirements for ${shipment.public_order_number}:\n\n${packingItems.map(([, label]) => `• ${label}`).join('\n')}\n\nOnly confirm after every check is complete.`)
     const completedChecklist = confirmedPackingChecklist(confirmed)
     if (!completedChecklist) return
-    void run(() => saveShipmentPacking(shipment.id, completedChecklist, true), () => `${shipment.order_number}: packing completed.`)
+    void run(() => saveShipmentPacking(shipment.id, completedChecklist, true), () => `${shipment.public_order_number}: packing completed.`)
   }
   function saveCost() {
     const cost = parseActualShippingCost(actualCost)
     if (cost === null || !payer) { setError('Enter a non-negative whole shipping cost and select who paid it.'); return }
-    void run(() => saveActualShipping(shipment.id, cost, payer), () => `${shipment.order_number}: actual shipping cost finalized.`)
+    void run(() => saveActualShipping(shipment.id, cost, payer), () => `${shipment.public_order_number}: actual shipping cost finalized.`)
   }
   function overrideService() {
     if (overrideReason.trim().length < 3) { setError('Enter an override reason (at least 3 characters).'); return }
-    void run(() => overrideShipmentService(shipment.id, details.courier, details.service, overrideReason), result => `${shipment.order_number}: shipping service overridden to ${result.courier} ${result.service}.`)
+    void run(() => overrideShipmentService(shipment.id, details.courier, details.service, overrideReason), result => `${shipment.public_order_number}: shipping service overridden to ${result.courier} ${result.service}.`)
   }
   async function copyAddress() {
     try { await copyText(formatShippingAddress(shipment)); setCopyNotice('Address copied.') }
@@ -162,11 +162,11 @@ function ShipmentCard({ shipment, role, onChanged, onShipped }: { shipment: Ship
       const validationError = validateDispatchDetails(details)
       if (validationError) { setError(validationError); return }
     }
-    if (action === 'ship' && !window.confirm(`Mark ${shipment.order_number} as shipped?`)) return
+    if (action === 'ship' && !window.confirm(`Mark ${shipment.public_order_number} as shipped?`)) return
     fulfill(action)
   }
   return <article className="customer-order fulfillment-card">
-    <WorkspaceCardHeader orderNumber={shipment.order_number} time={new Date(shipment.ordered_at).toLocaleString()} status={shipmentLabels[shipment.status]}/>
+    <WorkspaceCardHeader orderNumber={shipment.public_order_number} time={new Date(shipment.ordered_at).toLocaleString()} status={shipmentLabels[shipment.status]}/>
     <section className="fulfillment-address fulfillment-address-copy" aria-label="Shipping information"><div><h2>Shipping information</h2><pre>{formatShippingAddress(shipment)}</pre><p><strong>Courier:</strong> {[shipment.courier, shipment.service].filter(Boolean).join(' / ') || 'Not selected yet'}</p><p><strong>Tracking:</strong> {shipment.tracking_number || 'Not available yet'}</p></div><div className="fulfillment-document-actions"><button type="button" onClick={() => void copyAddress()}>Copy address</button><button type="button" onClick={() => void copyOrder()} disabled={formulaLoading || Boolean(formulaError)}>Copy order</button><button type="button" onClick={printLabel}>Print label</button><button type="button" onClick={printPackingSlip} disabled={formulaLoading || Boolean(formulaError)}>Print packing slip</button></div>{formulaLoading ? <p role="status">Loading formula snapshot…</p> : null}{formulaError ? <div role="alert"><p>Formula snapshot could not be loaded: {formulaError}</p><button type="button" onClick={() => { setFormulaLoading(true); setFormulaError(''); setFormulaRevision(n => n + 1) }}>Retry formula snapshot</button></div> : null}{copyNotice ? <p role="status">{copyNotice}</p> : null}</section>
     <ul className="fulfillment-products">{shipment.items_snapshot.map((item, index) => <li key={index}><strong>{item.product.label}</strong><span>{item.product.bottle_count} × {item.product.volume_ml} ml · Quantity: {item.quantity}</span></li>)}</ul>
     <section className="packing-card"><h2>Customer shipping selection</h2>{shipment.customer_shipping ? <><p><strong>{shipment.customer_shipping.courier} / {shipment.customer_shipping.service}</strong></p><p>Customer shipping paid: {formatPrice(shipment.customer_shipping.amount)}. This is separate from the vendor actual shipping cost.</p></> : <p>Legacy order: no customer shipping quote snapshot.</p>}{shipment.shipping_override_history?.length ? <div className="admin-help"><strong>Admin override history</strong>{shipment.shipping_override_history.map(entry => <p key={`${entry.overridden_at}:${entry.new_courier}`}>{entry.original_courier} {entry.original_service} to {entry.new_courier} {entry.new_service}: {entry.reason} ({new Date(entry.overridden_at).toLocaleString()})</p>)}</div> : null}</section>

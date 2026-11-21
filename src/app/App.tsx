@@ -322,7 +322,7 @@ function ConnectedApp({ catalog, auth }: { catalog: Catalog; auth: ReturnType<ty
       <WorkspaceLoadBoundary key={view}><Suspense fallback={<WorkspaceLoading/>}>
       {view === 'admin' ? auth.user && auth.role === 'admin' ? <AdminPage key={auth.user.id} userId={auth.user.id}/> : <div className="screen-empty"><h2>{auth.loading || auth.roleLoading ? 'Loading account…' : 'Admin access required'}</h2><p>This page is available to administrators.</p></div> : null}
       {view === 'fulfillment' ? auth.user && (auth.role === 'vendor' || auth.role === 'admin') ? <FulfillmentPage key={`${auth.user.id}:${auth.role}`} role={auth.role}/> : <div className="screen-empty"><h2>{auth.loading || auth.roleLoading ? 'Loading account…' : 'Fulfillment access required'}</h2><p>This page is available to vendors and administrators.</p>{!auth.user && !auth.loading ? <button onClick={auth.login}>Continue with Google</button> : null}</div> : null}
-      {view === 'payouts' ? auth.user && auth.role === 'vendor' ? <VendorPaymentsPage key={auth.user.id}/> : <div className="screen-empty"><h2>{auth.loading || auth.roleLoading ? 'Loading account…' : 'Vendor access required'}</h2><p>Payments are available to vendors.</p></div> : null}
+      {view === 'payouts' ? auth.user && auth.role === 'vendor' ? <VendorPaymentsPage key={auth.user.id} accountId={auth.user.id}/> : <div className="screen-empty"><h2>{auth.loading || auth.roleLoading ? 'Loading account…' : 'Vendor access required'}</h2><p>Payments are available to vendors.</p></div> : null}
       {view === 'production' ? auth.user && (auth.role === 'perfumer' || auth.role === 'admin' || auth.role === 'vendor') ? <ProductionPage key={`${auth.user.id}:${auth.role}`} userId={auth.user.id} role={auth.role}/> : <div className="screen-empty"><h2>{auth.loading || auth.roleLoading ? 'Loading account…' : 'Production access required'}</h2><p>This page is available to vendors, perfumers and administrators.</p>{!auth.user && !auth.loading ? <button onClick={auth.login}>Continue with Google</button> : null}</div> : null}
       </Suspense></WorkspaceLoadBoundary>
       {view === 'explore' ? <ExplorePage catalog={catalog} onMix={() => navigate('build')} onOpenArticle={openArticle} onOpenQuick={openQuickCard} onViewFresh={() => navigate('fresh')} onViewStudy={() => navigate('study')} onViewLibrary={() => navigate('library')}/> : null}
@@ -402,7 +402,7 @@ function WorkspaceApp({ auth }: { auth: ReturnType<typeof useAuth> }) {
       {role === 'admin' ? <AdminPage key={auth.user.id} userId={auth.user.id}/> : null}
       {vendor && (view === 'production' || view === 'fulfillment') ? <VendorWorkPage key={`${auth.user.id}:${view}`} userId={auth.user.id} initialStage={view === 'fulfillment' ? 'ready_to_ship' : 'order'}/> : null}
       {view === 'production' && perfumer ? <ProductionPage key={`${auth.user.id}:${role}`} userId={auth.user.id} role="perfumer"/> : null}
-      {view === 'payouts' && vendor ? <VendorPaymentsPage key={auth.user.id}/> : null}
+      {view === 'payouts' && vendor ? <VendorPaymentsPage key={auth.user.id} accountId={auth.user.id}/> : null}
       </Suspense></WorkspaceLoadBoundary>
     </main>
   </div>

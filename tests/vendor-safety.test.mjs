@@ -60,6 +60,7 @@ test('vendor shipping view uses one shipment RPC payload, separated stages, and 
 test('vendor workspace keeps refresh manual and formula notes responsive without customer card selectors', () => {
   const production = readFileSync(new URL('../src/pages/VendorProductionPage.tsx', import.meta.url), 'utf8')
   const shipping = readFileSync(new URL('../src/pages/VendorShippingPage.tsx', import.meta.url), 'utf8')
+  const payments = readFileSync(new URL('../src/pages/VendorPaymentsPage.tsx', import.meta.url), 'utf8')
   const operations = readFileSync(new URL('../src/components/OperationsPresentation.tsx', import.meta.url), 'utf8')
   const css = readFileSync(new URL('../src/admin.css', import.meta.url), 'utf8')
 
@@ -67,6 +68,10 @@ test('vendor workspace keeps refresh manual and formula notes responsive without
   assert.match(production, /Memuat pesanan/)
   assert.match(production, /Mulai racik/)
   assert.match(production, /variant="vendor"/)
+  assert.match(production, /getVendorCached/)
+  assert.match(shipping, /getVendorCached/)
+  assert.match(payments, /useVendorData/)
+  assert.doesNotMatch(payments, /setInterval/)
   assert.match(production, /isolated/)
   assert.match(shipping, /status: 'ready_to_ship' \| 'shipped' \| 'delivered'/)
   assert.doesNotMatch(shipping, /customer-order vendor-shipping-card/)

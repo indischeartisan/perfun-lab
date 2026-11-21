@@ -11,7 +11,7 @@ export interface ShipmentSummary {
   shipped_at: string | null; delivered_at: string | null
 }
 export interface Shipment extends ShipmentSummary {
-  id: string; order_id: string; order_number: string; ordered_at: string; created_at: string; updated_at: string
+  id: string; order_id: string; order_number: string; public_order_number: string; ordered_at: string; created_at: string; updated_at: string
   fulfillment_allowed: boolean; shipping_cost: number; provider: string; provider_reference: string | null
   address_snapshot: { recipient_name: string; phone: string; address_line: string; city: string; province: string; postal_code: string; district: string | null; delivery_note: string | null }
   items_snapshot: Array<{ product: { label: string; volume_ml: number; bottle_count: number }; quantity: number }>
@@ -22,7 +22,7 @@ export interface Shipment extends ShipmentSummary {
   formula_jobs?: ShipmentFormulaJob[]
 }
 export interface ShipmentFormulaJob {
-  id: string; order_number: string; quantity: number
+  id: string; order_number: string; public_order_number?: string; quantity: number
   product_snapshot: { label: string; volume_ml: number; bottle_count: number }
   formulas_snapshot: Array<{ top: string | null; middle: string | null; base: string | null }>
 }

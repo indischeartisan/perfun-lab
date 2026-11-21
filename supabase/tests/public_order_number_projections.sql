@@ -45,9 +45,6 @@ insert into public.payments(
   'fixture', 'sandbox', 'PUBLIC-NUMBER-PAYOUT', 117000, 'paid', clock_timestamp(), '{}'
 );
 
-insert into public.shipments(order_id)
-values ('d0200000-0000-4000-8000-000000000001');
-
 create temp table public_number_fixture as
 select public_order_number as reference
 from public.orders

@@ -68,6 +68,7 @@ do $$ declare v bigint; regular integer; sale integer; begin
  end if;
 end $$;
 
+reset role;
 do $$ begin
  if (select count(*) from public.products where id in ('10ml','30ml') and stock_tracking_enabled)<>2 then raise exception 'Admin stock tracking was not enabled'; end if;
  if exists(select 1 from inventory_catalog_before before_row join public.products after_row using(id)

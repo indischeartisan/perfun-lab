@@ -86,17 +86,22 @@ jobs:
           git cat-file -e "$RELEASE_SOURCE_SHA^{commit}"
           git cat-file -e "$RELEASE_SOURCE_SHA:supabase/migrations/20261120140000_product_inventory_reservations.sql"
 
-          # The release bundle intentionally contains only the approved migration.
+          # Keep the reviewed migration history so Supabase can compare the local
+          # bundle with production. The history guard below still permits only the
+          # approved target to be pending.
           bundle="$RUNNER_TEMP/perfun-inventory-release"
           rm -rf -- "$bundle"
           mkdir -p "$bundle/supabase/migrations"
           git show "$RELEASE_SOURCE_SHA:supabase/config.toml" > "$bundle/supabase/config.toml"
-          git show "$RELEASE_SOURCE_SHA:$target_migration_path" > "$bundle/supabase/migrations/$target_migration_file"
-          mapfile -t bundle_files < <(find "$bundle/supabase/migrations" -maxdepth 1 -type f -printf '%f\n')
-          [[ "${#bundle_files[@]}" -eq 1 && "${bundle_files[0]}" == "$target_migration_file" ]] || {
-            echo "::error::Release bundle contains a migration other than the approved target."
+          mapfile -t source_migrations < <(git ls-tree -r --name-only "$RELEASE_SOURCE_SHA" -- supabase/migrations | grep -E '/[0-9]{14}_[^/]+\.sql$' | sort)
+          [[ "${#source_migrations[@]}" -gt 0 ]] || {
+            echo "::error::Reviewed source SHA contains no migration history."
             exit 1
           }
+          for migration_path in "${source_migrations[@]}"; do
+            git show "$RELEASE_SOURCE_SHA:$migration_path" > "$bundle/supabase/migrations/${migration_path##*/}"
+          done
+          test -f "$bundle/supabase/migrations/$target_migration_file"
 
           # The old UI still calls these contracts. The migration adds overloads and
           # keeps the original 5-argument product save contract intact.
@@ -152,8 +157,17 @@ jobs:
           set -Eeuo pipefail
           bundle="$RUNNER_TEMP/perfun-inventory-release"
           dry_run_log="$RUNNER_TEMP/perfun-inventory-dry-run.log"
+          sanitize_cli_output() {
+            sed -E \
+              -e 's#(postgres(ql)?://)[^[:space:]]+#\1[redacted]#g' \
+              -e 's#(SUPABASE_DB_URL|DATABASE_URL|password|token|secret|authorization|api[_-]?key)[=:][^[:space:]]+#\1=[redacted]#Ig' \
+              -e 's#(sb_(publishable|secret)_[A-Za-z0-9_-]+)#[redacted]#g' \
+              "$1" | tail -n 80
+          }
           if ! (cd "$bundle" && supabase db push --db-url "$SUPABASE_DB_URL" --dry-run > "$dry_run_log" 2>&1); then
             echo "::error::Supabase dry-run failed; no production write was attempted."
+            echo "Sanitized Supabase CLI output (last 80 lines):"
+            sanitize_cli_output "$dry_run_log" || true
             exit 1
           fi
           pending="$(cat "$RUNNER_TEMP/pending-migrations.txt")"
@@ -204,7 +218,15 @@ jobs:
           bundle="$RUNNER_TEMP/perfun-inventory-release"
           mkdir -p "$bundle/supabase/migrations"
           git show "$RELEASE_SOURCE_SHA:supabase/config.toml" > "$bundle/supabase/config.toml"
-          git show "$RELEASE_SOURCE_SHA:$TARGET_MIGRATION_PATH" > "$bundle/supabase/migrations/$TARGET_MIGRATION_FILE"
+          mapfile -t source_migrations < <(git ls-tree -r --name-only "$RELEASE_SOURCE_SHA" -- supabase/migrations | grep -E '/[0-9]{14}_[^/]+\.sql$' | sort)
+          [[ "${#source_migrations[@]}" -gt 0 ]] || {
+            echo "::error::Reviewed source SHA contains no migration history."
+            exit 1
+          }
+          for migration_path in "${source_migrations[@]}"; do
+            git show "$RELEASE_SOURCE_SHA:$migration_path" > "$bundle/supabase/migrations/${migration_path##*/}"
+          done
+          test -f "$bundle/supabase/migrations/$TARGET_MIGRATION_FILE"
 
       - name: Repeat exact history guard and dry-run before apply
         shell: bash
@@ -230,7 +252,19 @@ jobs:
             exit 1
           }
           dry_run_log="$RUNNER_TEMP/perfun-inventory-dry-run-before-apply.log"
-          (cd "$RUNNER_TEMP/perfun-inventory-release" && supabase db push --db-url "$SUPABASE_DB_URL" --dry-run > "$dry_run_log" 2>&1)
+          sanitize_cli_output() {
+            sed -E \
+              -e 's#(postgres(ql)?://)[^[:space:]]+#\1[redacted]#g' \
+              -e 's#(SUPABASE_DB_URL|DATABASE_URL|password|token|secret|authorization|api[_-]?key)[=:][^[:space:]]+#\1=[redacted]#Ig' \
+              -e 's#(sb_(publishable|secret)_[A-Za-z0-9_-]+)#[redacted]#g' \
+              "$1" | tail -n 80
+          }
+          if ! (cd "$RUNNER_TEMP/perfun-inventory-release" && supabase db push --db-url "$SUPABASE_DB_URL" --dry-run > "$dry_run_log" 2>&1); then
+            echo "::error::Pre-apply Supabase dry-run failed; apply was not attempted."
+            echo "Sanitized Supabase CLI output (last 80 lines):"
+            sanitize_cli_output "$dry_run_log" || true
+            exit 1
+          fi
           migrations_in_output="$(grep -oE '[0-9]{14}_[A-Za-z0-9_]+\.sql' "$dry_run_log" | sort -u || true)"
           [[ "$migrations_in_output" == "$TARGET_MIGRATION_FILE" ]] || {
             echo "::error::Pre-apply dry-run proposed more than the approved migration."

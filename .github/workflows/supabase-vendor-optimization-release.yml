@@ -1,0 +1,221 @@
+name: Release Vendor optimization migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Dry-run is the default; apply requires production approval
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - apply
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-production-vendor-optimization-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_SOURCE_SHA: 7ff99c3164e57d5cceb868dd2de32cb6801d3d69
+  TARGET_MIGRATION_PATH: supabase/migrations/20261121130000_vendor_public_order_number_projections.sql
+  TARGET_MIGRATION_FILE: 20261121130000_vendor_public_order_number_projections.sql
+  SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+  NO_COLOR: "1"
+
+jobs:
+  preflight:
+    name: Verify production history and dry-run
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production
+    steps:
+      - name: Check out main release workflow
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verify release inputs and install pinned Supabase CLI
+        shell: bash
+        env:
+          RELEASE_MODE: ${{ inputs.mode }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_REF" == refs/heads/main ]] || { echo "::error::This workflow must be dispatched from main."; exit 1; }
+          [[ "$RELEASE_MODE" == dry-run || "$RELEASE_MODE" == apply ]] || { echo "::error::Unsupported release mode."; exit 1; }
+          [[ "$RELEASE_SOURCE_SHA" == "7ff99c3164e57d5cceb868dd2de32cb6801d3d69" ]] || { echo "::error::The release source SHA is not locked to the reviewed CI-green commit."; exit 1; }
+          [[ -n "${SUPABASE_DB_URL:-}" && "$SUPABASE_DB_URL" =~ ^postgres(ql)?:// ]] || { echo "::error::SUPABASE_DB_URL must be a PostgreSQL URL."; exit 1; }
+
+          tools="$RUNNER_TEMP/vendor-release-tools"
+          mkdir -p "$tools/path"
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "$tools/supabase.tar.gz" \
+            "https://github.com/supabase/cli/releases/download/v3.1.0/supabase_3.1.0_linux_amd64.tar.gz"
+          echo "dbe9fd66771337fc198727da86b9d3551302f87a7091cd8781be2a4cd0c8ac4d  $tools/supabase.tar.gz" | sha256sum --check --status
+          tar -xzf "$tools/supabase.tar.gz" -C "$tools"
+          install -m 0755 "$tools/supabase" "$tools/path/supabase"
+          echo "$tools/path" >> "$GITHUB_PATH"
+          "$tools/path/supabase" --version
+
+      - name: Build complete reviewed migration bundle and check legacy compatibility
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git fetch --no-tags origin "$RELEASE_SOURCE_SHA" --depth=1 >/dev/null
+          git cat-file -e "$RELEASE_SOURCE_SHA^{commit}"
+          git cat-file -e "$RELEASE_SOURCE_SHA:supabase/migrations/20261121130000_vendor_public_order_number_projections.sql"
+
+          bundle="$RUNNER_TEMP/vendor-release"
+          rm -rf -- "$bundle"
+          mkdir -p "$bundle/supabase/migrations"
+          git show "$RELEASE_SOURCE_SHA:supabase/config.toml" > "$bundle/supabase/config.toml"
+          mapfile -t source_migrations < <(git ls-tree -r --name-only "$RELEASE_SOURCE_SHA" -- supabase/migrations | grep -E '/[0-9]{14}_[^/]+\.sql$' | sort)
+          [[ "${#source_migrations[@]}" -gt 0 ]] || { echo "::error::Reviewed source contains no migration history."; exit 1; }
+          for migration_path in "${source_migrations[@]}"; do
+            git show "$RELEASE_SOURCE_SHA:$migration_path" > "$bundle/supabase/migrations/${migration_path##*/}"
+          done
+          test -f "$bundle/supabase/migrations/$TARGET_MIGRATION_FILE"
+
+          # The production application predates PR #62, so these existing contracts
+          # must remain present; the release migration only replaces read projections.
+          grep -Fq "rpc('list_fulfillment_shipments'" src/lib/shipments.ts
+          grep -Fq "rpc('list_vendor_production_orders'" src/lib/production.ts
+          grep -Fq "create or replace function private.list_fulfillment_shipments" "$bundle/supabase/migrations/$TARGET_MIGRATION_FILE"
+          grep -Fq "create or replace function private.admin_vendor_workspace" "$bundle/supabase/migrations/$TARGET_MIGRATION_FILE"
+          grep -Fq "create or replace function private.admin_vendor_assignments" "$bundle/supabase/migrations/$TARGET_MIGRATION_FILE"
+          grep -Fq "security definer" "$bundle/supabase/migrations/$TARGET_MIGRATION_FILE"
+          grep -Fq "set search_path=''" "$bundle/supabase/migrations/$TARGET_MIGRATION_FILE"
+          echo "Legacy Vendor/Admin contracts and SECURITY DEFINER projection guards passed."
+
+      - name: Read production history and enforce the exact pending set
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bundle="$RUNNER_TEMP/vendor-release"
+          source_history="$RUNNER_TEMP/vendor-source-history.txt"
+          remote_history="$RUNNER_TEMP/vendor-remote-history.txt"
+          pending_versions="$RUNNER_TEMP/vendor-pending-versions.txt"
+          target_version="${TARGET_MIGRATION_FILE:0:14}"
+          git ls-tree -r --name-only "$RELEASE_SOURCE_SHA" -- supabase/migrations | sed -n 's#^.*/\([0-9]\{14\}\)_[^/]*\.sql$#\1#p' | sort -u > "$source_history"
+          grep -Fxq "$target_version" "$source_history"
+          psql "$SUPABASE_DB_URL" --no-align --tuples-only --set=ON_ERROR_STOP=1 --command "select version from supabase_migrations.schema_migrations order by version" | sed '/^[[:space:]]*$/d' | sort -u > "$remote_history"
+          if unexpected="$(comm -13 "$source_history" "$remote_history")"; then
+            [[ -z "$unexpected" ]] || { echo "::error::Production migration history contains versions absent from the reviewed source."; exit 1; }
+          fi
+          comm -23 "$source_history" "$remote_history" > "$pending_versions"
+          pending_count="$(wc -l < "$pending_versions" | tr -d ' ')"
+          if [[ "$pending_count" -gt 1 ]] || { [[ "$pending_count" == 1 ]] && ! grep -Fxq "$target_version" "$pending_versions"; }; then
+            echo "::error::Pending production migrations are not exactly the approved Vendor migration."; exit 1
+          fi
+          if [[ "$pending_count" == 0 ]]; then echo "Production already records the approved migration."; else echo "Production pending set is exactly $TARGET_MIGRATION_FILE."; fi
+          (cd "$bundle" && supabase migration list --db-url "$SUPABASE_DB_URL" > "$RUNNER_TEMP/vendor-migration-list.txt" 2>&1)
+
+      - name: Run and verify sanitized production dry-run
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bundle="$RUNNER_TEMP/vendor-release"
+          target_version="${TARGET_MIGRATION_FILE:0:14}"
+          dry_run_log="$RUNNER_TEMP/vendor-dry-run.log"
+          sanitize_cli_output() {
+            sed -E \
+              -e 's#(postgres(ql)?://)[^[:space:]]+#\1[redacted]#g' \
+              -e 's#(SUPABASE_DB_URL|DATABASE_URL|password|token|secret|authorization|api[_-]?key)[=:][^[:space:]]+#\1=[redacted]#Ig' \
+              -e 's#(sb_(publishable|secret)_[A-Za-z0-9_-]+)#[redacted]#g' "$1" | tail -n 80
+          }
+          if ! (cd "$bundle" && supabase db push --db-url "$SUPABASE_DB_URL" --dry-run > "$dry_run_log" 2>&1); then
+            echo "::error::Supabase dry-run failed; no production write was attempted."; echo "Sanitized CLI output:"; sanitize_cli_output "$dry_run_log"; exit 1
+          fi
+          migrations_in_output="$(grep -oE '[0-9]{14}_[A-Za-z0-9_]+\.sql' "$dry_run_log" | sort -u || true)"
+          pending_count="$(wc -l < "$RUNNER_TEMP/vendor-pending-versions.txt" | tr -d ' ')"
+          if [[ "$pending_count" == 1 ]]; then
+            [[ "$migrations_in_output" == "$TARGET_MIGRATION_FILE" ]] || { echo "::error::Dry-run proposed more than the approved migration."; exit 1; }
+          else
+            [[ -z "$migrations_in_output" ]] || { echo "::error::Production is up to date but dry-run proposed a migration."; exit 1; }
+          fi
+          echo "Dry-run verified; only the approved Vendor projection migration may be applied."
+
+  apply:
+    name: Apply approved Vendor migration
+    needs: preflight
+    if: ${{ inputs.mode == 'apply' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production
+    steps:
+      - name: Check out main release workflow
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Rebuild complete reviewed migration bundle
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_REF" == refs/heads/main ]] || { echo "::error::This workflow must be dispatched from main."; exit 1; }
+          [[ "$RELEASE_SOURCE_SHA" == "7ff99c3164e57d5cceb868dd2de32cb6801d3d69" ]] || { echo "::error::The release source SHA is not locked."; exit 1; }
+          git fetch --no-tags origin "$RELEASE_SOURCE_SHA" --depth=1 >/dev/null
+          git cat-file -e "$RELEASE_SOURCE_SHA^{commit}"
+          git cat-file -e "$RELEASE_SOURCE_SHA:supabase/migrations/20261121130000_vendor_public_order_number_projections.sql"
+          bundle="$RUNNER_TEMP/vendor-release"
+          mkdir -p "$bundle/supabase/migrations"
+          git show "$RELEASE_SOURCE_SHA:supabase/config.toml" > "$bundle/supabase/config.toml"
+          mapfile -t source_migrations < <(git ls-tree -r --name-only "$RELEASE_SOURCE_SHA" -- supabase/migrations | grep -E '/[0-9]{14}_[^/]+\.sql$' | sort)
+          for migration_path in "${source_migrations[@]}"; do git show "$RELEASE_SOURCE_SHA:$migration_path" > "$bundle/supabase/migrations/${migration_path##*/}"; done
+          test -f "$bundle/supabase/migrations/$TARGET_MIGRATION_FILE"
+
+          tools="$RUNNER_TEMP/vendor-release-tools"
+          mkdir -p "$tools/path"
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "$tools/supabase.tar.gz" \
+            "https://github.com/supabase/cli/releases/download/v3.1.0/supabase_3.1.0_linux_amd64.tar.gz"
+          echo "dbe9fd66771337fc198727da86b9d3551302f87a7091cd8781be2a4cd0c8ac4d  $tools/supabase.tar.gz" | sha256sum --check --status
+          tar -xzf "$tools/supabase.tar.gz" -C "$tools"
+          install -m 0755 "$tools/supabase" "$tools/path/supabase"
+          echo "$tools/path" >> "$GITHUB_PATH"
+          "$tools/path/supabase" --version
+
+      - name: Repeat history guard and dry-run before apply
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          target_version="${TARGET_MIGRATION_FILE:0:14}"
+          source_history="$RUNNER_TEMP/vendor-source-history.txt"
+          remote_history="$RUNNER_TEMP/vendor-remote-history.txt"
+          pending_versions="$RUNNER_TEMP/vendor-pending-versions.txt"
+          git ls-tree -r --name-only "$RELEASE_SOURCE_SHA" -- supabase/migrations | sed -n 's#^.*/\([0-9]\{14\}\)_[^/]*\.sql$#\1#p' | sort -u > "$source_history"
+          psql "$SUPABASE_DB_URL" --no-align --tuples-only --set=ON_ERROR_STOP=1 --command "select version from supabase_migrations.schema_migrations order by version" | sed '/^[[:space:]]*$/d' | sort -u > "$remote_history"
+          unexpected="$(comm -13 "$source_history" "$remote_history")"; [[ -z "$unexpected" ]] || { echo "::error::Production migration history drift detected."; exit 1; }
+          comm -23 "$source_history" "$remote_history" > "$pending_versions"
+          [[ "$(cat "$pending_versions")" == "$target_version" ]] || { echo "::error::Apply stopped: pending migration is not exactly the approved target."; exit 1; }
+          (cd "$RUNNER_TEMP/vendor-release" && supabase migration list --db-url "$SUPABASE_DB_URL" > "$RUNNER_TEMP/vendor-migration-list-before-apply.txt" 2>&1)
+          dry_run_log="$RUNNER_TEMP/vendor-dry-run-before-apply.log"
+          sanitize_cli_output() { sed -E -e 's#(postgres(ql)?://)[^[:space:]]+#\1[redacted]#g' -e 's#(SUPABASE_DB_URL|DATABASE_URL|password|token|secret|authorization|api[_-]?key)[=:][^[:space:]]+#\1=[redacted]#Ig' -e 's#(sb_(publishable|secret)_[A-Za-z0-9_-]+)#[redacted]#g' "$1" | tail -n 80; }
+          if ! (cd "$RUNNER_TEMP/vendor-release" && supabase db push --db-url "$SUPABASE_DB_URL" --dry-run > "$dry_run_log" 2>&1); then echo "::error::Pre-apply dry-run failed; apply was not attempted."; sanitize_cli_output "$dry_run_log"; exit 1; fi
+          [[ "$(grep -oE '[0-9]{14}_[A-Za-z0-9_]+\.sql' "$dry_run_log" | sort -u)" == "$TARGET_MIGRATION_FILE" ]] || { echo "::error::Pre-apply dry-run proposed more than the approved migration."; exit 1; }
+
+      - name: Apply the single approved migration
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          (cd "$RUNNER_TEMP/vendor-release" && supabase db push --db-url "$SUPABASE_DB_URL" --yes)
+
+      - name: Verify migration, RPC projections, and access boundaries
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          target_version="${TARGET_MIGRATION_FILE:0:14}"
+          applied="$(psql "$SUPABASE_DB_URL" --no-align --tuples-only --set=ON_ERROR_STOP=1 --command "select count(*) from supabase_migrations.schema_migrations where version='$target_version'")"
+          [[ "$applied" == 1 ]] || { echo "::error::Approved migration was not recorded exactly once."; exit 1; }
+          contracts="$(psql "$SUPABASE_DB_URL" --no-align --tuples-only --field-separator='|' --set=ON_ERROR_STOP=1 --command "select to_regprocedure('public.list_fulfillment_shipments(text,integer)') is not null, to_regprocedure('public.list_vendor_production_orders(text,timestamptz,text)') is not null, to_regprocedure('public.admin_vendor_workspace(integer)') is not null, to_regprocedure('public.admin_vendor_assignments(integer)') is not null")"
+          [[ "$contracts" == "t|t|t|t" ]] || { echo "::error::Vendor shipping/production/Admin RPC contract verification failed."; exit 1; }
+          projection="$(psql "$SUPABASE_DB_URL" --no-align --tuples-only --field-separator='|' --set=ON_ERROR_STOP=1 --command "select exists(select 1 from information_schema.columns where table_schema='public' and table_name='orders' and column_name='public_order_number'), has_function_privilege('authenticated','public.list_fulfillment_shipments(text,integer)','EXECUTE'), has_function_privilege('authenticated','public.list_vendor_production_orders(text,timestamptz,text)','EXECUTE'), has_function_privilege('anon','public.list_fulfillment_shipments(text,integer)','EXECUTE'), has_function_privilege('anon','public.list_vendor_production_orders(text,timestamptz,text)','EXECUTE'), has_function_privilege('authenticated','public.admin_vendor_workspace(integer)','EXECUTE'), has_function_privilege('authenticated','public.admin_vendor_assignments(integer)','EXECUTE'), has_function_privilege('anon','public.admin_vendor_workspace(integer)','EXECUTE'), has_function_privilege('anon','public.admin_vendor_assignments(integer)','EXECUTE'), exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='private' and p.proname='list_fulfillment_shipments' and pg_get_functiondef(p.oid) like '%public_order_number%'), exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='list_vendor_production_orders' and pg_get_functiondef(p.oid) like '%public_order_number%')")"
+          [[ "$projection" == "t|t|t|f|f|t|t|f|f|t|t" ]] || { echo "::error::Vendor/Admin access boundary or public order projection verification failed."; exit 1; }
+          echo "Verified migration history, Vendor shipping/production/Admin RPCs, public_order_number projection, and unchanged access boundaries without creating production orders."

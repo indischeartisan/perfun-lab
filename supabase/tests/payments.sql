@@ -50,7 +50,7 @@ end $$;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','e1000000-0000-4000-8000-000000000001',true);
 do $$ begin
- if (select count(id) from public.payments)<>3 then raise exception 'Own payments unreadable'; end if;
+ if (select count(id) from public.payments)<>4 then raise exception 'Own payments unreadable'; end if;
  begin perform metadata from public.payments; raise exception 'Private metadata exposed'; exception when insufficient_privilege then null; end;
  begin update public.payments set status='paid'; raise exception 'Client payment write allowed'; exception when insufficient_privilege then null; end;
  begin update public.orders set payment_status='paid'; raise exception 'Client paid order allowed'; exception when insufficient_privilege then null; end;

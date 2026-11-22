@@ -1,6 +1,27 @@
 -- Payment deadlines are authoritative from order creation, not from the first
 -- attempt to open a provider session.
+create table if not exists private.payment_expiry_legacy_audit (
+  order_id uuid primary key references public.orders(id) on delete restrict,
+  created_at timestamptz not null,
+  payment_snapshot jsonb not null default '[]'::jsonb,
+  derived_deadline_at timestamptz not null,
+  audit_state text not null default 'pending' check (audit_state in ('pending','approved')),
+  reviewed_at timestamptz
+);
+revoke all on private.payment_expiry_legacy_audit from public,anon,authenticated;
+insert into private.payment_expiry_legacy_audit(order_id,created_at,payment_snapshot,derived_deadline_at)
+select o.id,o.created_at,
+  coalesce(jsonb_agg(jsonb_build_object('id',p.id,'created_at',p.created_at,'status',p.status) order by p.created_at) filter (where p.id is not null),'[]'::jsonb),
+  greatest(o.created_at+interval '60 minutes',coalesce(max(p.created_at+interval '60 minutes') filter (where p.status='pending'),o.created_at+interval '60 minutes'))
+from public.orders o left join public.payments p on p.order_id=o.id
+where o.status='pending_payment' and o.payment_status not in ('paid','refunded')
+group by o.id,o.created_at
+on conflict(order_id) do nothing;
 alter table public.orders add column if not exists payment_deadline_at timestamptz;
+update public.orders
+set payment_deadline_at = coalesce(a.derived_deadline_at,orders.created_at + interval '60 minutes')
+from private.payment_expiry_legacy_audit a
+where a.order_id=orders.id and orders.payment_deadline_at is null;
 update public.orders
 set payment_deadline_at = created_at + interval '60 minutes'
 where payment_deadline_at is null;
@@ -9,7 +30,7 @@ alter table public.orders alter column payment_deadline_at set not null;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname='orders_payment_deadline_check') then
     alter table public.orders add constraint orders_payment_deadline_check
-      check (payment_deadline_at >= created_at and payment_deadline_at <= created_at + interval '60 minutes');
+      check (payment_deadline_at >= created_at);
   end if;
 end $$;
 
@@ -22,6 +43,9 @@ returns trigger language plpgsql security definer set search_path='' as $$
 begin
   if tg_op='INSERT' then
     new.payment_deadline_at:=coalesce(new.payment_deadline_at,new.created_at+interval '60 minutes');
+    if new.payment_deadline_at>new.created_at+interval '60 minutes' then
+      raise exception 'Payment deadline cannot exceed 60 minutes from order creation' using errcode='23514';
+    end if;
   elsif new.payment_deadline_at is distinct from old.payment_deadline_at then
     raise exception 'Payment deadline is immutable' using errcode='23514';
   end if;
@@ -141,6 +165,7 @@ begin
       select o.id,o.payment_deadline_at from public.orders o
       where o.status='pending_payment' and o.payment_status='pending' and o.payment_deadline_at<=clock_timestamp()
         and not exists(select 1 from public.payments p where p.order_id=o.id)
+        and not exists(select 1 from private.payment_expiry_legacy_audit a where a.order_id=o.id and a.audit_state<>'approved')
       order by o.payment_deadline_at,o.id limit p_limit
     ) o),'[]'::jsonb),
     'pending',coalesce((select jsonb_agg(jsonb_build_object(
@@ -152,6 +177,7 @@ begin
       select p.*,o.payment_deadline_at from public.payments p join public.orders o on o.id=p.order_id
       where p.status='pending' and o.status='pending_payment' and o.payment_status='pending'
         and o.payment_deadline_at<=clock_timestamp()
+        and not exists(select 1 from private.payment_expiry_legacy_audit a where a.order_id=o.id and a.audit_state<>'approved')
       order by o.payment_deadline_at,p.id limit p_limit
     ) p join public.orders o on o.id=p.order_id),'[]'::jsonb)
   ) into result;
@@ -168,6 +194,7 @@ begin
   for o in select orders.* from public.orders as orders
     where orders.status='pending_payment' and orders.payment_status='pending' and orders.payment_deadline_at<=clock_timestamp()
       and not exists(select 1 from public.payments p where p.order_id=orders.id)
+      and not exists(select 1 from private.payment_expiry_legacy_audit a where a.order_id=orders.id and a.audit_state<>'approved')
     order by orders.payment_deadline_at,orders.id limit p_limit for update skip locked loop
     perform private.settle_inventory_for_order(o.id,'expired');
     update public.orders set payment_status='expired' where id=o.id and payment_status='pending';
@@ -178,9 +205,30 @@ end $$;
 revoke all on function public.expire_unstarted_payment_orders(integer) from public,anon,authenticated;
 grant execute on function public.expire_unstarted_payment_orders(integer) to service_role;
 
--- pg_cron/pg_net are opt-in extensions on Supabase. The schedule is created
--- only after this migration is applied; deployment order requires the
--- payments-expiry Edge Function to be deployed first.
+create or replace function public.payment_expiry_legacy_audit(p_limit integer default 100)
+returns jsonb language plpgsql security definer set search_path='' as $$
+declare result jsonb;
+begin
+  if p_limit not between 1 and 1000 then raise exception 'Invalid audit batch size'; end if;
+  select coalesce(jsonb_agg(jsonb_build_object('order_id',x.order_id,'created_at',x.created_at,'payment_snapshot',x.payment_snapshot,'derived_deadline_at',x.derived_deadline_at,'audit_state',x.audit_state,'reviewed_at',x.reviewed_at) order by x.created_at,x.order_id),'[]'::jsonb)
+  into result from (select * from private.payment_expiry_legacy_audit order by created_at,order_id limit p_limit) x;
+  return result;
+end $$;
+revoke all on function public.payment_expiry_legacy_audit(integer) from public,anon,authenticated;
+grant execute on function public.payment_expiry_legacy_audit(integer) to service_role;
+
+create or replace function public.approve_payment_expiry_legacy_audit(p_order_id uuid)
+returns boolean language plpgsql security definer set search_path='' as $$
+begin
+  update private.payment_expiry_legacy_audit set audit_state='approved',reviewed_at=clock_timestamp() where order_id=p_order_id;
+  return found;
+end $$;
+revoke all on function public.approve_payment_expiry_legacy_audit(uuid) from public,anon,authenticated;
+grant execute on function public.approve_payment_expiry_legacy_audit(uuid) to service_role;
+
+-- pg_cron/pg_net are opt-in extensions on Supabase. The migration prepares the
+-- scheduler but does not activate it. Activation is a separate guarded step
+-- after all payment functions are deployed and the legacy audit is approved.
 create extension if not exists pg_cron with schema extensions;
 create extension if not exists pg_net with schema extensions;
 
@@ -198,9 +246,19 @@ begin
 end $$;
 revoke all on function private.payment_expiry_tick() from public,anon,authenticated;
 
-do $$ begin
+create or replace function public.enable_payment_expiry_scheduler()
+returns boolean language plpgsql security definer set search_path='' as $$
+begin
+  if exists(select 1 from private.payment_expiry_legacy_audit where audit_state<>'approved') then
+    raise exception 'Legacy payment expiry audit is incomplete' using errcode='55000';
+  end if;
   if exists(select 1 from cron.job where jobname='perfun-payment-expiry-every-minute') then
     perform cron.unschedule(jobid) from cron.job where jobname='perfun-payment-expiry-every-minute';
   end if;
   perform cron.schedule('perfun-payment-expiry-every-minute','* * * * *','select private.payment_expiry_tick()');
+  return true;
 end $$;
+revoke all on function public.enable_payment_expiry_scheduler() from public,anon,authenticated;
+grant execute on function public.enable_payment_expiry_scheduler() to service_role;
+
+-- Scheduler activation is intentionally not performed by this migration.

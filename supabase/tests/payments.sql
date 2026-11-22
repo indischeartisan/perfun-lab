@@ -38,8 +38,10 @@ do $$ declare p jsonb; again jsonb; pid uuid; row_before text; order_before text
  perform public.apply_payment_event((again->>'id')::uuid,'verified-expiry',199000,'expired',null,'{}');
  perform public.apply_payment_event((again->>'id')::uuid,'late-paid-after-expiry',199000,'paid',now()+interval '2 hours','{}');
  if (select status from public.payments where id=(again->>'id')::uuid)<>'expired' or (select payment_status from public.orders where id='e2000000-0000-4000-8000-000000000002')<>'expired' then raise exception 'Late paid callback resurrected expired payment'; end if;
+ reset role;
  insert into public.orders(id,order_number,user_id,request_id,request_payload,address_snapshot,subtotal,discount,shipping,grand_total,created_at)
  values('e2000000-0000-4000-8000-000000000003','PAYMENT-TEST-3','e1000000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"address_line":"Historical street"}',99000,0,0,99000,now()-interval '2 hours');
+ set local role service_role;
  if public.expire_unstarted_payment_orders(10)<>1 then raise exception 'Unstarted payment order was not expired'; end if;
  if (select payment_status from public.orders where id='e2000000-0000-4000-8000-000000000003')<>'expired' or (select status from public.orders where id='e2000000-0000-4000-8000-000000000003')<>'pending_payment' then raise exception 'Unstarted order expiry status incorrect'; end if;
  if (select count(*) from public.orders where user_id='e1000000-0000-4000-8000-000000000001')<>3 then raise exception 'Duplicate order'; end if;

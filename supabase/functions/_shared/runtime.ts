@@ -22,6 +22,7 @@ function adminClient() {
   if (!url || !key) throw new PaymentError('Payment service is not configured', 503)
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
 }
+export function serviceClient() { return adminClient() }
 export async function authenticated(req: Request) {
   const token = req.headers.get('Authorization')?.match(/^Bearer (.+)$/i)?.[1]
   if (!token) throw new PaymentError('Sign in required', 401)
@@ -53,12 +54,12 @@ export function setup() {
   const repo: PaymentRepository = {
     async reserve(orderId, userId) { return await rpc('reserve_payment', { p_order_id: orderId, p_user_id: userId, p_provider: providerName, p_environment: environment, p_return_url: returnUrl.toString() }) as Payment },
     async byOrder(orderId, userId) {
-      const owner = await db.from('orders').select('id').eq('id', orderId).eq('user_id', userId).maybeSingle()
+      const owner = await db.from('orders').select('id,payment_deadline_at').eq('id', orderId).eq('user_id', userId).maybeSingle()
       if (owner.error) throw new PaymentError('Unable to read order', 500)
       if (!owner.data) throw new PaymentError('Order not found', 404)
       const result = await db.from('payments').select('*').eq('order_id', orderId).eq('provider', providerName).eq('environment', environment).order('attempt_sequence', { ascending: false }).limit(1).maybeSingle()
       if (result.error) throw new PaymentError('Unable to read payment', 500)
-      return result.data as Payment | null
+      return result.data ? { ...result.data, payment_deadline_at: owner.data.payment_deadline_at } as Payment : null
     },
     async byReference(reference) {
       const result = await db.from('payments').select('*').eq('provider', providerName).eq('environment', environment).eq('provider_reference', reference).maybeSingle()

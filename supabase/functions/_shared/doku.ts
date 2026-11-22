@@ -68,8 +68,10 @@ export class DokuProvider implements PaymentProvider {
     return this.send(host + path, { method, headers, body, signal: AbortSignal.timeout(20000), redirect: 'error' })
   }
   async create(payment: Payment): Promise<ProviderSession> {
+    const remainingMinutes = payment.request_payload.payment_due_date ?? Math.floor((Date.parse(payment.payment_deadline_at) - Date.now()) / 60000)
+    if (!Number.isFinite(remainingMinutes) || remainingMinutes < 1 || Date.parse(payment.payment_deadline_at) <= Date.now()) throw new PaymentError('Payment deadline has passed', 409)
     const body = JSON.stringify({ order: { amount: payment.amount, invoice_number: payment.provider_reference, currency: payment.currency,
-      callback_url: payment.request_payload.return_url }, payment: { payment_due_date: 60 } })
+      callback_url: payment.request_payload.return_url }, payment: { payment_due_date: Math.min(60, remainingMinutes) } })
     const response = await this.request('POST', '/checkout/v1/payment', payment.id, body)
     if ([400, 422].includes(response.status)) throw new CreationRejected('Provider rejected the payment request. Please try again or contact support.', 502)
     // DOKU returns the original response with HTTP 409 when the same Request-Id/body is retried.

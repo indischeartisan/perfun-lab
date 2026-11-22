@@ -472,3 +472,32 @@ jobs:
           name: admin-finance-browser-screenshots
           path: ${{ runner.temp }}/finance-browser
           if-no-files-found: warn
+
+  payment-expiry-browser:
+    name: Payment expiry browser regression
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install application dependencies
+        run: npm ci
+      - name: Install disposable browser runner
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.59.1
+          npx playwright install --with-deps chromium
+      - name: Run responsive payment expiry browser regression
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm run dev -- --host 127.0.0.1 --port 4176 >"$RUNNER_TEMP/payment-expiry-vite.log" 2>&1 & vite_pid=$!
+          cleanup() { kill "$vite_pid" 2>/dev/null || true; }
+          trap cleanup EXIT
+          for attempt in {1..30}; do curl --silent --fail http://127.0.0.1:4176/payment-expiry-preview.html >/dev/null && break; sleep 1; done
+          curl --silent --fail http://127.0.0.1:4176/payment-expiry-preview.html >/dev/null
+          node scripts/e2e/payment-expiry-browser.mjs

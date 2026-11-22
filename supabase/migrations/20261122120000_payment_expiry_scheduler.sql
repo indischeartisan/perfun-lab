@@ -166,10 +166,10 @@ returns integer language plpgsql security definer set search_path='' as $$
 declare o public.orders; expired_count integer:=0;
 begin
   if p_limit not between 1 and 100 then raise exception 'Invalid expiry batch size'; end if;
-  for o in select o.* from public.orders o
-    where o.status='pending_payment' and o.payment_status='pending' and o.payment_deadline_at<=clock_timestamp()
-      and not exists(select 1 from public.payments p where p.order_id=o.id)
-    order by o.payment_deadline_at,o.id limit p_limit for update skip locked loop
+  for o in select orders.* from public.orders as orders
+    where orders.status='pending_payment' and orders.payment_status='pending' and orders.payment_deadline_at<=clock_timestamp()
+      and not exists(select 1 from public.payments p where p.order_id=orders.id)
+    order by orders.payment_deadline_at,orders.id limit p_limit for update skip locked loop
     perform private.settle_inventory_for_order(o.id,'expired');
     update public.orders set payment_status='expired' where id=o.id and payment_status='pending';
     expired_count:=expired_count+1;

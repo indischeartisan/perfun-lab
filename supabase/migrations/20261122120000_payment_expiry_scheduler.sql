@@ -109,9 +109,8 @@ begin
     when exists(select 1 from public.payments where order_id=oid and status='pending') then 'pending'
     else (select status from public.payments where order_id=oid order by attempt_sequence desc limit 1) end into aggregate_status;
   update public.orders set payment_status=aggregate_status,
-    status=case when aggregate_status='paid' and status='pending_payment' then 'paid'
-      when aggregate_status='expired' and status='pending_payment' then 'cancelled' else status end
-    where id=oid and (payment_status<>aggregate_status or (aggregate_status='paid' and status='pending_payment') or (aggregate_status='expired' and status='pending_payment'));
+    status=case when aggregate_status='paid' and status='pending_payment' then 'paid' else status end
+    where id=oid and (payment_status<>aggregate_status or (aggregate_status='paid' and status='pending_payment'));
   return jsonb_build_object('duplicate',false,'status',new_status,'order_payment_status',aggregate_status);
 end $$;
 
@@ -172,7 +171,7 @@ begin
       and not exists(select 1 from public.payments p where p.order_id=o.id)
     order by o.payment_deadline_at,o.id limit p_limit for update skip locked loop
     perform private.settle_inventory_for_order(o.id,'expired');
-    update public.orders set payment_status='expired',status='cancelled' where id=o.id and payment_status='pending';
+    update public.orders set payment_status='expired' where id=o.id and payment_status='pending';
     expired_count:=expired_count+1;
   end loop;
   return expired_count;

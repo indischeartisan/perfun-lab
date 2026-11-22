@@ -43,6 +43,20 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.24.0"
+          # The repository is not a Go module. The CLI module is cloned into
+          # RUNNER_TEMP below, so setup-go's root go.sum cache is not applicable.
+          cache: false
+
+      - name: Verify runner prerequisites
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for tool in git grep jq curl sha256sum xargs; do
+            command -v "$tool" >/dev/null || {
+              echo "::error::Required runner tool is missing: $tool"
+              exit 1
+            }
+          done
 
       - name: Build and verify pinned Supabase CLI
         shell: bash
@@ -73,7 +87,7 @@ jobs:
           functions=(payments-create payments-webhook payments-sync)
           for function in "${functions[@]}"; do
             test -f "supabase/functions/$function/index.ts"
-            rg -q "_shared/" "supabase/functions/$function/index.ts"
+            grep -Fq "_shared/" "supabase/functions/$function/index.ts"
           done
           test -d supabase/functions/_shared
           test -f supabase/config.toml
@@ -132,6 +146,19 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.24.0"
+          # Keep cache disabled here for the same non-Go-module repository.
+          cache: false
+
+      - name: Verify runner prerequisites
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for tool in git grep jq curl sha256sum xargs; do
+            command -v "$tool" >/dev/null || {
+              echo "::error::Required runner tool is missing: $tool"
+              exit 1
+            }
+          done
 
       - name: Build and verify the same pinned Supabase CLI
         shell: bash

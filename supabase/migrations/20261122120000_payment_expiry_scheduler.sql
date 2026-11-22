@@ -34,14 +34,12 @@ for each row execute function private.guard_payment_deadline();
 
 create or replace function public.reserve_payment(p_order_id uuid,p_user_id uuid,p_provider text,p_environment text,p_return_url text)
 returns jsonb language plpgsql security invoker set search_path='' as $$
-declare o public.orders; p public.payments; new_id uuid := gen_random_uuid(); due_minutes integer;
+declare o public.orders; p public.payments; new_id uuid := gen_random_uuid();
 begin
   select * into o from public.orders where id=p_order_id and user_id=p_user_id for update;
   if not found then raise exception 'Order not found' using errcode='42501'; end if;
   if o.status<>'pending_payment' or o.payment_status in ('paid','refunded') then raise exception 'Order is not payable'; end if;
   if clock_timestamp()>=o.payment_deadline_at then raise exception 'Payment deadline has passed' using errcode='P0001'; end if;
-  due_minutes:=floor(extract(epoch from (o.payment_deadline_at-clock_timestamp()))/60)::integer;
-  if due_minutes<1 then raise exception 'Payment deadline has passed' using errcode='P0001'; end if;
   if o.grand_total<=0 or o.grand_total>999999999999 then raise exception 'Unsupported payment amount'; end if;
   select * into p from public.payments where order_id=o.id and status='pending';
   if found then
@@ -50,7 +48,7 @@ begin
   end if;
   insert into public.payments(id,order_id,provider,environment,provider_reference,amount,request_payload)
   values(new_id,o.id,p_provider,p_environment,'PF'||substr(replace(new_id::text,'-',''),1,28),o.grand_total,
-    jsonb_build_object('amount',o.grand_total,'currency',o.currency,'return_url',p_return_url,'payment_due_date',least(60,due_minutes))) returning * into p;
+    jsonb_build_object('amount',o.grand_total,'currency',o.currency,'return_url',p_return_url)) returning * into p;
   update public.orders set payment_status='pending' where id=o.id and payment_status<>'pending';
   return to_jsonb(p)||jsonb_build_object('payment_deadline_at',o.payment_deadline_at);
 end $$;
@@ -73,7 +71,7 @@ end $$;
 
 create or replace function public.apply_payment_event(p_payment_id uuid,p_event_key text,p_amount bigint,p_status text,p_paid_at timestamptz,p_metadata jsonb)
 returns jsonb language plpgsql security invoker set search_path='' as $$
-declare p public.payments; o public.orders; oid uuid; new_status text; aggregate_status text; inserted integer;
+declare p public.payments; o public.orders; oid uuid; new_status text; aggregate_status text; inserted integer; effective_paid_at timestamptz;
 begin
   select order_id into oid from public.payments where id=p_payment_id;
   select * into o from public.orders where id=oid for update;
@@ -88,7 +86,8 @@ begin
   -- A late paid callback is not allowed to resurrect an order after the
   -- authoritative deadline or after a verified expiry. The event is retained
   -- for audit/idempotency, but inventory remains released.
-  if p_status='paid' and (p.status in ('expired','refunded') or p_paid_at is null or p_paid_at>o.payment_deadline_at) then
+  effective_paid_at:=coalesce(p_paid_at,clock_timestamp());
+  if p_status='paid' and (p.status in ('expired','refunded') or effective_paid_at>o.payment_deadline_at) then
     return jsonb_build_object('duplicate',false,'late_paid',true,'status',p.status);
   end if;
   new_status:=p.status;
@@ -100,7 +99,7 @@ begin
   end if;
   if new_status<>p.status then
     update public.payments set status=new_status,
-      paid_at=case when new_status='paid' then coalesce(p.paid_at,p_paid_at,now()) else p.paid_at end,
+      paid_at=case when new_status='paid' then coalesce(p.paid_at,p_paid_at,clock_timestamp()) else p.paid_at end,
       metadata=metadata||p_metadata,updated_at=now() where id=p.id;
   end if;
   select case

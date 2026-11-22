@@ -68,7 +68,7 @@ export class DokuProvider implements PaymentProvider {
     return this.send(host + path, { method, headers, body, signal: AbortSignal.timeout(20000), redirect: 'error' })
   }
   async create(payment: Payment): Promise<ProviderSession> {
-    const remainingMinutes = payment.request_payload.payment_due_date ?? Math.floor((Date.parse(payment.payment_deadline_at) - Date.now()) / 60000)
+    const remainingMinutes = Math.floor((Date.parse(payment.payment_deadline_at) - Date.now()) / 60000)
     if (!Number.isFinite(remainingMinutes) || remainingMinutes < 1 || Date.parse(payment.payment_deadline_at) <= Date.now()) throw new PaymentError('Payment deadline has passed', 409)
     const body = JSON.stringify({ order: { amount: payment.amount, invoice_number: payment.provider_reference, currency: payment.currency,
       callback_url: payment.request_payload.return_url }, payment: { payment_due_date: Math.min(60, remainingMinutes) } })
@@ -77,8 +77,10 @@ export class DokuProvider implements PaymentProvider {
     // DOKU returns the original response with HTTP 409 when the same Request-Id/body is retried.
     if (!response.ok && response.status !== 409) throw new PaymentError('Payment provider unavailable. Please retry the same payment.')
     const data = object(await response.json()), result = object(data.response), order = object(result.order), session = object(result.payment)
+    const providerExpiry = typeof session.expired_date === 'string' ? Date.parse(session.expired_date) : NaN
+    if (Number.isFinite(providerExpiry) && providerExpiry > Date.parse(payment.payment_deadline_at)) throw new PaymentError('Payment provider session exceeds order deadline')
     if (order.invoice_number !== payment.provider_reference || amount(order.amount) !== payment.amount || typeof session.url !== 'string' || !this.validPaymentUrl(session.url)) throw new PaymentError('Invalid payment provider response')
-    return { url: session.url, metadata: { expired_date: session.expired_date ?? null } }
+    return { url: session.url, metadata: { expired_date: session.expired_date ?? null, payment_due_date: remainingMinutes } }
   }
   async status(payment: Payment): Promise<ProviderEvent | null> {
     const response = await this.request('GET', '/orders/v1/status/' + encodeURIComponent(payment.provider_reference), crypto.randomUUID())

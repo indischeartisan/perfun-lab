@@ -7,7 +7,7 @@ import { CreationRejected } from '../supabase/functions/_shared/payment-provider
 import { paymentErrorMessage } from '../src/lib/paymentErrorMessage.ts'
 
 const config = { clientId: 'test-client', secret: 'test-only-secret', environment: 'sandbox' }
-const payment = () => ({ id: 'e3000000-0000-4000-8000-000000000001', order_id: 'test-order', provider: 'doku', environment: 'sandbox', provider_reference: 'PF123456789', amount: 109000, currency: 'IDR', status: 'pending', payment_url: null, created_at: new Date().toISOString(), payment_deadline_at: new Date(Date.now() + 60 * 60000).toISOString(), request_payload: { amount: 109000, currency: 'IDR', return_url: 'https://shop.example/#orders', payment_due_date: 60 } })
+const payment = () => ({ id: 'e3000000-0000-4000-8000-000000000001', order_id: 'test-order', provider: 'doku', environment: 'sandbox', provider_reference: 'PF123456789', amount: 109000, currency: 'IDR', status: 'pending', payment_url: null, created_at: new Date().toISOString(), payment_deadline_at: new Date(Date.now() + 60 * 60000).toISOString(), request_payload: { amount: 109000, currency: 'IDR', return_url: 'https://shop.example/#orders' } })
 const body = (status = 'SUCCESS', amount = 109000, type = 'SALE') => JSON.stringify({ order: { invoice_number: 'PF123456789', amount }, transaction: { status, type, date: '2026-09-08T08:00:00Z' } })
 const target = '/functions/v1/payments-webhook'
 async function signedRequest(raw, path = target) {
@@ -55,7 +55,7 @@ test('DOKU Checkout distinguishes failed channel, order expiry, authorization, p
   const expired = JSON.parse(body('EXPIRED')); expired.order.status = 'ORDER_EXPIRED'
   assert.equal(parseDokuEvent(expired).status, 'expired')
 })
-test('create retries preserve request ID/body and accept DOKU duplicate 409 response', async () => {
+test('create retries keep the same reference while recalculating duration from the deadline', async () => {
   const requests = []
   const provider = new DokuProvider(config, async (_url, init) => {
     requests.push(init)
@@ -67,7 +67,9 @@ test('create retries preserve request ID/body and accept DOKU duplicate 409 resp
   assert.equal(repo.p.status,'pending')
   const result = await initiatePayment('test-order','owner',repo,provider)
   assert.ok(result.payment_url.startsWith('https://sandbox.doku.com/'))
-  assert.equal(requests[0].body,requests[1].body)
+  const firstBody = JSON.parse(requests[0].body), retryBody = JSON.parse(requests[1].body)
+  assert.ok(retryBody.payment.payment_due_date <= firstBody.payment.payment_due_date)
+  assert.ok(retryBody.payment.payment_due_date >= 1)
   assert.equal(requests[0].headers['Request-Id'],requests[1].headers['Request-Id'])
 })
 test('DOKU session duration never exceeds the authoritative order deadline', async () => {
@@ -76,8 +78,15 @@ test('DOKU session duration never exceeds the authoritative order deadline', asy
     requests.push(JSON.parse(init.body))
     return Response.json({ response: { order: { invoice_number: 'PF123456789', amount: 109000 }, payment: { url: 'https://sandbox.doku.com/checkout-link-v2/test' } } })
   })
-  await provider.create({ ...payment(), payment_deadline_at: new Date(Date.now() + 17 * 60000 + 50000).toISOString(), request_payload: { ...payment().request_payload, payment_due_date: 17 } })
+  await provider.create({ ...payment(), payment_deadline_at: new Date(Date.now() + 17 * 60000 + 50000).toISOString() })
   assert.equal(requests[0].payment.payment_due_date, 17)
+})
+test('provider expiry returned by DOKU cannot exceed the order deadline', async () => {
+  const provider = new DokuProvider(config, async (_url, init) => {
+    const providerExpiry = new Date(Date.now() + 11 * 60000).toISOString()
+    return Response.json({ response: { order: { invoice_number: 'PF123456789', amount: 109000 }, payment: { url: 'https://sandbox.doku.com/checkout-link-v2/test', expired_date: providerExpiry } } })
+  })
+  await assert.rejects(provider.create({ ...payment(), payment_deadline_at: new Date(Date.now() + 10 * 60000).toISOString() }), /exceeds order deadline/)
 })
 test('sandbox accepts DOKU staging checkout host returned by the live API', () => {
   const provider = new DokuProvider(config)

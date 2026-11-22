@@ -16,3 +16,14 @@ test('expiry workflow verifies provider status before finalizing pending payment
   assert.match(source, /provider\.status\(payment\)/)
   assert.match(source, /status === 'paid' \|\| event\.status === 'expired'/)
 })
+
+test('expiry rollout deploys all payment functions before the scheduler migration', async () => {
+  const fs = await import('node:fs/promises')
+  const rollout = await fs.readFile(new URL('../docs/payment-expiry-rollout.md', import.meta.url), 'utf8')
+  const migration = await fs.readFile(new URL('../supabase/migrations/20261122120000_payment_expiry_scheduler.sql', import.meta.url), 'utf8')
+  for (const functionName of ['payments-create', 'payments-webhook', 'payments-sync', 'payments-expiry']) assert.match(rollout, new RegExp(functionName))
+  assert.ok(rollout.indexOf('deploy `payments-create`') < rollout.indexOf('Apply `20261122120000_payment_expiry_scheduler.sql`'))
+  assert.ok(migration.indexOf('create extension if not exists pg_cron') < migration.indexOf('cron.schedule'))
+  const reserve = migration.slice(migration.indexOf('create or replace function public.reserve_payment'), migration.indexOf('create or replace function public.attach_payment_session'))
+  assert.doesNotMatch(reserve, /payment_due_date/)
+})

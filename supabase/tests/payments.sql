@@ -36,21 +36,29 @@ do $$ declare p jsonb; again jsonb; pid uuid; row_before text; order_before text
  if (select status from public.orders where id='e2000000-0000-4000-8000-000000000002')<>'pending_payment' or (select payment_status from public.orders where id='e2000000-0000-4000-8000-000000000002')<>'failed' then raise exception 'Failed status incorrect'; end if;
  again:=public.reserve_payment('e2000000-0000-4000-8000-000000000002','e1000000-0000-4000-8000-000000000001','doku','sandbox','https://example.invalid');
  perform public.apply_payment_event((again->>'id')::uuid,'verified-expiry',199000,'expired',null,'{}');
- perform public.apply_payment_event((again->>'id')::uuid,'late-paid-after-expiry',199000,'paid',now()+interval '2 hours','{}');
+ perform public.apply_payment_event((again->>'id')::uuid,'late-paid-after-expiry',199000,'paid',null,'{}');
  if (select status from public.payments where id=(again->>'id')::uuid)<>'expired' or (select payment_status from public.orders where id='e2000000-0000-4000-8000-000000000002')<>'expired' then raise exception 'Late paid callback resurrected expired payment'; end if;
+ reset role;
+ insert into public.orders(id,order_number,user_id,request_id,request_payload,address_snapshot,subtotal,discount,shipping,grand_total)
+ values('e2000000-0000-4000-8000-000000000004','PAYMENT-TEST-4','e1000000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"address_line":"Historical street"}',99000,0,0,99000);
+ set local role service_role;
+ p:=public.reserve_payment('e2000000-0000-4000-8000-000000000004','e1000000-0000-4000-8000-000000000001','doku','sandbox','https://example.invalid');
+ perform public.apply_payment_event((p->>'id')::uuid,'paid-without-provider-timestamp',99000,'paid',null,'{}');
+ if (select status from public.payments where id=(p->>'id')::uuid)<>'paid' or (select payment_status from public.orders where id='e2000000-0000-4000-8000-000000000004')<>'paid' then raise exception 'Paid event without timestamp was rejected'; end if;
+ reset role;
  reset role;
  insert into public.orders(id,order_number,user_id,request_id,request_payload,address_snapshot,subtotal,discount,shipping,grand_total,created_at)
  values('e2000000-0000-4000-8000-000000000003','PAYMENT-TEST-3','e1000000-0000-4000-8000-000000000001',gen_random_uuid(),'{}','{"address_line":"Historical street"}',99000,0,0,99000,now()-interval '2 hours');
  set local role service_role;
  if public.expire_unstarted_payment_orders(10)<>1 then raise exception 'Unstarted payment order was not expired'; end if;
  if (select payment_status from public.orders where id='e2000000-0000-4000-8000-000000000003')<>'expired' or (select status from public.orders where id='e2000000-0000-4000-8000-000000000003')<>'pending_payment' then raise exception 'Unstarted order expiry status incorrect'; end if;
- if (select count(*) from public.orders where user_id='e1000000-0000-4000-8000-000000000001')<>3 then raise exception 'Duplicate order'; end if;
+ if (select count(*) from public.orders where user_id='e1000000-0000-4000-8000-000000000001')<>4 then raise exception 'Duplicate order'; end if;
  begin perform public.reserve_payment('e2000000-0000-4000-8000-000000000001','e1000000-0000-4000-8000-000000000002','doku','sandbox','https://example.invalid'); raise exception 'Foreign order accepted'; exception when insufficient_privilege then null; end;
 end $$;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','e1000000-0000-4000-8000-000000000001',true);
 do $$ begin
- if (select count(id) from public.payments)<>4 then raise exception 'Own payments unreadable'; end if;
+ if (select count(id) from public.payments)<>5 then raise exception 'Own payments unreadable'; end if;
  begin perform metadata from public.payments; raise exception 'Private metadata exposed'; exception when insufficient_privilege then null; end;
  begin update public.payments set status='paid'; raise exception 'Client payment write allowed'; exception when insufficient_privilege then null; end;
  begin update public.orders set payment_status='paid'; raise exception 'Client paid order allowed'; exception when insufficient_privilege then null; end;

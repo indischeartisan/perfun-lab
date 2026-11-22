@@ -1,0 +1,232 @@
+name: Align DOKU payment Edge Functions
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Deployment mode
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - apply
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-doku-edge-functions-parity
+  cancel-in-progress: false
+
+env:
+  SOURCE_SHA: 82303906aa2ea6442b00f24bb871efca203e2c1c
+  SUPABASE_PROJECT_REF: fcightecxkegtqlaxvjs
+  SUPABASE_CLI_SOURCE_SHA: bce705147ae90b9bddd6dfc24986744ced1d97d4
+  NO_COLOR: "1"
+
+jobs:
+  preflight:
+    name: Verify pinned source and deployment plan
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out the pinned payment source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.0"
+
+      - name: Build and verify pinned Supabase CLI
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export GOBIN="$RUNNER_TEMP/supabase-cli-bin"
+          export GOPROXY=https://proxy.golang.org
+          cli_source="$RUNNER_TEMP/supabase-cli-source"
+          mkdir -p "$GOBIN"
+          git init --quiet "$cli_source"
+          git -C "$cli_source" remote add origin https://github.com/supabase/cli.git
+          git -C "$cli_source" fetch --depth=1 origin "$SUPABASE_CLI_SOURCE_SHA"
+          git -C "$cli_source" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$cli_source" rev-parse HEAD)" = "$SUPABASE_CLI_SOURCE_SHA"
+          (cd "$cli_source" && go build -trimpath -o "$GOBIN/supabase" .)
+          echo "$GOBIN" >> "$GITHUB_PATH"
+          "$GOBIN/supabase" --help >/dev/null
+          "$GOBIN/supabase" functions deploy --help >/dev/null
+          echo "Supabase CLI source verified at $SUPABASE_CLI_SOURCE_SHA"
+
+      - name: Verify source, shared dependencies, and JWT contracts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git rev-parse HEAD)" = "82303906aa2ea6442b00f24bb871efca203e2c1c"
+
+          functions=(payments-create payments-webhook payments-sync)
+          for function in "${functions[@]}"; do
+            test -f "supabase/functions/$function/index.ts"
+            rg -q "_shared/" "supabase/functions/$function/index.ts"
+          done
+          test -d supabase/functions/_shared
+          test -f supabase/config.toml
+          grep -Fq '[functions.payments-create]' supabase/config.toml
+          grep -Fq '[functions.payments-sync]' supabase/config.toml
+          grep -Fq '[functions.payments-webhook]' supabase/config.toml
+          grep -A1 '^\[functions\.payments-create\]' supabase/config.toml | grep -Fq 'verify_jwt = true'
+          grep -A1 '^\[functions\.payments-sync\]' supabase/config.toml | grep -Fq 'verify_jwt = true'
+          grep -A1 '^\[functions\.payments-webhook\]' supabase/config.toml | grep -Fq 'verify_jwt = false'
+
+          manifest="$RUNNER_TEMP/doku-payment-source.sha256"
+          git ls-files supabase/functions/payments-create supabase/functions/payments-webhook supabase/functions/payments-sync supabase/functions/_shared supabase/config.toml | sort | xargs sha256sum > "$manifest"
+          echo "Source SHA: $SOURCE_SHA"
+          echo "Shared dependency manifest:"
+          cat "$manifest"
+
+      - name: Print safe dry-run plan
+        if: ${{ inputs.mode == 'dry-run' }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cat <<'PLAN'
+          DRY-RUN ONLY: no Supabase API, deployment, secret, or production write is performed.
+          The following commands would be run only by the approved apply job:
+            supabase functions deploy payments-create --project-ref fcightecxkegtqlaxvjs --use-api
+            supabase functions deploy payments-webhook --project-ref fcightecxkegtqlaxvjs --use-api --no-verify-jwt
+            supabase functions deploy payments-sync --project-ref fcightecxkegtqlaxvjs --use-api
+          Source and all _shared dependencies are pinned to 82303906aa2ea6442b00f24bb871efca203e2c1c.
+          JWT contract: create=true, webhook=false, sync=true.
+          PLAN
+
+      - name: Confirm apply requires production approval
+        if: ${{ inputs.mode == 'apply' }}
+        shell: bash
+        run: echo "Apply selected; the separate deployment job is protected by the production environment approval."
+
+  apply:
+    name: Deploy and verify three payment functions
+    needs: preflight
+    if: ${{ inputs.mode == 'apply' && github.ref == 'refs/heads/main' }}
+    environment:
+      name: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - name: Check out the pinned payment source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.0"
+
+      - name: Build and verify the same pinned Supabase CLI
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export GOBIN="$RUNNER_TEMP/supabase-cli-bin"
+          export GOPROXY=https://proxy.golang.org
+          cli_source="$RUNNER_TEMP/supabase-cli-source"
+          mkdir -p "$GOBIN"
+          git init --quiet "$cli_source"
+          git -C "$cli_source" remote add origin https://github.com/supabase/cli.git
+          git -C "$cli_source" fetch --depth=1 origin "$SUPABASE_CLI_SOURCE_SHA"
+          git -C "$cli_source" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$cli_source" rev-parse HEAD)" = "$SUPABASE_CLI_SOURCE_SHA"
+          (cd "$cli_source" && go build -trimpath -o "$GOBIN/supabase" .)
+          echo "$GOBIN" >> "$GITHUB_PATH"
+          "$GOBIN/supabase" --help >/dev/null
+          "$GOBIN/supabase" functions deploy --help >/dev/null
+
+      - name: Verify source SHA and function configuration before deployment
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -f supabase/functions/payments-create/index.ts
+          test -f supabase/functions/payments-webhook/index.ts
+          test -f supabase/functions/payments-sync/index.ts
+          test -d supabase/functions/_shared
+          grep -A1 '^\[functions\.payments-create\]' supabase/config.toml | grep -Fq 'verify_jwt = true'
+          grep -A1 '^\[functions\.payments-sync\]' supabase/config.toml | grep -Fq 'verify_jwt = true'
+          grep -A1 '^\[functions\.payments-webhook\]' supabase/config.toml | grep -Fq 'verify_jwt = false'
+
+      - name: Record deployed versions before apply
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "${SUPABASE_ACCESS_TOKEN:-}"
+          curl --fail --silent --show-error --retry 3 \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H "Accept: application/json" \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/functions" \
+            > "$RUNNER_TEMP/functions-before.json"
+          jq -e 'type == "array"' "$RUNNER_TEMP/functions-before.json" >/dev/null
+          jq -r '.[] | select(.slug == "payments-create" or .slug == "payments-webhook" or .slug == "payments-sync") | [.slug, .version, .status, .verify_jwt] | @tsv' "$RUNNER_TEMP/functions-before.json"
+
+      - name: Deploy payments-create with JWT verification
+        shell: bash
+        run: supabase functions deploy payments-create --project-ref "$SUPABASE_PROJECT_REF" --use-api
+
+      - name: Deploy payments-webhook without JWT verification
+        shell: bash
+        run: supabase functions deploy payments-webhook --project-ref "$SUPABASE_PROJECT_REF" --use-api --no-verify-jwt
+
+      - name: Deploy payments-sync with JWT verification
+        shell: bash
+        run: supabase functions deploy payments-sync --project-ref "$SUPABASE_PROJECT_REF" --use-api
+
+      - name: Verify status, version, and JWT configuration
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl --fail --silent --show-error --retry 3 \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H "Accept: application/json" \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/functions" \
+            > "$RUNNER_TEMP/functions-after.json"
+          jq -e 'type == "array"' "$RUNNER_TEMP/functions-after.json" >/dev/null
+
+          for function in payments-create payments-webhook payments-sync; do
+            jq -e --arg function "$function" '
+              map(select(.slug == $function))[0] |
+              .status == "ACTIVE" and (.version | type == "number") and (.version > 0)
+            ' "$RUNNER_TEMP/functions-after.json" >/dev/null
+          done
+
+          jq -e '
+            (map(select(.slug == "payments-create"))[0].verify_jwt == true) and
+            (map(select(.slug == "payments-webhook"))[0].verify_jwt == false) and
+            (map(select(.slug == "payments-sync"))[0].verify_jwt == true)
+          ' "$RUNNER_TEMP/functions-after.json" >/dev/null
+
+          echo "Verified ACTIVE status, numeric versions, and JWT settings for all three functions."
+          jq -r '.[] | select(.slug == "payments-create" or .slug == "payments-webhook" or .slug == "payments-sync") | [.slug, .version, .status, .verify_jwt] | @tsv' "$RUNNER_TEMP/functions-after.json"
+
+      - name: Publish partial-deployment rollback procedure
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          {
+            echo "### Partial deployment rollback procedure"
+            echo
+            echo "One or more function deployments or post-deploy checks failed. Do not rerun apply blindly."
+            echo "1. Keep production unchanged until the failed function and current versions are identified."
+            echo "2. Use the last approved source SHA and the same pinned CLI to redeploy each affected function individually."
+            echo "3. Deploy payments-create and payments-sync with JWT verification enabled; deploy payments-webhook with --no-verify-jwt."
+            echo "4. Re-run the read-only Management API verification until all three functions are ACTIVE with the expected JWT settings."
+            echo "5. If the previous source is unavailable, stop and obtain a reviewed rollback commit; this workflow never guesses or deletes functions."
+          } >> "$GITHUB_STEP_SUMMARY"

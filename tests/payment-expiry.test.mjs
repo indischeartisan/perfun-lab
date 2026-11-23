@@ -26,6 +26,8 @@ test('expiry rollout deploys all payment functions before the scheduler migratio
   assert.ok(rollout.indexOf('Deploy `payments-create`') < rollout.indexOf('enable_payment_expiry_scheduler'))
   assert.ok(migration.indexOf('create extension if not exists pg_cron') < migration.indexOf('enable_payment_expiry_scheduler'))
   assert.match(migration, /payment_expiry_legacy_audit/)
+  assert.match(migration, /parse_doku_expiry/)
+  assert.match(migration, /provider_expiry_at/)
   assert.match(migration, /where o\.status='pending_payment' and o\.payment_status not in \('paid','refunded'\)/)
   assert.match(migration, /Legacy payment expiry audit is incomplete/)
   const beforeActivation = migration.slice(0, migration.indexOf('create or replace function public.enable_payment_expiry_scheduler'))

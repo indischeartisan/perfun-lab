@@ -1,5 +1,21 @@
 -- Payment deadlines are authoritative from order creation, not from the first
 -- attempt to open a provider session.
+create or replace function private.parse_doku_expiry(p_value text)
+returns timestamptz language plpgsql immutable strict set search_path='' as $$
+declare
+  local_value timestamp;
+begin
+  if p_value !~ '^[0-9]{14}$' then return null; end if;
+  local_value := make_timestamp(substring(p_value,1,4)::int, substring(p_value,5,2)::int,
+    substring(p_value,7,2)::int, substring(p_value,9,2)::int, substring(p_value,11,2)::int,
+    substring(p_value,13,2)::double precision);
+  if to_char(local_value,'YYYYMMDDHH24MISS') <> p_value then return null; end if;
+  return local_value at time zone 'Asia/Jakarta';
+exception when others then
+  return null;
+end $$;
+revoke all on function private.parse_doku_expiry(text) from public,anon,authenticated;
+
 create table if not exists private.payment_expiry_legacy_audit (
   order_id uuid primary key references public.orders(id) on delete restrict,
   created_at timestamptz not null,
@@ -11,7 +27,9 @@ create table if not exists private.payment_expiry_legacy_audit (
 revoke all on private.payment_expiry_legacy_audit from public,anon,authenticated;
 insert into private.payment_expiry_legacy_audit(order_id,created_at,payment_snapshot,derived_deadline_at)
 select o.id,o.created_at,
-  coalesce(jsonb_agg(jsonb_build_object('id',p.id,'created_at',p.created_at,'status',p.status) order by p.created_at) filter (where p.id is not null),'[]'::jsonb),
+  coalesce(jsonb_agg(jsonb_build_object('id',p.id,'created_at',p.created_at,'status',p.status,
+    'provider_expiry_raw',p.metadata->>'expired_date',
+    'provider_expiry_at',private.parse_doku_expiry(p.metadata->>'expired_date')) order by p.created_at) filter (where p.id is not null),'[]'::jsonb),
   greatest(o.created_at+interval '60 minutes',coalesce(max(p.created_at+interval '60 minutes') filter (where p.status='pending'),o.created_at+interval '60 minutes'))
 from public.orders o left join public.payments p on p.order_id=o.id
 where o.status='pending_payment' and o.payment_status not in ('paid','refunded')

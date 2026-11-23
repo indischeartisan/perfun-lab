@@ -10,6 +10,11 @@ verify_jwt = true
 [functions.payments-webhook]
 verify_jwt = false
 
+# Called only by the database-generated scheduler token; the handler performs
+# its own token check before using the service role.
+[functions.payments-expiry]
+verify_jwt = false
+
 [functions.shipping-destinations]
 verify_jwt = true
 

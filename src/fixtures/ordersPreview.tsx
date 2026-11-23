@@ -13,7 +13,7 @@ import './ordersPreview.css'
 const address = { recipient_name: 'Farras Agung Mujafar S.', phone: '0812 3456 7890', address_line: 'Jl. Melati No. 12, Cibeunying Kidul', city: 'Kota Bandung', province: 'Jawa Barat', postal_code: '40124', label: 'Rumah', is_default: true }
 const paid = [{ id: 'payment-fixture', provider: 'doku', status: 'paid' as const, amount: 229000, paid_at: '2026-11-08T08:00:00.000Z' }]
 
-type PreviewOrder = Omit<CustomerOrder, 'public_order_number'> & { public_order_number?: string }
+type PreviewOrder = Omit<CustomerOrder, 'public_order_number' | 'payment_deadline_at'> & { public_order_number?: string; payment_deadline_at?: string }
 
 const previewOrders: PreviewOrder[] = [
   { id: 'fixture-order-1', user_id: 'fixture-user', order_number: 'PF-5F8B7542E7A9E53DA', status: 'in_production', payment_status: 'paid', created_at: '2026-11-08T08:00:00.000Z', address_snapshot: address, subtotal: 199000, discount: 0, shipping: 30000, grand_total: 229000, shipping_quote_snapshot: null, payments: paid, shipment: null, order_items: [{ product_snapshot: { id: '30ml', label: 'Eau de Parfum', volume_ml: 30, bottle_count: 1 }, creations_snapshot: [{ id: 'blend-1', name: 'Blend 1', notes: [{ phase: 'top', note: { id: 'yuzu', name: 'Yuzu' } }, { phase: 'middle', note: { id: 'matcha', name: 'Matcha' } }, { phase: 'base', note: { id: 'amber', name: 'Amber' } }] }], quantity: 1, normal_unit_price: 199000, unit_price: 199000, line_total: 199000 }] },
@@ -32,6 +32,7 @@ const previewPublicNumbers: Record<string, string> = {
 }
 const customerPreviewOrders: CustomerOrder[] = previewOrders.map(order => ({
   ...order,
+  payment_deadline_at: order.payment_deadline_at ?? '2026-11-08T09:00:00.000Z',
   public_order_number: order.public_order_number ?? previewPublicNumbers[order.id],
 }))
 

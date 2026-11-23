@@ -24,6 +24,15 @@ export function amount(value: unknown) {
   if (!Number.isSafeInteger(result) || result <= 0) throw new PaymentError('Invalid provider amount', 400)
   return result
 }
+export function parseDokuExpiry(value: unknown): string | null {
+  if (typeof value !== 'string' || !/^\d{14}$/.test(value)) return null
+  const year = Number(value.slice(0, 4)), month = Number(value.slice(4, 6)), day = Number(value.slice(6, 8))
+  const hour = Number(value.slice(8, 10)), minute = Number(value.slice(10, 12)), second = Number(value.slice(12, 14))
+  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59) return null
+  const calendar = new Date(Date.UTC(year, month - 1, day)), parsed = new Date(Date.UTC(year, month - 1, day, hour - 7, minute, second))
+  if (calendar.getUTCFullYear() !== year || calendar.getUTCMonth() !== month - 1 || calendar.getUTCDate() !== day || parsed.getUTCHours() !== (hour + 17) % 24 || parsed.getUTCMinutes() !== minute || parsed.getUTCSeconds() !== second) return null
+  return parsed.toISOString()
+}
 export function parseDokuEvent(data: unknown): ProviderEvent {
   const payload = object(data), order = object(payload.order), transaction = object(payload.transaction)
   const reference = String(order.invoice_number ?? '')
@@ -68,15 +77,21 @@ export class DokuProvider implements PaymentProvider {
     return this.send(host + path, { method, headers, body, signal: AbortSignal.timeout(20000), redirect: 'error' })
   }
   async create(payment: Payment): Promise<ProviderSession> {
+    const remainingMinutes = Math.floor((Date.parse(payment.payment_deadline_at) - Date.now()) / 60000)
+    if (!Number.isFinite(remainingMinutes) || remainingMinutes < 1 || Date.parse(payment.payment_deadline_at) <= Date.now()) throw new PaymentError('Payment deadline has passed', 409)
     const body = JSON.stringify({ order: { amount: payment.amount, invoice_number: payment.provider_reference, currency: payment.currency,
-      callback_url: payment.request_payload.return_url }, payment: { payment_due_date: 60 } })
+      callback_url: payment.request_payload.return_url }, payment: { payment_due_date: Math.min(60, remainingMinutes) } })
     const response = await this.request('POST', '/checkout/v1/payment', payment.id, body)
     if ([400, 422].includes(response.status)) throw new CreationRejected('Provider rejected the payment request. Please try again or contact support.', 502)
     // DOKU returns the original response with HTTP 409 when the same Request-Id/body is retried.
     if (!response.ok && response.status !== 409) throw new PaymentError('Payment provider unavailable. Please retry the same payment.')
     const data = object(await response.json()), result = object(data.response), order = object(result.order), session = object(result.payment)
+    const providerExpiry = parseDokuExpiry(session.expired_date)
+    if (!providerExpiry) throw new PaymentError('Invalid payment provider expiry')
+    const providerExpiryAt = Date.parse(providerExpiry), deadlineAt = Date.parse(payment.payment_deadline_at)
+    if (providerExpiryAt <= Date.now() || providerExpiryAt > deadlineAt) throw new PaymentError('Payment provider session exceeds order deadline')
     if (order.invoice_number !== payment.provider_reference || amount(order.amount) !== payment.amount || typeof session.url !== 'string' || !this.validPaymentUrl(session.url)) throw new PaymentError('Invalid payment provider response')
-    return { url: session.url, metadata: { expired_date: session.expired_date ?? null } }
+    return { url: session.url, metadata: { expired_date: session.expired_date, expired_date_at: providerExpiry, payment_due_date: remainingMinutes } }
   }
   async status(payment: Payment): Promise<ProviderEvent | null> {
     const response = await this.request('GET', '/orders/v1/status/' + encodeURIComponent(payment.provider_reference), crypto.randomUUID())

@@ -2,6 +2,7 @@ export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'expired' | 'refunde
 export interface Payment {
   id: string; order_id: string; provider: string; environment: 'sandbox' | 'production'; provider_reference: string
   amount: number; currency: string; status: PaymentStatus; payment_url: string | null; created_at: string
+  payment_deadline_at: string
   request_payload: { amount: number; currency: string; return_url: string }
 }
 export interface ProviderEvent { reference: string; amount: number; status: PaymentStatus; paidAt: string | null; metadata: Record<string, unknown> }

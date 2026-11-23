@@ -61,9 +61,9 @@ type DashboardOrderFilter = 'all' | 'unpaid' | 'queue' | 'production' | 'ready' 
 const dashboardTabs: Array<[DashboardOrderFilter, string]> = [['all', 'Semua'], ['unpaid', 'Belum bayar'], ['production', 'Produksi'], ['ready', 'Siap dikirim'], ['shipping', 'Sedang dikirim'], ['complete', 'Selesai']]
 const emptyAdminFilter: AdminOrderFilters = { search: '', payment: '', production: '', shipment: '', page: 0 }
 async function loadDashboardOrders(filter: DashboardOrderFilter) {
-  if (filter === 'queue') { const result = await getAdminOrders({ ...emptyAdminFilter, production: 'queued' }); return { ...result, rows: result.rows.slice(0, 5) } }
+  if (filter === 'queue') { const result = await getAdminOrders({ ...emptyAdminFilter, payment: 'paid', production: 'queued' }); return { ...result, rows: result.rows.slice(0, 5) } }
   if (filter === 'production') {
-    const [queued, active] = await Promise.all([getAdminOrders({ ...emptyAdminFilter, production: 'queued' }), getAdminOrders({ ...emptyAdminFilter, production: 'in_production' })])
+    const [queued, active] = await Promise.all([getAdminOrders({ ...emptyAdminFilter, payment: 'paid', production: 'queued' }), getAdminOrders({ ...emptyAdminFilter, payment: 'paid', production: 'in_production' })])
     const rows = [...queued.rows, ...active.rows].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     return { rows: rows.slice(0, 5), count: queued.count + active.count }
   }
@@ -73,7 +73,7 @@ async function loadDashboardOrders(filter: DashboardOrderFilter) {
     ready: { ...emptyAdminFilter, shipment: 'ready_to_ship' },
     shipping: { ...emptyAdminFilter, shipment: 'shipped' },
     complete: { ...emptyAdminFilter, shipment: 'delivered' },
-    queue: { ...emptyAdminFilter, production: 'queued' },
+    queue: { ...emptyAdminFilter, payment: 'paid', production: 'queued' },
     production: emptyAdminFilter,
   }
   const result = await getAdminOrders(filters[filter])
@@ -113,8 +113,8 @@ async function loadAdminOrdersTab(tab: AdminOrdersTab, filter: AdminOrderFilters
   const pageFilter = { ...filter, page: sourcePage }
   if (tab === 'production') {
     const [queued, active] = await Promise.all([
-      getAdminOrders({ ...pageFilter, payment: '', production: 'queued', shipment: '' }),
-      getAdminOrders({ ...pageFilter, payment: '', production: 'in_production', shipment: '' }),
+      getAdminOrders({ ...pageFilter, payment: 'paid', production: 'queued', shipment: '' }),
+      getAdminOrders({ ...pageFilter, payment: 'paid', production: 'in_production', shipment: '' }),
     ])
     const rows = [...queued.rows, ...active.rows].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     return { rows: rows.slice((filter.page % 5) * 5, (filter.page % 5 + 1) * 5), count: queued.count + active.count }

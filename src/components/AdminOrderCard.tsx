@@ -1,16 +1,7 @@
 import type { AdminOrder } from '../lib/admin'
 import { formatPrice } from '../lib/currency'
 import { getNoteStickerAsset } from '../lib/noteAssets'
-
-function processStatus(order: AdminOrder) {
-  if (order.payment_status === 'pending') return 'Menunggu pembayaran'
-  if (order.shipment_status === 'delivered') return 'Selesai'
-  if (order.shipment_status === 'shipped') return 'Sedang dikirim'
-  if (order.shipment_status === 'ready_to_ship') return 'Siap dikirim'
-  if (order.production_status === 'in_production') return 'Sedang diracik'
-  if (order.production_status === 'queued') return 'Antrean produksi'
-  return 'Menunggu diracik'
-}
+import { processAdminOrderStatus } from '../lib/adminOrderStatus'
 
 function usableLabel(value: string) { return Boolean(value.trim()) && !/^\d+\s*ml$/i.test(value.trim()) }
 
@@ -26,6 +17,6 @@ function Product({ product }: { product: AdminOrder['products'][number] }) {
 }
 
 export function AdminOrderCard({ order, onDetail }: { order: AdminOrder; onDetail?: () => void }) {
-  const status = processStatus(order)
+  const status = processAdminOrderStatus(order)
   return <article className="admin-order-card"><header><div><strong title={order.public_order_number}>{order.public_order_number}</strong><span>{order.customer.name || order.customer.email || 'Pemesan belum tersedia'}</span><time>{new Date(order.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</time></div><b className={`admin-process-status ${order.shipment_status === 'delivered' ? 'complete' : order.production_status === 'in_production' ? 'production' : 'default'}`}>{status}</b></header><div className="admin-order-products">{order.products.map((product, index) => <Product key={`${product.label}-${index}`} product={product}/>)}</div><footer><span>Total <strong>{formatPrice(order.grand_total)}</strong></span>{onDetail ? <button type="button" onClick={onDetail}>Lihat detail →</button> : null}</footer></article>
 }

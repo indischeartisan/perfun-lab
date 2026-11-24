@@ -142,6 +142,78 @@ jobs:
         shell: bash
         run: rm -rf -- "$RUNNER_TEMP/perfun-fixture-artifact-check"
 
+  validate-dummy-restore-and-privilege-fixture:
+    name: Validate dummy restore and SQLSTATE 42501 locally
+    needs: tooling-smoke-test
+    if: inputs.fixture_restore_failure_test == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Restore a dummy dump and reproduce local privilege denial
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          tools="$RUNNER_TEMP/perfun-dummy-fixture-tools"
+          dump_dir="$RUNNER_TEMP/perfun-dummy-fixture-dump"
+          restore_dir="$RUNNER_TEMP/perfun-dummy-fixture-restore"
+          privilege_log="$RUNNER_TEMP/perfun-dummy-fixture-privilege.log"
+          start_log="$RUNNER_TEMP/perfun-dummy-fixture-start.log"
+          cleanup() {
+            (cd "$restore_dir" && "$tools/supabase" stop --no-backup) >/dev/null 2>&1 || true
+            rm -rf -- "$tools" "$dump_dir" "$restore_dir" "$privilege_log" "$start_log"
+          }
+          trap cleanup EXIT
+          mkdir -p "$tools" "$dump_dir" "$restore_dir"
+
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "$tools/supabase.tar.gz" \
+            "https://github.com/supabase/cli/releases/download/v3.1.0/supabase_3.1.0_linux_amd64.tar.gz"
+          echo "dbe9fd66771337fc198727da86b9d3551302f87a7091cd8781be2a4cd0c8ac4d  $tools/supabase.tar.gz" | sha256sum --check --status
+          tar -xzf "$tools/supabase.tar.gz" -C "$tools"
+
+          printf '%s\n' '-- dummy role fixture' > "$dump_dir/roles.sql"
+          printf '%s\n' 'CREATE TABLE public.orders (id integer PRIMARY KEY, label text NOT NULL);' > "$dump_dir/schema.sql"
+          printf 'COPY public.orders (id, label) FROM stdin;\n1\tfixture\n\\.\n' > "$dump_dir/data.sql"
+          printf '%s\n' 'CREATE SCHEMA IF NOT EXISTS supabase_migrations;' 'CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (version text);' > "$dump_dir/migration-schema.sql"
+          printf '%s\n' 'COPY supabase_migrations.schema_migrations (version) FROM stdin;' 'fixture-version' '\.' > "$dump_dir/migration-data.sql"
+          (cd "$dump_dir" && sha256sum -- *.sql > SHA256SUMS && sha256sum --check --status SHA256SUMS)
+
+          if ! (cd "$restore_dir" && "$tools/supabase" init >/dev/null && "$tools/supabase" start \
+            --exclude gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor) > "$start_log" 2>&1; then
+            if grep -qi 'toomanyrequests\|rate exceeded' "$start_log"; then
+              echo "::error::Dummy local stack category=container_registry_rate_limit sqlstate=unavailable"
+            else
+              echo "::error::Dummy local stack category=container_start_failed sqlstate=unavailable"
+            fi
+            exit 1
+          fi
+          container="$(docker ps --format '{{.ID}} {{.Names}}' | awk '$2 ~ /^supabase_db_/ { print $1; exit }')"
+          test -n "$container" || { echo "::error::Dummy local Postgres container was not found."; exit 1; }
+          docker exec "$container" createdb -U supabase_admin --maintenance-db=template1 dummy_restore_test
+          docker exec -i "$container" psql --single-transaction --set ON_ERROR_STOP=1 -U postgres -d dummy_restore_test < "$dump_dir/schema.sql"
+          docker exec -i "$container" psql --single-transaction --set ON_ERROR_STOP=1 -U postgres -d dummy_restore_test < "$dump_dir/data.sql"
+          docker exec -i "$container" psql --single-transaction --set ON_ERROR_STOP=1 -U postgres -d dummy_restore_test < "$dump_dir/migration-schema.sql"
+          docker exec -i "$container" psql --single-transaction --set ON_ERROR_STOP=1 -U postgres -d dummy_restore_test < "$dump_dir/migration-data.sql"
+          grep -Eq '^COPY supabase_migrations\.schema_migrations ' "$dump_dir/migration-data.sql"
+          docker exec "$container" psql --set ON_ERROR_STOP=1 -U postgres -d dummy_restore_test --command "DO \$\$ BEGIN IF (SELECT count(*) FROM supabase_migrations.schema_migrations) = 0 THEN RAISE EXCEPTION 'migration history is empty'; END IF; IF to_regclass('public.orders') IS NULL THEN RAISE EXCEPTION 'orders is absent'; END IF; IF (SELECT count(*) FROM public.orders) <> 1 THEN RAISE EXCEPTION 'orders row count mismatch'; END IF; END \$\$;" >/dev/null
+
+          set +e
+          docker exec "$container" psql -v ON_ERROR_STOP=0 -v VERBOSITY=verbose -U postgres -d postgres \
+            --command 'SET ROLE anon; CREATE ROLE fixture_privilege_probe;' > "$privilege_log" 2>&1
+          privilege_exit=$?
+          set -e
+          if (( privilege_exit == 0 )); then
+            echo "::error::Local privilege fixture unexpectedly completed without a PostgreSQL error."
+            exit 1
+          fi
+          grep -Eq '^ERROR:[[:space:]]+42501:' "$privilege_log" || {
+            echo "::error::Local privilege fixture category=unexpected sqlstate=unavailable"
+            exit 1
+          }
+          echo "Local privilege fixture category=insufficient_privilege sqlstate=42501"
+          echo "Dummy restore validation passed."
+
   backup:
     name: Encrypted database backup
     needs: tooling-smoke-test
@@ -407,9 +479,13 @@ jobs:
             echo "::error::Role restore parser accepted a non-role duplicate object."
             exit 1
           fi
-          if ! docker exec "$container" psql -v ON_ERROR_STOP=0 -v VERBOSITY=verbose -U postgres -d postgres \
-            --command 'SET ROLE anon; CREATE ROLE fixture_privilege_probe;' > "$role_parser_test_dir/privilege.log" 2>&1; then
-            echo "::error::Could not run the local privilege diagnostic fixture."
+          set +e
+          docker exec "$container" psql -v ON_ERROR_STOP=0 -v VERBOSITY=verbose -U postgres -d postgres \
+            --command 'SET ROLE anon; CREATE ROLE fixture_privilege_probe;' > "$role_parser_test_dir/privilege.log" 2>&1
+          privilege_exit=$?
+          set -e
+          if (( privilege_exit == 0 )); then
+            echo "::error::Local privilege diagnostic fixture unexpectedly completed without a PostgreSQL error."
             exit 1
           fi
           grep -Eq '^ERROR:[[:space:]]+42501:' "$role_parser_test_dir/privilege.log" || {

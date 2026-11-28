@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { exploreContent, getFeaturedExploreContent, getFreshExploreContent, getPublishedExploreContent, getStudyExploreContent, isNewFromStudy } from '../src/data/exploreContent.ts'
 import { loadExploreArticleDetail } from '../src/data/exploreArticleDetails.ts'
-import { readFile } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 
 test('featured Explore content is published and uses valid destinations', () => {
   const contentIds = new Set(exploreContent.map(item => item.id))
@@ -98,6 +98,19 @@ test('launch articles retain the required editorial guidance', async () => {
   assert.match(combinationsText, /note baru dan special notes/)
   assert.match(combinationsText, /belum tersedia saat ini/)
   assert.doesNotMatch(combinationsText, /ribuan|jadwal update|setiap minggu/i)
+})
+
+test('published launch articles use the supplied editorial WebP covers', async () => {
+  const expected = {
+    'journal-welcome-to-perfun-lab': '/explore/covers/welcome-to-perfun-lab.webp',
+    'experiment-growing-combinations': '/explore/covers/growing-combinations.webp',
+    'quick-fresh-is-not-always-citrus': '/explore/covers/fresh-not-always-citrus.webp',
+    'study-top-middle-base-notes': '/explore/covers/top-middle-base.webp',
+    'study-fragrance-family': '/explore/covers/fragrance-family.webp'
+  }
+  const published = getPublishedExploreContent(undefined, new Date('2026-11-13T12:00:00Z'))
+  assert.deepEqual(Object.fromEntries(published.map(item => [item.id, item.coverImage])), expected)
+  for (const cover of Object.values(expected)) await access(new URL(`../public${cover}`, import.meta.url))
 })
 
 test('Explore homepage renders only the Note Library gateway, not legacy note preview cards', async () => {

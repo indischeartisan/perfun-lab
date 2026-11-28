@@ -24,6 +24,7 @@
 :where(.customer-app) .explore-fresh-art{position:relative;display:grid;place-items:center;align-self:stretch;min-height:190px;border-radius:16px;background:radial-gradient(circle at 66% 28%,rgba(255,255,255,.78) 0 12%,transparent 13%),radial-gradient(circle at 35% 72%,rgba(143,174,36,.24) 0 19%,transparent 20%),#d4e1bc}
 :where(.customer-app) .explore-fresh-card--experiment .explore-fresh-art{background:radial-gradient(circle at 65% 30%,rgba(255,255,255,.76) 0 12%,transparent 13%),radial-gradient(circle at 34% 72%,rgba(230,171,60,.25) 0 19%,transparent 20%),#eedcb5}
 :where(.customer-app) .explore-fresh-art img{position:relative;z-index:1;width:min(72%,190px);height:min(72%,190px);object-fit:contain;filter:drop-shadow(0 12px 12px rgba(57,68,35,.16))}
+:where(.customer-app) .explore-fresh-art img.explore-editorial-cover{width:100%;height:100%;object-fit:cover;border-radius:16px;filter:none}
 :where(.customer-app) .explore-fresh-art svg{width:76px;height:76px;color:#698110}
 :where(.customer-app) .explore-fresh-copy{align-self:center;max-width:360px}
 :where(.customer-app) .explore-fresh-copy h3{font-size:clamp(23px,3vw,32px)}
@@ -53,6 +54,7 @@
 :where(.customer-app) .explore-article-header>p:last-child,:where(.customer-app) .explore-article-page--missing>p:last-child{max-width:510px;margin:0;color:#62675e;font-size:clamp(16px,2.4vw,20px);line-height:1.55}
 :where(.customer-app) .explore-article-cover{display:grid;place-items:center;width:100%;max-width:620px;aspect-ratio:16/9;margin:0 0 24px;overflow:hidden;border:1px solid #e2dacb;border-radius:20px;background:linear-gradient(135deg,#edf2dc,#f5ead7)}
 :where(.customer-app) .explore-article-cover img{display:block;width:min(58%,260px);height:min(72%,220px);object-fit:contain;filter:drop-shadow(0 14px 14px rgba(64,73,39,.15))}
+:where(.customer-app) .explore-article-cover--editorial img{width:100%;height:100%;object-fit:cover;filter:none}
 :where(.customer-app) .explore-article-body{max-width:620px;padding:clamp(22px,4vw,36px);border:1px solid #e2dacb;border-radius:20px;background:#fffaf2;box-shadow:0 5px 18px rgba(77,66,42,.05)}
 :where(.customer-app) .explore-article-body p{margin:0;color:#45493f;font-size:clamp(16px,2.2vw,18px);line-height:1.7}
 :where(.customer-app) .explore-article-body p+p{margin-top:18px}
@@ -79,6 +81,7 @@
 :where(.customer-app) .explore-quick-summary{margin:0;color:#62675e;font-size:17px;line-height:1.5}
 :where(.customer-app) .explore-quick-card .explore-article-cover{margin:20px 0 0;border-radius:16px}
 :where(.customer-app) .explore-quick-card .explore-article-cover img{width:min(52%,190px);height:min(68%,160px)}
+:where(.customer-app) .explore-quick-card .explore-article-cover--editorial img{width:100%;height:100%;object-fit:cover;filter:none}
 :where(.customer-app) .explore-quick-body{margin-top:22px;color:#45493f}
 :where(.customer-app) .explore-quick-body p{margin:0;font-size:16px;line-height:1.65}
 :where(.customer-app) .explore-quick-body p+p{margin-top:12px}
@@ -147,6 +150,7 @@
 :where(.customer-app) .explore-collection-card{display:flex;min-width:0;flex-direction:column;overflow:hidden;border:1px solid #e2dacb;border-radius:20px;background:#fffaf2;box-shadow:0 5px 18px rgba(77,66,42,.06)}
 :where(.customer-app) .explore-collection-card .explore-article-cover{width:100%;max-width:none;margin:0;border:0;border-bottom:1px solid #e2dacb;border-radius:0;background:linear-gradient(135deg,#edf2dc,#f5ead7)}
 :where(.customer-app) .explore-collection-card .explore-article-cover img{width:min(54%,210px);height:min(70%,190px)}
+:where(.customer-app) .explore-collection-card .explore-article-cover--editorial img{width:100%;height:100%;object-fit:cover;filter:none}
 :where(.customer-app) .explore-collection-card-copy{display:flex;min-height:198px;flex:1;flex-direction:column;align-items:flex-start;padding:20px}
 :where(.customer-app) .explore-collection-card-copy h2{margin:9px 0 8px;font-size:clamp(20px,2.4vw,26px);line-height:1.1;letter-spacing:-.035em}
 :where(.customer-app) .explore-collection-card-copy p{margin:0;color:#62675e;font-size:14px;line-height:1.5}

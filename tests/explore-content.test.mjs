@@ -96,6 +96,7 @@ test('launch articles retain the required editorial guidance', async () => {
   assert.match(welcomeText, /top, middle, dan base/)
   assert.match(welcomeText, /bukan berarti parfum hanya mengandung tiga bahan/)
   assert.match(combinationsText, /note baru dan special notes/)
+  assert.match(combinationsText, /belum tersedia saat ini/)
   assert.doesNotMatch(combinationsText, /ribuan|jadwal update|setiap minggu/i)
 })
 

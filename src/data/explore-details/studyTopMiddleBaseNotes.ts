@@ -3,10 +3,11 @@ import type { ExploreArticleDetail } from '../exploreArticleDetails'
 export const article: ExploreArticleDetail = {
   id: 'study-top-middle-base-notes',
   blocks: [
-    { type: 'section', heading: '1. Top notes — the first hello', paragraphs: ['Top notes are the first part of a fragrance you notice. They can make the opening feel bright, green, or gently spicy.', 'In the Lab, Yuzu and Bergamot are examples of notes that can start the conversation.'] },
-    { type: 'section', heading: '2. Middle notes — the character', paragraphs: ['Middle notes arrive as the first impression settles. They help give a mix its main character and keep the scent feeling present.', 'Matcha and Jasmine are two very different ways to explore a middle layer.'] },
-    { type: 'section', heading: '3. Base notes — what stays close', paragraphs: ['Base notes stay with the mix for longer. They can bring a soft, warm, or grounded feeling to the scent’s final chapter.', 'Clean Musk and Sandalwood offer different places to begin exploring a base.'] },
-    { type: 'takeaways', heading: 'Key takeaways', items: ['A mix has one Top, one Middle, and one Base note.', 'Each layer has its own moment to shine.', 'Your own curiosity is a good place to start.'] }
+    { type: 'section', heading: 'Tiga lapisan aroma', paragraphs: ['Parfum berubah saat berada di kulit. Aroma yang tercium pertama dapat berbeda dari karakter yang muncul beberapa saat kemudian dan jejak yang tersisa lebih lama.', 'Top, middle, dan base notes adalah tiga lapisan untuk menjelaskan perubahan tersebut.'] },
+    { type: 'section', heading: '1. Top notes: kesan pertama', paragraphs: ['Top notes adalah aroma yang paling awal tercium setelah parfum digunakan. Umumnya terasa ringan, cerah, atau segar, lalu berkurang saat lapisan lain mulai muncul.', 'Yuzu dan bergamot adalah contoh note yang dapat digunakan pada lapisan ini.'] },
+    { type: 'section', heading: '2. Middle notes: karakter utama', paragraphs: ['Middle notes mulai lebih terasa setelah top notes berkurang. Lapisan ini sering membentuk karakter utama yang dikenali dari racikan.', 'Matcha dapat memberi nuansa hijau, sementara jasmine memberi nuansa floral yang lembut.'] },
+    { type: 'section', heading: '3. Base notes: fondasi aroma', paragraphs: ['Base notes bertahan lebih lama dan menjadi fondasi bagi lapisan lainnya. Karakternya dapat terasa hangat, bersih, lembut, atau membumi.', 'Clean musk dan sandalwood adalah contoh pilihan dengan karakter yang berbeda pada lapisan dasar.'] },
+    { type: 'takeaways', heading: 'Yang bisa kamu ingat', items: ['Top note membuka percakapan.', 'Middle note membawa karakter utama.', 'Base note meninggalkan jejak yang paling lama.'] }
   ],
-  labNote: { title: 'Little Lab Note', body: 'The three layers do not need to compete; let each one bring its own character.' }
+  labNote: { title: 'Little Lab Note', body: 'Urutan top, middle, dan base menjelaskan perkembangan aroma, bukan urutan bahan yang selalu terpisah saat dicium.' }
 }
